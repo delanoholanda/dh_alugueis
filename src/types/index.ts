@@ -31,14 +31,6 @@ export type PaymentMethod = 'pix' | 'dinheiro' | 'cartao_credito' | 'cartao_debi
 
 export type PaymentStatus = 'paid' | 'pending' | 'overdue';
 
-export interface RentalPhoto {
-  id: string;
-  rentalId: number;
-  imageUrl: string;
-  photoType: 'delivery' | 'return';
-  uploadedAt: string;
-}
-
 export interface Rental {
   id: number; 
   customerId: string;
@@ -64,7 +56,6 @@ export interface Rental {
   isOpenEnded?: boolean;
   chargeSaturdays?: boolean;
   chargeSundays?: boolean;
-  photos?: RentalPhoto[];
 }
 
 export interface ExpenseCategory {
@@ -97,7 +88,6 @@ export interface CompanyDetails {
   pixKey: string;
   contractTermsAndConditions?: string;
   contractFooterText?: string;
-  companyLogoUrl?: string;
   contractLogoUrl?: string;
 }
 
@@ -119,3 +109,6 @@ export interface UserProfile {
   name: string;
   email: string;
 }
+
+
+

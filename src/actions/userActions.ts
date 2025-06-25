@@ -1,4 +1,3 @@
-
 'use server';
 
 import type { User, UserWithPasswordHash, UserProfile } from '@/types';
@@ -89,46 +88,54 @@ export async function getUserByEmailInternal(email: string): Promise<UserWithPas
 export async function updateUser(id: string, userData: Partial<Omit<User, 'id'>> & { password?: string }): Promise<UserProfile | null> {
   const db = getDb();
   try {
-    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserWithPasswordHash | undefined;
+    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserWithPasswordHash;
+
     if (!currentUser) {
-        throw new Error("User not found.");
+      throw new Error("User not found.");
     }
     
-    let newPasswordHash = currentUser.passwordHash;
-    let newPasswordSalt = currentUser.passwordSalt;
-
-    if (userData.password) {
-      if (userData.password.length < 6) {
-        throw new Error('New password must be at least 6 characters long.');
-      }
-      const { salt, hash } = await hashPassword(userData.password);
-      newPasswordHash = hash;
-      newPasswordSalt = salt;
-    }
-    
-    if (userData.email && userData.email !== currentUser.email) {
-        const existingUser = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(userData.email, id);
-        if (existingUser) {
-            throw new Error('This email address is already in use by another user.');
-        }
-    }
-
-    const updatedUserForDb = {
+    // Prepare the new data, starting with current data
+    const updatedData = {
       id: id,
-      name: userData.name || currentUser.name,
-      email: userData.email || currentUser.email,
-      passwordHash: newPasswordHash,
-      passwordSalt: newPasswordSalt,
+      name: userData.name ?? currentUser.name,
+      email: userData.email ?? currentUser.email,
+      passwordHash: currentUser.passwordHash,
+      passwordSalt: currentUser.passwordSalt,
     };
 
-    const stmt = db.prepare('UPDATE users SET name = @name, email = @email, passwordHash = @passwordHash, passwordSalt = @passwordSalt WHERE id = @id');
-    stmt.run(updatedUserForDb);
+    // If a new password is provided, hash it and update the fields
+    if (userData.password && userData.password.trim() !== '') {
+      if (userData.password.length < 6) {
+        throw new Error('A nova senha deve ter pelo menos 6 caracteres.');
+      }
+      const { salt, hash } = await hashPassword(userData.password);
+      updatedData.passwordHash = hash;
+      updatedData.passwordSalt = salt;
+    }
+
+    // Check for email uniqueness if it's being changed
+    if (userData.email && userData.email !== currentUser.email) {
+      const existingUser = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(userData.email, id);
+      if (existingUser) {
+          throw new Error('Este endereço de e-mail já está em uso por outro usuário.');
+      }
+    }
+    
+    // Execute the update
+    const stmt = db.prepare(
+      'UPDATE users SET name = @name, email = @email, passwordHash = @passwordHash, passwordSalt = @passwordSalt WHERE id = @id'
+    );
+    stmt.run(updatedData);
+
+    revalidatePath('/dashboard/settings');
     revalidatePath('/dashboard/settings/users');
-    return { id: id, name: updatedUserForDb.name, email: updatedUserForDb.email };
+
+    return { id: updatedData.id, name: updatedData.name, email: updatedData.email };
+
   } catch (error) {
     console.error(`Failed to update user with id ${id}:`, error);
     if (error instanceof Error) throw error;
-    throw new Error('Failed to update user in database.');
+    throw new Error('Falha ao atualizar o usuário no banco de dados.');
   }
 }
 

@@ -37,7 +37,6 @@ import { useState, useEffect } from 'react';
 import { DynamicLucideIcon, getIcon } from '@/lib/lucide-icons'; 
 import type { EquipmentType } from '@/types'; 
 import { getEquipmentTypes } from '@/actions/equipmentTypeActions'; 
-import { getCompanySettings } from '@/actions/settingsActions';
 
 
 interface NavItem {
@@ -68,31 +67,32 @@ const settingsNavItems: NavItem[] = [
 ];
 
 
+const COMPANY_LOGO_STORAGE_KEY = 'dhAlugueisCompanyLogo';
 const DEFAULT_COMPANY_LOGO = '/dh-alugueis-logo.png';
 
 export function SidebarNav() {
   const pathname = usePathname();
   const { logout, user } = useAuth();
-  const { open, toggleSidebar, isMobile, state, setOpenMobile } = useSidebar();
+  const { open, toggleSidebar, isMobile, state, setOpenMobile } = useSidebar(); // Added setOpenMobile
   const [currentLogo, setCurrentLogo] = useState<string>(DEFAULT_COMPANY_LOGO);
   const [dynamicNavItems, setDynamicNavItems] = useState<NavItem[]>(mainNavItems);
 
   useEffect(() => {
-    // This effect runs once to fetch the logo from the DB.
-    // It's not designed to be reactive to DB changes while the user is on the page,
-    // which is generally fine for a company logo. A page refresh would pick up changes.
-    const fetchLogo = async () => {
-        try {
-            const settings = await getCompanySettings();
-            if(settings.companyLogoUrl) {
-                setCurrentLogo(settings.companyLogoUrl);
-            }
-        } catch (error) {
-            console.error("Failed to fetch company logo for sidebar:", error);
-            setCurrentLogo(DEFAULT_COMPANY_LOGO);
-        }
+    const storedLogo = localStorage.getItem(COMPANY_LOGO_STORAGE_KEY);
+    if (storedLogo) {
+      setCurrentLogo(storedLogo);
+    } else {
+      setCurrentLogo(DEFAULT_COMPANY_LOGO);
+    }
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === COMPANY_LOGO_STORAGE_KEY) {
+        setCurrentLogo(event.newValue || DEFAULT_COMPANY_LOGO);
+      }
     };
-    fetchLogo();
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -104,6 +104,7 @@ export function SidebarNav() {
         if (inventoryNavIndex !== -1) {
           const inventorySubItems: NavItem[] = fetchedTypes.map(type => {
             let hrefSegment = type.id.replace('type_', '');
+            // Garante que o link para "Plataforma" seja sempre "platforms" (plural)
             if (type.name.toLowerCase() === 'plataforma') {
               hrefSegment = 'platforms';
             }

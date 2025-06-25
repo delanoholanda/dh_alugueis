@@ -6,7 +6,6 @@ import { useParams, notFound, useRouter } from 'next/navigation';
 import { getRentalById } from '@/actions/rentalActions';
 import { getInventoryItemById } from '@/actions/inventoryActions';
 import { getCustomerById } from '@/actions/customerActions';
-import { getCompanySettings } from '@/actions/settingsActions';
 import Image from 'next/image';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,7 +18,25 @@ import { generatePixPayload } from '@/lib/pix';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MapPin, AlertCircle } from 'lucide-react';
 
+const COMPANY_LOGO_STORAGE_KEY = 'dhAlugueisCompanyLogo';
 const DEFAULT_COMPANY_LOGO = '/dh-alugueis-logo.png';
+const COMPANY_DETAILS_STORAGE_KEY = 'dhAlugueisCompanyDetails';
+
+const INITIAL_COMPANY_DETAILS: CompanyDetails = {
+  companyName: 'DH Alugueis',
+  responsibleName: 'Delano Holanda',
+  phone: '88982248384',
+  address: 'Rua Ana Ventura de Oliveira, 189, Ipu, CE',
+  email: 'dhalugueis@gmail.com',
+  pixKey: '+5588982248384',
+  contractTermsAndConditions: `1. O locatário é responsável por quaisquer danos, perda ou roubo do equipamento alugado.
+2. O equipamento deve ser devolvido na data e hora especificadas no contrato. Atrasos podem incorrer em taxas adicionais.
+3. O pagamento deve ser efetuado conforme acordado. Em caso de inadimplência, medidas legais poderão ser tomadas.
+4. A DH Aluguéis não se responsabiliza por acidentes ou danos causados pelo uso inadequado do equipamento.
+5. Este documento não tem valor fiscal. Solicite sua nota fiscal, se necessário.`,
+  contractFooterText: 'Obrigado por escolher a DH Aluguéis!',
+  contractLogoUrl: '',
+};
 
 const paymentMethodMap: Record<PaymentMethod, string> = {
   pix: 'PIX',
@@ -176,19 +193,25 @@ const formatCpfForDisplay = (cpf: string | null | undefined): string => {
   return `CPF: ${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
 };
 
+console.log("[ContractPage MODULE LEVEL] File being processed by browser.");
+
 export default function RentalContractPage() {
   const routeParams = useParams();
   const router = useRouter();
   const idStr = Array.isArray(routeParams.id) ? routeParams.id[0] : routeParams.id;
   const rentalIdNum = parseInt(idStr || '', 10);
 
+  console.log("[ContractPage FUNCTION LEVEL] Component function entered. routeParams from useParams():", routeParams);
+
   const [rental, setRental] = useState<Rental | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [detailedEquipment, setDetailedEquipment] = useState<DetailedEquipmentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentCompanyDetails, setCurrentCompanyDetails] = useState<CompanyDetails | null>(null);
+  const [generalCompanyLogo, setGeneralCompanyLogo] = useState<string>(DEFAULT_COMPANY_LOGO);
+  const [currentCompanyDetails, setCurrentCompanyDetails] = useState<CompanyDetails>(INITIAL_COMPANY_DETAILS);
   const [pixPayload, setPixPayload] = useState<string | null>(null);
+  const [companyDetailsLoaded, setCompanyDetailsLoaded] = useState(false);
 
   const formatPixKeyForDisplay = (pixKey: string): string => {
     if (!pixKey) return '';
@@ -211,41 +234,103 @@ export default function RentalContractPage() {
   };
 
   useReactEffect(() => {
+    console.log("[ContractPage useEffect - company settings] Attempting to load company settings from localStorage.");
     let isMounted = true;
-    
+    const loadCompanySettings = () => {
+      const storedGeneralLogo = localStorage.getItem(COMPANY_LOGO_STORAGE_KEY);
+      if (isMounted && storedGeneralLogo) {
+        setGeneralCompanyLogo(storedGeneralLogo);
+        console.log("[ContractPage useEffect - company settings] Loaded general logo from localStorage.");
+      }
+
+      const storedCompanyDetails = localStorage.getItem(COMPANY_DETAILS_STORAGE_KEY);
+      let detailsToUse = { ...INITIAL_COMPANY_DETAILS };
+      if (storedCompanyDetails) {
+        try {
+          detailsToUse = { ...INITIAL_COMPANY_DETAILS, ...JSON.parse(storedCompanyDetails) };
+          console.log("[ContractPage useEffect - company settings] Loaded company details from localStorage.");
+        } catch (e) {
+          console.error("[ContractPage useEffect - company settings] Error parsing company details from localStorage:", e);
+        }
+      }
+      if (isMounted) {
+        setCurrentCompanyDetails(detailsToUse);
+        setCompanyDetailsLoaded(true);
+        console.log("[ContractPage useEffect - company settings] Company details state updated. companyDetailsLoaded: true.");
+      }
+    };
+
+    loadCompanySettings();
+    return () => {
+      isMounted = false;
+      console.log("[ContractPage useEffect - company settings] Unmounted. isMounted set to false.");
+    };
+  }, []);
+
+  useReactEffect(() => {
+    let isMounted = true;
+    console.log(`[ContractPage useEffect - main data] Triggered. Dependencies: idStr=${idStr}, rentalIdNum=${rentalIdNum}, companyDetailsLoaded=${companyDetailsLoaded}`);
+
     const loadReceiptData = async () => {
-      if (!isMounted) return;
+      if (!isMounted) {
+        console.log("[ContractPage loadReceiptData] Not mounted, exiting.");
+        return;
+      }
       if (isNaN(rentalIdNum)) {
+        console.error("[ContractPage loadReceiptData] rentalIdNum is NaN. Calling notFound().");
         setError('ID do contrato inválido.');
         setIsLoading(false);
-        notFound();
+        if (isMounted) notFound();
+        return;
+      }
+      if (!companyDetailsLoaded) {
+        console.log("[ContractPage loadReceiptData] Company details not yet loaded. Waiting.");
+        if (isMounted) setIsLoading(true);
         return;
       }
 
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const [fetchedRental, companySettings] = await Promise.all([
-          getRentalById(rentalIdNum),
-          getCompanySettings()
-        ]);
-        
-        if (!isMounted) return;
-        setCurrentCompanyDetails(companySettings);
+      console.log(`[ContractPage loadReceiptData] Starting to load data for rental ID: ${rentalIdNum}`);
+      if (isMounted) {
+        setIsLoading(true);
+        setRental(null);
+        setCustomer(null);
+        setDetailedEquipment([]);
+        setPixPayload(null);
+        setError(null);
+      }
 
-        if (!fetchedRental) {
-          setError('Contrato não encontrado ou erro ao buscar.');
-          setIsLoading(false);
-          notFound();
+
+      try {
+        console.log(`[ContractPage loadReceiptData] Fetching rental with ID: ${rentalIdNum}`);
+        const fetchedRental = await getRentalById(rentalIdNum);
+        if (!isMounted) {
+          console.log("[ContractPage loadReceiptData] Unmounted after fetching rental. Exiting.");
           return;
         }
-        setRental(fetchedRental);
-        
-        let fetchedCustomer: Customer | undefined | null = null;
+
+        if (!fetchedRental) {
+          console.warn(`[ContractPage loadReceiptData] Rental not found or error fetching for ID: ${rentalIdNum}. Calling notFound().`);
+          if(isMounted) {
+            setError('Contrato não encontrado ou erro ao buscar.');
+            setIsLoading(false);
+            notFound();
+          }
+          return;
+        }
+        console.log("[ContractPage loadReceiptData] Rental data fetched:", fetchedRental);
+        if(isMounted) setRental(fetchedRental);
+
         if (fetchedRental.customerId) {
-          fetchedCustomer = await getCustomerById(fetchedRental.customerId);
-          if (isMounted) setCustomer(fetchedCustomer || null);
+          console.log(`[ContractPage loadReceiptData] Fetching customer with ID: ${fetchedRental.customerId}`);
+          const fetchedCustomer = await getCustomerById(fetchedRental.customerId);
+          if (isMounted) {
+            setCustomer(fetchedCustomer || null);
+            console.log("[ContractPage loadReceiptData] Customer data fetched:", fetchedCustomer);
+          }
+        }
+
+        if (fetchedRental.paymentMethod === 'pix' && !currentCompanyDetails.pixKey) {
+          console.warn(`[ContractPage loadReceiptData] PIX payment method but no PIX key configured for company: ${currentCompanyDetails.companyName}`);
         }
 
         const equipmentDetailsPromises = fetchedRental.equipment.map(async (eq) => {
@@ -265,44 +350,76 @@ export default function RentalContractPage() {
         });
 
         const resolvedEquipmentDetails = await Promise.all(equipmentDetailsPromises);
-        if (isMounted) setDetailedEquipment(resolvedEquipmentDetails);
+        if (!isMounted) {
+          console.log("[ContractPage loadReceiptData] Unmounted after fetching equipment details. Exiting.");
+          return;
+        }
+        setDetailedEquipment(resolvedEquipmentDetails);
+        console.log("[ContractPage loadReceiptData] Detailed equipment list processed:", resolvedEquipmentDetails);
         
         const pixAmount = fetchedRental.isOpenEnded ? 0 : fetchedRental.value;
-        if (fetchedRental.paymentMethod === 'pix' && companySettings.pixKey && pixAmount > 0) {
-          const city = extractCityFromAddress(companySettings.address);
+        if (fetchedRental.paymentMethod === 'pix' && currentCompanyDetails.pixKey && pixAmount > 0) {
+          const city = extractCityFromAddress(currentCompanyDetails.address);
           const txidForPix = `DHALUGUEIS${fetchedRental.id.toString().padStart(6, '0')}`;
-          const descriptionForPix = `Aluguel ${companySettings.companyName || 'Empresa'} - ID ${fetchedRental.id}`;
+          const descriptionForPix = `Aluguel ${currentCompanyDetails.companyName || 'Empresa'} - ID ${fetchedRental.id}`;
 
+          console.log(`[ContractPage loadReceiptData] Generating PIX payload with: key=${currentCompanyDetails.pixKey}, merchant=${currentCompanyDetails.companyName}, city=${city}, amount=${pixAmount}, txid=${txidForPix}`);
           const payload = generatePixPayload({
-            pixKey: companySettings.pixKey,
-            merchantName: companySettings.companyName || 'Nome Empresa',
+            pixKey: currentCompanyDetails.pixKey,
+            merchantName: currentCompanyDetails.companyName || 'Nome Empresa',
             merchantCity: city,
             amount: pixAmount,
             txid: txidForPix,
             description: descriptionForPix,
           });
-          if (isMounted) setPixPayload(payload);
+          if (!isMounted) {
+            console.log("[ContractPage loadReceiptData] Unmounted after generating PIX payload. Exiting.");
+            return;
+          }
+          setPixPayload(payload);
+          console.log("[ContractPage loadReceiptData] PIX Payload generated:", payload);
         } else {
           if(isMounted) setPixPayload(null);
+          console.log("[ContractPage loadReceiptData] Conditions not met for PIX payload generation or PIX key missing.");
         }
-
+        console.log("[ContractPage loadReceiptData] Data loading complete.");
       } catch (err) {
         if (isMounted) {
-          console.error("Error fetching rental data:", err);
-          const errorMessage = (err instanceof Error) ? err.message : "Erro desconhecido.";
-          setError(`Falha ao carregar dados do contrato: ${errorMessage}.`);
+          console.error("[ContractPage loadReceiptData] Error fetching rental data. Raw error:", err);
+          const errorMessage = (err instanceof Error) ? err.message : "Erro desconhecido ao carregar dados.";
+          setError(`Falha ao carregar dados do contrato: ${errorMessage}. Verifique o console para mais detalhes.`);
         }
       } finally {
-        if (isMounted) setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+          console.log("[ContractPage loadReceiptData] setIsLoading(false).");
+        }
       }
     };
-    
-    loadReceiptData();
 
-    return () => { isMounted = false; };
-  }, [idStr, rentalIdNum, router]);
+    if (idStr && !isNaN(rentalIdNum) && companyDetailsLoaded) {
+      loadReceiptData();
+    } else if ((!idStr || isNaN(rentalIdNum)) && isMounted) {
+      console.warn(`[ContractPage useEffect - main data] Invalid rental ID: idStr=${idStr}, rentalIdNum=${rentalIdNum}. Calling notFound().`);
+      if (isMounted) {
+        setError("ID do contrato não fornecido ou inválido.");
+        setIsLoading(false);
+        notFound();
+      }
+    } else if (isMounted) {
+      console.log("[ContractPage useEffect - main data] Waiting for companyDetailsLoaded or valid rentalIdNum.");
+      if(isMounted) setIsLoading(true);
+    }
 
-  if (isLoading || !currentCompanyDetails) {
+    return () => {
+      isMounted = false;
+      console.log("[ContractPage useEffect - main data] Unmounted. isMounted set to false.");
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idStr, rentalIdNum, companyDetailsLoaded, router]);
+
+
+  if (isLoading) {
     return (
       <div className="bg-gray-100 min-h-screen py-8 px-4 print:bg-white print:py-0 print:px-0">
         <div className="contract-container max-w-3xl mx-auto bg-white p-8 shadow-lg print:shadow-none print:border-none font-['Arial',_sans-serif] text-xs text-gray-800 print:p-0">
@@ -374,7 +491,7 @@ export default function RentalContractPage() {
   const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
   const valorPorExtenso = numberToWords(rental.value);
-  const displayContractLogo = currentCompanyDetails.contractLogoUrl || currentCompanyDetails.companyLogoUrl || DEFAULT_COMPANY_LOGO;
+  const displayContractLogo = currentCompanyDetails.contractLogoUrl || generalCompanyLogo || DEFAULT_COMPANY_LOGO;
   const contractTitle = "Contrato de Aluguel";
   const rentalPeriod = rental.isOpenEnded
     ? `${format(parseISO(rental.rentalStartDate), "dd/MM/yyyy", { locale: ptBR })} - Em Aberto`
@@ -405,10 +522,18 @@ export default function RentalContractPage() {
           .contract-container h3,
           .contract-container th,
           .contract-container td {
-            line-height: 0.8 !important; 
+            /* === CONTROLE DE ESPAÇAMENTO GERAL DO TEXTO PARA PRINT === */
+            /* line-height: Controla o espaçamento vertical entre as linhas de texto. Valores menores = mais apertado. */
+            /* Experimente com valores como 0.8, 0.9, 1.0, 1.1 etc. */
+            line-height: 0.8 !important; /* Ajuste este valor para mais ou menos espaço entre linhas. Ex: 0.8, 0.9, 1.0 */
+
             font-size: 6pt !important;
-            margin-top: 0.01mm !important;
-            margin-bottom: 0.01mm !important;
+
+            /* margin-top / margin-bottom: Controla o espaço acima e abaixo de cada parágrafo/elemento. */
+            /* Experimente com valores como 0mm, 0.05mm, 0.1mm etc. */
+            margin-top: 0.01mm !important;    /* Mínimo espaço acima dos elementos */
+            margin-bottom: 0.01mm !important; /* Mínimo espaço abaixo dos elementos */
+
             padding-top: 0 !important;
             padding-bottom: 0 !important;
           }
@@ -519,6 +644,8 @@ export default function RentalContractPage() {
           }
           
            .contract-section.signature-container {
+            /* margin-top: ESPAÇO ANTES DO BLOCO DE ASSINATURAS (REDUZIDO) */
+            /* margin-bottom: ESPAÇO DEPOIS DO BLOCO DE ASSINATURAS (REDUZIDO) */
             margin-top: 0.5mm !important;
             margin-bottom: 0.3mm !important;
             display: flex !important;
@@ -527,17 +654,20 @@ export default function RentalContractPage() {
           }
           .signature-area {
             text-align: center;
+            /* margin-top: ESPAÇO ACIMA DE CADA LINHA DE ASSINATURA (REDUZIDO) */
             margin-top: 0.3mm !important;
-            margin-bottom: 0.01mm !important;
+            margin-bottom: 0.01mm !important; /* Mínimo espaço abaixo do nome */
           }
           .signature-area:first-child {
+             /* margin-bottom: ESPAÇO ENTRE AS DUAS ASSINATURAS (REDUZIDO) */
             margin-bottom: 0.5mm !important;
           }
           .signature-line {
              display: block;
-             margin: 0 auto 0.01mm auto;
+             margin: 0 auto 0.01mm auto; /* Reduzida margem inferior da linha */
              width: 30mm !important;
              border-bottom: 0.1px solid #333 !important;
+             /* padding-bottom: ESPAÇO ABAIXO DA LINHA PARA ASSINAR (REDUZIDO) */
              padding-bottom: 0.8mm !important; 
           }
            .signature-area p.font-semibold.text-xs,
@@ -554,6 +684,173 @@ export default function RentalContractPage() {
             line-height: 0.8 !important;      
           }
         }
+
+        /* === PDF EXPORT MODE === */
+        .pdf-export-mode .contract-container {
+            box-shadow: none !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+          }
+        .pdf-export-mode .contract-container p,
+        .pdf-export-mode .contract-container li,
+        .pdf-export-mode .contract-container div:not(.signature-area):not(.signature-container),
+        .pdf-export-mode .contract-container span,
+        .pdf-export-mode .contract-container h1,
+        .pdf-export-mode .contract-container h2,
+        .pdf-export-mode .contract-container h3,
+        .pdf-export-mode .contract-container th,
+        .pdf-export-mode .contract-container td {
+            /* === CONTROLE DE ESPAÇAMENTO GERAL DO TEXTO PARA PDF === */
+            /* line-height: Controla o espaçamento vertical entre as linhas de texto. Valores menores = mais apertado. */
+            /* Experimente com valores como 0.8, 0.9, 1.0, 1.1 etc. */
+            line-height: 0.8 !important; /* AJUSTE AQUI (original 0.8)*/
+
+            font-size: 6pt !important; 
+
+            /* margin-top / margin-bottom: Controla o espaço acima e abaixo de cada parágrafo/elemento. */
+            /* Experimente com valores como 0mm, 0.05mm, 0.1mm etc. */
+            margin-top: 0.01mm !important;    /* AJUSTE AQUI (original 0.01mm)*/
+            margin-bottom: 0.01mm !important; /* AJUSTE AQUI (original 0.01mm)*/
+
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+          }
+        .pdf-export-mode .contract-table th, .pdf-export-mode .contract-table td {
+            border: 0.05px solid #ccc !important;
+            padding: 0.01mm 0.05mm !important; 
+            font-size: 4.5pt !important;
+            line-height: 0.8 !important;      
+          }
+        .pdf-export-mode .contract-header .logo-container {
+             width: 18mm !important;
+             height: 7mm !important;
+             margin-bottom: 0mm !important;
+          }
+        .pdf-export-mode .contract-header {
+            margin-bottom: 0.01mm !important; 
+          }
+        .pdf-export-mode .contract-header .company-info {
+            font-size: 5pt !important;
+            line-height: 0.8 !important; 
+          }
+        .pdf-export-mode .contract-header .company-info h1 {
+            font-size: 7pt !important;
+            margin-bottom: 0.01mm !important; 
+            line-height: 0.8 !important;
+          }
+        .pdf-export-mode .contract-header .company-info p {
+            font-size: 5pt !important;
+            line-height: 0.8 !important;
+            margin-bottom: 0mm !important;
+          }
+        .pdf-export-mode .contract-section {
+            margin-bottom: 0.01mm !important; 
+          }
+        .pdf-export-mode .contract-section.flex.justify-between.items-start {
+             margin-bottom: 0.01mm !important; 
+          }
+        .pdf-export-mode .contract-section > h2.font-semibold,
+        .pdf-export-mode .contract-section > h3.font-semibold {
+              font-size: 6.5pt !important;
+              margin-bottom: 0.01mm !important; 
+              margin-top: 0.01mm !important;
+              line-height: 0.8 !important;
+          }
+        .pdf-export-mode hr {
+            margin: 0.01mm 0 !important; 
+            border-top-width: 0.05px !important;
+          }
+        .pdf-export-mode .contract-table th {
+            background-color: #fdfdfd !important;
+          }
+        .pdf-export-mode .contract-summary-grid {
+            font-size: 5pt !important;
+            gap: 0rem 0.01rem !important; 
+            margin-bottom: 0.01mm !important; 
+          }
+        .pdf-export-mode .total-line {
+            font-size: 6pt !important;
+            line-height: 0.8 !important;
+          }
+        .pdf-export-mode .pix-section {
+              margin-top: 0.01mm !important; 
+          }
+        .pdf-export-mode .pix-section h3 {
+              font-size: 5.5pt !important;
+              margin-bottom: 0.01mm !important;
+              line-height: 0.8 !important;
+          }
+        .pdf-export-mode .pix-section canvas {
+            width: 10mm !important;
+            height: 10mm !important;
+            margin: 0.01mm auto !important;
+            border: 0.05px solid #ccc !important;
+            padding: 0.05mm !important;
+          }
+        .pdf-export-mode .pix-key-text {
+            font-size: 4pt !important;
+            word-break: break-all !important;
+            line-height: 0.8 !important;
+          }
+        .pdf-export-mode .terms-conditions {
+            font-size: 3.5pt !important;
+            line-height: 0.8 !important;      
+            white-space: pre-wrap !important;
+            margin-top: 0.1mm !important; 
+            margin-bottom: 0.1mm !important; 
+          }
+        .pdf-export-mode .contract-section p.valor-extenso-class {
+            font-size: 4.5pt !important;
+            line-height: 0.8 !important;      
+            margin-top: 0.1mm !important;     
+            margin-bottom: 0.2mm !important; 
+          }
+          
+           .pdf-export-mode .contract-section.signature-container {
+            /* margin-top: ESPAÇO ANTES DO BLOCO DE ASSINATURAS */
+            /* margin-bottom: ESPAÇO DEPOIS DO BLOCO DE ASSINATURAS */
+            margin-top: 0.5mm !important;  /* AJUSTE AQUI (original 0.5mm) */
+            margin-bottom: 0.3mm !important; /* AJUSTE AQUI (original 0.3mm) */
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+          }
+          .pdf-export-mode .signature-area {
+            text-align: center;
+            /* margin-top: ESPAÇO ACIMA DE CADA LINHA DE ASSINATURA */
+            margin-top: 0.3mm !important;   /* AJUSTE AQUI (original 0.3mm) */
+            margin-bottom: 0.01mm !important; 
+          }
+          .pdf-export-mode .signature-area:first-child {
+             /* margin-bottom: ESPAÇO ENTRE AS DUAS ASSINATURAS */
+            margin-bottom: 0.5mm !important; /* AJUSTE AQUI (original 0.5mm) */
+          }
+          .pdf-export-mode .signature-line {
+             display: block;
+             margin: 0 auto 0.01mm auto; 
+             width: 30mm !important;
+             border-bottom: 0.05px solid #333 !important;
+             /* padding-bottom: ESPAÇO ABAIXO DA LINHA PARA ASSINAR */
+             padding-bottom: 0.8mm !important; /* AJUSTE AQUI (original 0.8mm) */
+          }
+           .pdf-export-mode .signature-area p.font-semibold.text-xs,
+           .pdf-export-mode .signature-area p.text-xs {
+            font-size: 4.5pt !important;
+            line-height: 0.8 !important;
+            margin-bottom: 0mm !important;
+          }
+          .pdf-export-mode footer.text-center.text-xs {
+            font-size: 4.5pt !important;
+            margin-top: 0.01mm !important;     
+            padding-top: 0.01mm !important;
+            border-top: 0.05px solid #ccc !important;
+            line-height: 0.8 !important;      
+          }
+
+        /* Default styles for HTML view (screen) */
         .contract-container { max-width: 750px; margin: 0 auto; background-color: white; padding: 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.1); font-family: Arial, sans-serif; font-size: 11px; color: #333; border: 1px solid #eee; overflow-x: auto; }
         .contract-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; }
         .contract-header .logo-container { width: 200px; height: 100px; display: flex; align-items: center; justify-content: flex-start;}
@@ -573,7 +870,11 @@ export default function RentalContractPage() {
         .pix-key-text { font-size: 9px; word-break: break-all; }
         .terms-conditions { white-space: pre-wrap; font-size: 8px; line-height: 1.3; margin-bottom: 0.5rem; }
         .contract-section p.valor-extenso-class { margin-top: 0.5rem; margin-bottom: 1rem; }
+        
+        /* ESPAÇAMENTO PARA ASSINATURA NA TELA (HTML VIEW - REDUZIDO) */
         .contract-section.signature-container {
+          /* margin-top: ESPAÇO ANTES DO BLOCO DE ASSINATURAS (HTML) */
+          /* margin-bottom: ESPAÇO DEPOIS DO BLOCO DE ASSINATURAS (HTML) */
           margin-top: 2rem !important;     
           margin-bottom: 1.5rem !important;  
           display: flex !important;
@@ -582,10 +883,12 @@ export default function RentalContractPage() {
         }
         .signature-area {
           text-align: center;
+          /* margin-top: ESPAÇO ACIMA DE CADA LINHA DE ASSINATURA (HTML) */
           margin-top: 1.5rem !important;     
           margin-bottom: 0.5rem !important;
         }
         .signature-area:first-child {
+           /* margin-bottom: ESPAÇO ENTRE AS DUAS ASSINATURAS (HTML) */
            margin-bottom: 1.5rem !important; 
         }
         .signature-line {
@@ -593,6 +896,7 @@ export default function RentalContractPage() {
           margin: 0 auto 0.25rem auto;
           width: 280px;
           border-bottom: 1px solid #333;
+          /* padding-bottom: ESPAÇO ABAIXO DA LINHA PARA ASSINAR (HTML) */
           padding-bottom: 25px !important; 
         }
         footer.text-center.text-xs {
@@ -691,7 +995,7 @@ export default function RentalContractPage() {
 
             <h3 className="font-semibold text-sm mb-2 mt-4">Termos e Condições:</h3>
             <p className="terms-conditions">
-              {currentCompanyDetails.contractTermsAndConditions || ''}
+              {currentCompanyDetails.contractTermsAndConditions || INITIAL_COMPANY_DETAILS.contractTermsAndConditions}
             </p>
              <p className="text-xs mt-4 valor-extenso-class">
               Valor por extenso: {valorPorExtenso || 'Não especificado'}. {rental.isOpenEnded && <span className="font-semibold">(Valor referente à diária)</span>}
@@ -780,7 +1084,7 @@ export default function RentalContractPage() {
         </div>
 
         <footer className="text-center text-xs text-gray-500 mt-8 pt-4 border-t">
-            <p>{currentCompanyDetails.contractFooterText || ''}</p>
+            <p>{currentCompanyDetails.contractFooterText || INITIAL_COMPANY_DETAILS.contractFooterText}</p>
             <p>Em caso de dúvidas, entre em contato: {currentCompanyDetails.phone}</p>
         </footer>
 

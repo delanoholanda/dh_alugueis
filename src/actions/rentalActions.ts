@@ -1,12 +1,10 @@
-
 'use server';
 
-import type { Rental, PaymentMethod, Equipment as InventoryEquipment, RentalPhoto } from '@/types';
+import type { Rental, PaymentMethod, Equipment as InventoryEquipment } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { getCustomerById } from './customerActions';
 import { getInventoryItemById } from './inventoryActions';
 import { getDb } from '@/lib/database';
-import crypto from 'crypto';
 
 import { addDays, format, parseISO, eachDayOfInterval, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -40,8 +38,7 @@ export async function getRentals(): Promise<Rental[]> {
   try {
     const rentalRows = db.prepare(`
       SELECT r.*, 
-             json_group_array(json_object('equipmentId', re.equipmentId, 'quantity', re.quantity, 'name', re.name, 'customDailyRentalRate', re.customDailyRentalRate)) as equipmentJson,
-             (SELECT json_group_array(json_object('id', rp.id, 'imageUrl', rp.imageUrl, 'photoType', rp.photoType, 'uploadedAt', rp.uploadedAt)) FROM rental_photos rp WHERE rp.rentalId = r.id) as photosJson
+             json_group_array(json_object('equipmentId', re.equipmentId, 'quantity', re.quantity, 'name', re.name, 'customDailyRentalRate', re.customDailyRentalRate)) as equipmentJson
       FROM rentals r
       LEFT JOIN rental_equipment re ON r.id = re.rentalId
       GROUP BY r.id
@@ -51,7 +48,6 @@ export async function getRentals(): Promise<Rental[]> {
     return rentalRows.map(row => ({
       ...row,
       equipment: row.equipmentJson ? JSON.parse(row.equipmentJson).filter((eq: any) => eq.equipmentId !== null) : [],
-      photos: row.photosJson ? JSON.parse(row.photosJson).filter((ph: any) => ph && ph.id !== null) : [],
       actualReturnDate: row.actualReturnDate || null, 
       paymentDate: row.paymentDate || null, 
       notes: row.notes || null,
@@ -71,8 +67,7 @@ export async function getRentalById(id: number): Promise<Rental | undefined> {
   try {
     const row = db.prepare(`
       SELECT r.*, 
-             json_group_array(json_object('equipmentId', re.equipmentId, 'quantity', re.quantity, 'name', re.name, 'customDailyRentalRate', re.customDailyRentalRate)) as equipmentJson,
-             (SELECT json_group_array(json_object('id', rp.id, 'imageUrl', rp.imageUrl, 'photoType', rp.photoType, 'uploadedAt', rp.uploadedAt)) FROM rental_photos rp WHERE rp.rentalId = r.id) as photosJson
+             json_group_array(json_object('equipmentId', re.equipmentId, 'quantity', re.quantity, 'name', re.name, 'customDailyRentalRate', re.customDailyRentalRate)) as equipmentJson
       FROM rentals r
       LEFT JOIN rental_equipment re ON r.id = re.rentalId
       WHERE r.id = ?
@@ -83,7 +78,6 @@ export async function getRentalById(id: number): Promise<Rental | undefined> {
     return {
       ...row,
       equipment: row.equipmentJson ? JSON.parse(row.equipmentJson).filter((eq: any) => eq.equipmentId !== null) : [],
-      photos: row.photosJson ? JSON.parse(row.photosJson).filter((ph: any) => ph && ph.id !== null) : [],
       actualReturnDate: row.actualReturnDate || null,
       paymentDate: row.paymentDate || null,
       notes: row.notes || null,
@@ -155,8 +149,8 @@ export async function createRental(
     deliveryAddress: rentalData.deliveryAddress && rentalData.deliveryAddress.trim() !== '' ? rentalData.deliveryAddress : 'A definir',
   };
   
-  const { equipment } = rentalData;
-  const rentalFieldsToInsert = newRentalForDbBase;
+  const { equipment } = rentalData; // Correctly get equipment from rentalData
+  const rentalFieldsToInsert = newRentalForDbBase; // The rest of the fields for the 'rentals' table
 
   const insertRentalStmt = db.prepare(`
     INSERT INTO rentals (customerId, customerName, rentalStartDate, rentalDays, expectedReturnDate, actualReturnDate, freightValue, discountValue, value, paymentStatus, paymentMethod, paymentDate, notes, deliveryAddress, isOpenEnded, chargeSaturdays, chargeSundays)
@@ -384,20 +378,16 @@ export async function updateRental(
 
 export async function deleteRental(id: number): Promise<{ success: boolean }> { 
   const db = getDb();
-  const deletePhotosStmt = db.prepare('DELETE FROM rental_photos WHERE rentalId = ?');
-  const deleteEquipmentStmt = db.prepare('DELETE FROM rental_equipment WHERE rentalId = ?');
-  const deleteRentalStmt = db.prepare('DELETE FROM rentals WHERE id = ?');
-  
   try {
-    db.transaction(() => {
-        deletePhotosStmt.run(id);
-        deleteEquipmentStmt.run(id);
-        deleteRentalStmt.run(id);
-    })();
+    const deleteEquipmentStmt = db.prepare('DELETE FROM rental_equipment WHERE rentalId = ?');
+    deleteEquipmentStmt.run(id);
+
+    const deleteRentalStmt = db.prepare('DELETE FROM rentals WHERE id = ?'); 
+    const result = deleteRentalStmt.run(id);
     
     revalidatePath('/dashboard/rentals');
     revalidatePath('/dashboard/inventory');
-    return { success: true };
+    return { success: result.changes > 0 };
   } catch (error) {
     console.error(`Failed to delete rental with id ${id}:`, error);
     return { success: false };
@@ -579,46 +569,5 @@ export async function finalizeRental(id: number): Promise<Rental | null> {
   } catch (error) {
     console.error(`Failed to mark rental as returned with id ${id}:`, error);
     throw new Error(`Falha ao marcar o aluguel ${id} como devolvido.`);
-  }
-}
-
-export async function addRentalPhoto(rentalId: number, imageUrl: string, photoType: 'delivery' | 'return'): Promise<RentalPhoto> {
-  const db = getDb();
-  const newId = `rpho_${crypto.randomBytes(8).toString('hex')}`;
-  const newPhoto: RentalPhoto = {
-    id: newId,
-    rentalId,
-    imageUrl,
-    photoType,
-    uploadedAt: new Date().toISOString(),
-  };
-
-  try {
-    const stmt = db.prepare('INSERT INTO rental_photos (id, rentalId, imageUrl, photoType, uploadedAt) VALUES (@id, @rentalId, @imageUrl, @photoType, @uploadedAt)');
-    stmt.run(newPhoto);
-    revalidatePath(`/dashboard/rentals/${rentalId}/details`);
-    return newPhoto;
-  } catch (error) {
-    console.error("Failed to add rental photo:", error);
-    throw new Error('Failed to add photo to database.');
-  }
-}
-
-export async function deleteRentalPhoto(photoId: string): Promise<{ success: boolean }> {
-  const db = getDb();
-  try {
-    const getRentalIdStmt = db.prepare('SELECT rentalId FROM rental_photos WHERE id = ?');
-    const photo = getRentalIdStmt.get(photoId) as { rentalId: number } | undefined;
-
-    const stmt = db.prepare('DELETE FROM rental_photos WHERE id = ?');
-    const result = stmt.run(photoId);
-    
-    if (result.changes > 0 && photo) {
-      revalidatePath(`/dashboard/rentals/${photo.rentalId}/details`);
-    }
-    return { success: result.changes > 0 };
-  } catch (error) {
-    console.error(`Failed to delete rental photo with id ${photoId}:`, error);
-    throw new Error('Failed to delete photo from database.');
   }
 }

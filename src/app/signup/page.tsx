@@ -1,20 +1,9 @@
 
-'use client';
+import { redirect } from 'next/navigation';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
+// Esta página redireciona para o login, pois o cadastro público foi desativado.
 export default function SignupPageDisabled() {
-  const router = useRouter();
-
-  useEffect(() => {
-    // Redireciona para a página de login, pois o cadastro público foi desativado.
-    router.replace('/login');
-  }, [router]);
-
-  return (
-    <div className="flex items-center justify-center h-screen">
-      <p>Redirecionando...</p>
-    </div>
-  );
+  redirect('/login');
+  // O return não é alcançado, mas é bom para o TypeScript.
+  return null;
 }

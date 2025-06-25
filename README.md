@@ -1,4 +1,3 @@
-
 # Firebase Studio
 
 This is a NextJS starter in Firebase Studio.
@@ -48,19 +47,11 @@ Siga os passos abaixo para configurar e rodar esta aplicação no seu ambiente l
 
 ### Banco de Dados
 
-*   A aplicação utiliza **SQLite** como banco de dados. O arquivo do banco (`dhalugueis.db`) será criado automaticamente na pasta `data` na raiz do projeto na primeira vez que a aplicação tentar acessá-lo, se ele ainda não existir.
+*   A aplicação utiliza **SQLite** como banco de dados. O arquivo do banco (`dhalugueis.db`) será criado automaticamente na raiz do projeto na primeira vez que a aplicação tentar acessá-lo, se ele ainda não existir.
 *   Se for a primeira vez que o banco de dados é criado, um usuário administrador padrão será gerado com as seguintes credenciais:
     *   **Email**: `admin@dhalugueis.com`
     *   **Senha**: `dhdh1234`
     Recomenda-se alterar essa senha após o primeiro login através da interface de gerenciamento de usuários.
-
-### Persistência de Dados com Docker
-
-Quando você executa a aplicação via Docker, utilizando o arquivo `docker-compose.yml`, a persistência dos dados é garantida através de um **volume Docker**.
-
-*   **Como funciona?** A linha `volumes: - ./data:/app/data` no `docker-compose.yml` mapeia a pasta `data` do seu projeto (no seu computador) para a pasta `/app/data` dentro do contêiner.
-*   **O que isso significa?** Qualquer arquivo que a aplicação salve dentro da pasta `/app/data`, como o banco de dados `dhalugueis.db`, é na verdade salvo diretamente na pasta `data` em seu computador host.
-*   **Segurança dos Dados:** Isso garante que, mesmo que você pare, remova ou reconstrua o contêiner Docker, seus dados (clientes, aluguéis, configurações e **todas as imagens de logo e fotos de aluguel**) permanecerão intactos, pois estão fisicamente armazenados no seu computador.
 
 ### Funcionalidades de Inteligência Artificial (Genkit)
 
