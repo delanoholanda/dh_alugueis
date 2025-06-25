@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, type FormEvent, useEffect } from 'react';
@@ -6,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-// import Link from 'next/link'; // Link para signup removido
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import type { CompanyDetails } from '@/types';
+import { getCompanySettings } from '@/actions/settingsActions';
 
 interface AuthFormProps {
   mode: 'login'; // Único modo suportado agora é login
@@ -16,9 +17,7 @@ interface AuthFormProps {
   initialAppName?: string; 
 }
 
-const COMPANY_LOGO_STORAGE_KEY = 'dhAlugueisCompanyLogo';
 const DEFAULT_COMPANY_LOGO = '/dh-alugueis-logo.png';
-const COMPANY_DETAILS_STORAGE_KEY = 'dhAlugueisCompanyDetails';
 const DEFAULT_APP_NAME = "DH Alugueis";
 
 export function AuthForm({ mode, onSubmit, initialAppName = DEFAULT_APP_NAME }: AuthFormProps) {
@@ -31,28 +30,22 @@ export function AuthForm({ mode, onSubmit, initialAppName = DEFAULT_APP_NAME }: 
   const [dynamicAppName, setDynamicAppName] = useState<string>(initialAppName);
 
   useEffect(() => {
-    const storedLogo = localStorage.getItem(COMPANY_LOGO_STORAGE_KEY);
-    if (storedLogo) {
-      setCurrentLogo(storedLogo);
-    } else {
-      setCurrentLogo(DEFAULT_COMPANY_LOGO);
-    }
-
-    const storedCompanyDetails = localStorage.getItem(COMPANY_DETAILS_STORAGE_KEY);
-    if (storedCompanyDetails) {
+    const loadDisplaySettings = async () => {
       try {
-        const parsedDetails: CompanyDetails = JSON.parse(storedCompanyDetails);
-        if (parsedDetails.companyName) {
-          setDynamicAppName(parsedDetails.companyName);
-        } else {
-          setDynamicAppName(initialAppName);
+        const settings = await getCompanySettings();
+        if (settings.companyLogoUrl) {
+          setCurrentLogo(settings.companyLogoUrl);
         }
-      } catch (e) {
+        if (settings.companyName) {
+          setDynamicAppName(settings.companyName);
+        }
+      } catch (error) {
+        console.error("Failed to load company settings for login page:", error);
+        setCurrentLogo(DEFAULT_COMPANY_LOGO);
         setDynamicAppName(initialAppName);
       }
-    } else {
-      setDynamicAppName(initialAppName);
-    }
+    };
+    loadDisplaySettings();
   }, [initialAppName]);
 
 
@@ -113,7 +106,7 @@ export function AuthForm({ mode, onSubmit, initialAppName = DEFAULT_APP_NAME }: 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="bg-neutral-800 border-neutral-600 text-gray-50 placeholder:text-neutral-400 focus-visible:ring-primary focus-visible:border-primary text-base"
+                  className="bg-neutral-800 border-neutral-600 text-gray-50 placeholder:text-neutral-400 focus-visible:ring-primary focus-visible:border-primary text-base pr-10"
                 />
                  <Button
                   type="button"

@@ -14,7 +14,7 @@ services:
     # para o arquivo /app/dhalugueis.db dentro do container.
     # Seus dados estarão seguros mesmo que o container seja removido ou reconstruído.
     volumes:
-      - ./dhalugueis.db:/app/dhalugueis.db
+      - ./data:/app/data
     # Reinicia o container automaticamente se ele travar, a menos que tenha sido parado manualmente.
     # Isso garante que a aplicação volte a funcionar após a reinicialização do servidor.
     restart: unless-stopped
