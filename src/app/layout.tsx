@@ -13,13 +13,18 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: `${companyName} - Gerenciador`,
       description: 'Sistema de Gerenciamento de Aluguéis',
-      // O Next.js buscará automaticamente /src/app/icon.ico ou um arquivo similar.
+      icons: {
+        icon: '/icon.png',
+      },
     };
   } catch (error) {
     console.error("Falha ao gerar metadados dinâmicos:", error);
     return {
       title: 'DH Alugueis - Gerenciador',
       description: 'Sistema de Gerenciamento de Aluguéis',
+      icons: {
+        icon: '/icon.png',
+      },
     };
   }
 }
