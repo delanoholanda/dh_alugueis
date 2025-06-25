@@ -26,46 +26,64 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
   const { toast } = useToast();
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 4 * 1024 * 1024) { // 4MB limit for base64
-        toast({
-          title: 'Arquivo Muito Grande',
-          description: 'Por favor, selecione uma imagem menor que 4MB.',
-          variant: 'destructive',
-        });
-        event.target.value = ''; 
-        return;
-    }
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
     setIsLoading(true);
+    let successfulUploads = 0;
+
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onloadend = async () => {
-        const base64Image = reader.result as string;
-        await addRentalPhoto(rentalId, base64Image, photoType);
+      const uploadPromises = Array.from(files).map(file => {
+        return new Promise<void>((resolve, reject) => {
+          if (file.size > 8 * 1024 * 1024) { // 8MB limit
+            toast({
+              title: 'Arquivo Muito Grande',
+              description: `A imagem "${file.name}" excede o limite de 8MB.`,
+              variant: 'destructive',
+            });
+            // Don't reject the whole batch, just this file.
+            resolve();
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onloadend = async () => {
+            try {
+              const base64Image = reader.result as string;
+              await addRentalPhoto(rentalId, base64Image, photoType);
+              successfulUploads++;
+              resolve();
+            } catch (uploadError) {
+              reject(uploadError);
+            }
+          };
+          reader.onerror = () => {
+            reject(new Error(`Falha ao ler o arquivo ${file.name}.`));
+          };
+        });
+      });
+
+      await Promise.all(uploadPromises);
+
+      if (successfulUploads > 0) {
         toast({
-          title: 'Foto Adicionada',
-          description: 'A imagem foi salva com sucesso.',
+          title: 'Fotos Adicionadas',
+          description: `${successfulUploads} imagem(ns) foram salvas com sucesso.`,
           variant: 'success',
         });
-        router.refresh(); 
-      };
-      reader.onerror = () => {
-        throw new Error("Falha ao ler o arquivo de imagem.");
+        router.refresh();
       }
     } catch (error) {
       toast({
-        title: 'Erro ao Salvar Foto',
-        description: (error as Error).message || 'Ocorreu um problema ao salvar a imagem.',
+        title: 'Erro ao Salvar Fotos',
+        description: (error as Error).message || 'Ocorreu um problema ao salvar uma ou mais imagens.',
         variant: 'destructive',
       });
     } finally {
-        // Reset file input to allow re-uploading the same file if needed
-        event.target.value = '';
-        setIsLoading(false);
+      // Reset file input to allow re-uploading the same file if needed
+      if(event.target) event.target.value = '';
+      setIsLoading(false);
     }
   };
 
@@ -100,7 +118,7 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
       <CardContent>
         <div className="mb-4">
           <label htmlFor={`upload-${photoType}`} className="block text-sm font-medium text-muted-foreground mb-2">
-            Adicionar nova foto
+            Adicionar nova(s) foto(s) (máx 8MB cada)
           </label>
           <div className="relative">
             <Input
@@ -110,6 +128,7 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
               onChange={handleFileChange}
               disabled={isLoading}
               className="cursor-pointer file:mr-2 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary file:border-0 file:rounded file:px-2 file:py-1 hover:file:bg-primary/20"
+              multiple
             />
             {isLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin" />}
           </div>

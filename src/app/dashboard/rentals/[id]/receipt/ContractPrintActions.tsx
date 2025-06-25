@@ -2,9 +2,10 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Printer, ArrowLeft, FileDown } from 'lucide-react';
+import { Printer, ArrowLeft, FileDown, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import html2pdf from 'html2pdf.js';
+import { useState } from 'react';
 
 interface ContractPrintActionsProps {
   rentalId: string;
@@ -13,16 +14,7 @@ interface ContractPrintActionsProps {
 
 export default function ContractPrintActions({ rentalId, customerName }: ContractPrintActionsProps) {
   const router = useRouter();
-
-  const handlePrint = () => {
-    console.log('Botão Imprimir Contrato clicado. Tentando chamar window.print()...');
-    try {
-      window.print();
-      console.log('window.print() chamado com sucesso.');
-    } catch (error) {
-      console.error('Erro ao chamar window.print():', error);
-    }
-  };
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const sanitizeFilenamePart = (name: string | undefined): string => {
     if (!name) return '';
@@ -33,53 +25,61 @@ export default function ContractPrintActions({ rentalId, customerName }: Contrac
       .replace(/[^a-zA-Z0-9]/g, "") 
       .substring(0, 15); 
   };
-
-  const handleExportToPDF = () => {
-    console.log('Botão Exportar para PDF clicado.');
+  
+  const generatePdf = async (outputType: 'save' | 'open') => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    
     const element = document.querySelector('.contract-container');
-    if (element) {
-      const customerFirstNamePart = sanitizeFilenamePart(customerName);
-      const pdfFilename = `Contrato_DH_Alugueis_${rentalId}${customerFirstNamePart ? `_${customerFirstNamePart}` : ''}.pdf`;
+    if (!element) {
+      console.error("Elemento .contract-container não encontrado.");
+      setIsProcessing(false);
+      return;
+    }
 
-      const opt = {
-        margin: [10, 12, 10, 12], 
-        filename: pdfFilename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, dpi: 192, letterRendering: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-      };
-      
-      const actionsElement = element.querySelector('.no-print');
-      if (actionsElement) (actionsElement as HTMLElement).style.display = 'none';
+    const actionsElement = element.querySelector('.no-print');
+    if (actionsElement) (actionsElement as HTMLElement).style.display = 'none';
 
-      html2pdf()
-        .from(element)
-        .set(opt)
-        .save()
-        .then(() => {
-          console.log('PDF exportado e salvo com sucesso.');
-          if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex'; 
-        })
-        .catch((err: any) => {
-          console.error("Erro ao gerar PDF:", err);
-          if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
-        });
-    } else {
-      console.error("Elemento .contract-container não encontrado para exportar para PDF.");
+    const customerFirstNamePart = sanitizeFilenamePart(customerName);
+    const pdfFilename = `Contrato_DH_Alugueis_${rentalId}${customerFirstNamePart ? `_${customerFirstNamePart}` : ''}.pdf`;
+
+    const opt = {
+      margin: [10, 12, 10, 12], 
+      filename: pdfFilename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, dpi: 192, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+    
+    const worker = html2pdf().from(element).set(opt);
+
+    try {
+        if (outputType === 'save') {
+            await worker.save();
+        } else {
+            await worker.outputPdf('dataurlnewwindow');
+        }
+    } catch (error) {
+        console.error("Erro ao gerar PDF:", error);
+    } finally {
+        if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
+        setIsProcessing(false);
     }
   };
 
   return (
     <div className="mb-6 flex flex-wrap justify-end gap-2 no-print">
-      <Button variant="outline" onClick={() => router.back()}>
+      <Button variant="outline" onClick={() => router.back()} disabled={isProcessing}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
       </Button>
-      <Button onClick={handleExportToPDF}>
-        <FileDown className="mr-2 h-4 w-4" /> Exportar para PDF
+      <Button onClick={() => generatePdf('save')} disabled={isProcessing}>
+        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />} 
+        Exportar para PDF
       </Button>
-      <Button onClick={handlePrint}>
-        <Printer className="mr-2 h-4 w-4" /> Imprimir Contrato
+      <Button onClick={() => generatePdf('open')} disabled={isProcessing}>
+        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />} 
+        Imprimir Contrato
       </Button>
     </div>
   );
