@@ -14,63 +14,47 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import Image from 'next/image';
 import type { CompanyDetails, UserProfile } from '@/types';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from 'zod';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { updateUser } from '@/actions/userActions';
 import { getCompanySettings, updateCompanySettings } from '@/actions/settingsActions';
-
-const companyDetailsSchema = z.object({
-  companyName: z.string().min(1, "Nome da empresa é obrigatório."),
-  responsibleName: z.string().min(1, "Nome do responsável é obrigatório."),
-  phone: z.string().min(1, "Telefone é obrigatório."),
-  address: z.string().min(1, "Endereço é obrigatório."),
-  email: z.string().email("Email inválido."),
-  pixKey: z.string().min(1, "Chave PIX é obrigatória."),
-  contractTermsAndConditions: z.string().optional(),
-  contractFooterText: z.string().optional(),
-});
-
-type CompanyDetailsFormValues = z.infer<typeof companyDetailsSchema>;
-
 
 export default function SettingsPage() {
   const { user, updateUserContext } = useAuth();
   const { toast } = useToast();
   
+  // State for the profile form
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
+  // State for preferences
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(false); 
   
-  // State for logos, now managed separately from the form
-  const [companyLogoUrl, setCompanyLogoUrl] = useState('');
-  const [contractLogoUrl, setContractLogoUrl] = useState('');
-
-  const companyDetailsForm = useForm<CompanyDetailsFormValues>({
-    resolver: zodResolver(companyDetailsSchema),
-    defaultValues: {
-      companyName: '',
-      responsibleName: '',
-      phone: '',
-      address: '',
-      email: '',
-      pixKey: '',
-      contractTermsAndConditions: '',
-      contractFooterText: '',
-    }
+  // State for company details form (managed with useState)
+  const [companyDetails, setCompanyDetails] = useState<CompanyDetails>({
+    companyName: '',
+    responsibleName: '',
+    phone: '',
+    address: '',
+    email: '',
+    pixKey: '',
+    contractTermsAndConditions: '',
+    contractFooterText: '',
+    companyLogoUrl: '',
+    contractLogoUrl: '',
   });
+  const [isSavingCompanyDetails, setIsSavingCompanyDetails] = useState(false);
 
+  // Load all settings on component mount
   useEffect(() => {
     if (user) {
       setName(user.name);
       setEmail(user.email);
     }
+    
+    // Theme setup
     const isDarkModePreferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) {
@@ -81,13 +65,11 @@ export default function SettingsPage() {
       document.documentElement.classList.toggle('dark', isDarkModePreferred);
     }
 
+    // Load company settings from DB
     const loadSettings = async () => {
       try {
         const settings = await getCompanySettings();
-        companyDetailsForm.reset(settings);
-        // Set the separate state for logos
-        setCompanyLogoUrl(settings.companyLogoUrl || '');
-        setContractLogoUrl(settings.contractLogoUrl || '');
+        setCompanyDetails(settings);
       } catch (error) {
         console.error("Failed to load company settings:", error);
         toast({
@@ -98,8 +80,7 @@ export default function SettingsPage() {
       }
     };
     loadSettings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, toast]);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,26 +158,26 @@ export default function SettingsPage() {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
-        if (type === 'company') {
-          setCompanyLogoUrl(result);
-        } else {
-          setContractLogoUrl(result);
-        }
-        // No toast here, user must click save.
+        setCompanyDetails(prev => ({
+          ...prev,
+          [type === 'company' ? 'companyLogoUrl' : 'contractLogoUrl']: result,
+        }));
       };
       reader.readAsDataURL(file);
-       event.target.value = '';
+      event.target.value = '';
     }
   };
-
-  const handleCompanyDetailsSave = async (data: CompanyDetailsFormValues) => {
+  
+  const handleCompanyDetailsInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setCompanyDetails(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleCompanyDetailsSave = async (e: FormEvent) => {
+    e.preventDefault();
+    setIsSavingCompanyDetails(true);
     try {
-        const settingsToSave: CompanyDetails = {
-            ...data,
-            companyLogoUrl: companyLogoUrl,
-            contractLogoUrl: contractLogoUrl,
-        };
-        await updateCompanySettings(settingsToSave);
+        await updateCompanySettings(companyDetails);
         toast({
             title: 'Informações da Empresa Atualizadas',
             description: 'Os dados da sua empresa foram salvos com sucesso.',
@@ -204,9 +185,10 @@ export default function SettingsPage() {
         });
     } catch (error) {
         toast({ title: "Erro ao Salvar", description: (error as Error).message, variant: "destructive" });
+    } finally {
+        setIsSavingCompanyDetails(false);
     }
   };
-
 
   return (
     <div className="container mx-auto py-2">
@@ -217,6 +199,7 @@ export default function SettingsPage() {
       />
 
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+        {/* Profile Card */}
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><UserCircle className="mr-2 h-5 w-5 text-primary"/> Informações do Perfil</CardTitle>
@@ -249,67 +232,96 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Company and Contract Details Card */}
         <Card className="shadow-lg xl:col-span-2">
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center"><Building className="mr-2 h-5 w-5 text-primary"/> Detalhes da Empresa e Contratos</CardTitle>
-            <CardDescription>Edite os dados da sua empresa, PIX, e personalizações para contratos.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...companyDetailsForm}>
-              <form onSubmit={companyDetailsForm.handleSubmit(handleCompanyDetailsSave)} className="space-y-6">
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField control={companyDetailsForm.control} name="companyName" render={({ field }) => ( <FormItem> <FormLabel>Nome da Empresa</FormLabel> <FormControl> <Input placeholder="Nome da sua Empresa" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
-                  <FormField control={companyDetailsForm.control} name="responsibleName" render={({ field }) => ( <FormItem> <FormLabel>Nome do Responsável</FormLabel> <FormControl> <Input placeholder="Nome do Responsável" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
-                </div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField control={companyDetailsForm.control} name="phone" render={({ field }) => ( <FormItem> <FormLabel>Telefone da Empresa</FormLabel> <FormControl> <Input placeholder="Telefone para contato" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
-                   <FormField control={companyDetailsForm.control} name="email" render={({ field }) => ( <FormItem> <FormLabel>Email da Empresa</FormLabel> <FormControl> <Input type="email" placeholder="Email para contato" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
-                </div>
-                <FormField control={companyDetailsForm.control} name="address" render={({ field }) => ( <FormItem> <FormLabel>Endereço da Empresa</FormLabel> <FormControl> <Input placeholder="Rua, Número, Bairro, Cidade, Estado" {...field} /> </FormControl> <FormDescription className="text-xs mt-1"> Ex: Rua Exemplo, 123, Centro, Sua Cidade, SC </FormDescription> <FormMessage /> </FormItem> )}/>
-                <FormField control={companyDetailsForm.control} name="pixKey" render={({ field }) => ( <FormItem> <FormLabel>Chave PIX</FormLabel> <FormControl> <Input placeholder="Sua chave PIX" {...field} /> </FormControl> <FormDescription className="text-xs mt-1"> Pode ser CPF/CNPJ (só números), Telefone (+55DDD... ou DDD...), Email ou Chave Aleatória. </FormDescription> <FormMessage /> </FormItem> )}/>
-                
-                <div className="pt-6 border-t">
-                    <h3 className="text-lg font-medium flex items-center mb-4"><ImageIconLucide className="mr-2 h-5 w-5 text-primary"/>Logos da Empresa</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <Label>Logo Geral (Login, etc.)</Label>
-                             <div className="flex flex-col items-center space-y-2 mt-1">
-                                <div className="w-40 h-20 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-1">
-                                    {companyLogoUrl ? (<Image src={companyLogoUrl} alt="Pré-visualização Logo Empresa" layout="fill" objectFit="contain" key={companyLogoUrl} data-ai-hint="company logo"/>) : (<ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>)}
-                                </div>
-                                <Input placeholder="Cole a URL da imagem aqui" value={companyLogoUrl || ''} onChange={(e) => setCompanyLogoUrl(e.target.value)} />
-                                <Input id="companyLogoUpload" type="file" accept="image/*" onChange={(e) => handleLogoChange(e, 'company')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
-                             </div>
-                        </div>
-                         <div className="space-y-2">
-                            <Label>Logo Específica do Contrato</Label>
-                            <div className="flex flex-col items-center space-y-2 mt-1">
-                                <div className="w-40 h-20 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-1">
-                                    {contractLogoUrl ? (<Image src={contractLogoUrl} alt="Pré-visualização Logo Contrato" layout="fill" objectFit="contain" key={contractLogoUrl} data-ai-hint="contract logo"/>) : (<ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>)}
-                                </div>
-                                <Input placeholder="Cole a URL da imagem aqui" value={contractLogoUrl || ''} onChange={(e) => setContractLogoUrl(e.target.value)} />
-                                <Input id="contractLogoUpload" type="file" accept="image/*" onChange={(e) => handleLogoChange(e, 'contract')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
-                            </div>
-                            <p className="text-xs text-muted-foreground text-center mt-1">Se vazio, a logo geral será usada.</p>
-                        </div>
+           <form onSubmit={handleCompanyDetailsSave}>
+              <CardHeader>
+                <CardTitle className="font-headline flex items-center"><Building className="mr-2 h-5 w-5 text-primary"/> Detalhes da Empresa e Contratos</CardTitle>
+                <CardDescription>Edite os dados da sua empresa, PIX, e personalizações para contratos.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                  {/* TEXT FIELDS SECTION */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                       <Label htmlFor="companyName">Nome da Empresa</Label>
+                       <Input id="companyName" name="companyName" value={companyDetails.companyName} onChange={handleCompanyDetailsInputChange} placeholder="Nome da sua Empresa" />
                     </div>
-                </div>
+                    <div className="space-y-1.5">
+                       <Label htmlFor="responsibleName">Nome do Responsável</Label>
+                       <Input id="responsibleName" name="responsibleName" value={companyDetails.responsibleName} onChange={handleCompanyDetailsInputChange} placeholder="Nome do Responsável" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                       <Label htmlFor="phone">Telefone da Empresa</Label>
+                       <Input id="phone" name="phone" value={companyDetails.phone} onChange={handleCompanyDetailsInputChange} placeholder="Telefone para contato" />
+                    </div>
+                    <div className="space-y-1.5">
+                       <Label htmlFor="email">Email da Empresa</Label>
+                       <Input id="email" name="email" type="email" value={companyDetails.email} onChange={handleCompanyDetailsInputChange} placeholder="Email para contato" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                     <Label htmlFor="address">Endereço da Empresa</Label>
+                     <Input id="address" name="address" value={companyDetails.address} onChange={handleCompanyDetailsInputChange} placeholder="Rua, Número, Bairro, Cidade, Estado" />
+                     <p className="text-sm text-muted-foreground">Ex: Rua Exemplo, 123, Centro, Sua Cidade, SC</p>
+                  </div>
+                  <div className="space-y-1.5">
+                     <Label htmlFor="pixKey">Chave PIX</Label>
+                     <Input id="pixKey" name="pixKey" value={companyDetails.pixKey} onChange={handleCompanyDetailsInputChange} placeholder="Sua chave PIX" />
+                     <p className="text-sm text-muted-foreground">Pode ser CPF/CNPJ (só números), Telefone (+55...), Email ou Chave Aleatória.</p>
+                  </div>
+                  
+                  {/* LOGOS SECTION */}
+                  <div className="pt-6 border-t">
+                      <h3 className="text-lg font-medium flex items-center mb-4"><ImageIconLucide className="mr-2 h-5 w-5 text-primary"/>Logos da Empresa</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                              <Label>Logo Geral (Login, etc.)</Label>
+                              <div className="flex flex-col items-center space-y-2 mt-1">
+                                  <div className="w-40 h-20 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-1">
+                                      {companyDetails.companyLogoUrl ? (<Image src={companyDetails.companyLogoUrl} alt="Pré-visualização Logo Empresa" layout="fill" objectFit="contain" key={companyDetails.companyLogoUrl} data-ai-hint="company logo"/>) : (<ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>)}
+                                  </div>
+                                  <Input name="companyLogoUrl" placeholder="Cole a URL da imagem aqui" value={companyDetails.companyLogoUrl || ''} onChange={handleCompanyDetailsInputChange} />
+                                  <Input id="companyLogoUpload" type="file" accept="image/*" onChange={(e) => handleLogoChange(e, 'company')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                              </div>
+                          </div>
+                          <div className="space-y-2">
+                              <Label>Logo Específica do Contrato</Label>
+                              <div className="flex flex-col items-center space-y-2 mt-1">
+                                  <div className="w-40 h-20 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-1">
+                                      {companyDetails.contractLogoUrl ? (<Image src={companyDetails.contractLogoUrl} alt="Pré-visualização Logo Contrato" layout="fill" objectFit="contain" key={companyDetails.contractLogoUrl} data-ai-hint="contract logo"/>) : (<ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>)}
+                                  </div>
+                                  <Input name="contractLogoUrl" placeholder="Cole a URL da imagem aqui" value={companyDetails.contractLogoUrl || ''} onChange={handleCompanyDetailsInputChange} />
+                                  <Input id="contractLogoUpload" type="file" accept="image/*" onChange={(e) => handleLogoChange(e, 'contract')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                              </div>
+                              <p className="text-xs text-muted-foreground text-center mt-1">Se vazio, a logo geral será usada.</p>
+                          </div>
+                      </div>
+                  </div>
 
-                <hr className="my-2"/>
-                <h3 className="text-lg font-medium flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/>Personalização de Contratos</h3>
-
-                <FormField control={companyDetailsForm.control} name="contractTermsAndConditions" render={({ field }) => ( <FormItem> <FormLabel>Termos e Condições do Contrato</FormLabel> <FormControl> <Textarea placeholder="Insira os termos e condições aqui..." {...field} value={field.value || ''} rows={5}/> </FormControl> <FormMessage /> </FormItem> )}/>
-                <FormField control={companyDetailsForm.control} name="contractFooterText" render={({ field }) => ( <FormItem> <FormLabel>Texto do Rodapé do Contrato</FormLabel> <FormControl> <Input placeholder="Ex: Obrigado pela preferência!" {...field} value={field.value || ''}/> </FormControl> <FormMessage /> </FormItem> )}/>
-
-                <Button type="submit" className="w-full sm:w-auto" disabled={companyDetailsForm.formState.isSubmitting}>
-                    {companyDetailsForm.formState.isSubmitting ? "Salvando Dados..." : "Salvar Dados da Empresa e Contratos"}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
+                  {/* CONTRACT TEXTS SECTION */}
+                  <div className="pt-6 border-t">
+                    <h3 className="text-lg font-medium flex items-center mb-4"><FileText className="mr-2 h-5 w-5 text-primary"/>Personalização de Contratos</h3>
+                     <div className="space-y-1.5">
+                       <Label htmlFor="contractTermsAndConditions">Termos e Condições do Contrato</Label>
+                       <Textarea id="contractTermsAndConditions" name="contractTermsAndConditions" placeholder="Insira os termos e condições aqui..." value={companyDetails.contractTermsAndConditions || ''} onChange={handleCompanyDetailsInputChange} rows={5}/>
+                    </div>
+                     <div className="space-y-1.5 mt-4">
+                       <Label htmlFor="contractFooterText">Texto do Rodapé do Contrato</Label>
+                       <Input id="contractFooterText" name="contractFooterText" placeholder="Ex: Obrigado pela preferência!" value={companyDetails.contractFooterText || ''} onChange={handleCompanyDetailsInputChange} />
+                    </div>
+                  </div>
+              </CardContent>
+              <CardFooter>
+                 <Button type="submit" className="w-full sm:w-auto" disabled={isSavingCompanyDetails}>
+                      {isSavingCompanyDetails ? "Salvando..." : "Salvar Dados da Empresa e Contratos"}
+                  </Button>
+              </CardFooter>
+            </form>
         </Card>
 
+        {/* Preferences Cards */}
         <div className="space-y-6">
           <Card className="shadow-lg">
             <CardHeader>
