@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  dhalugueis-app:
+    # Constrói a imagem Docker usando o Dockerfile no diretório atual.
+    build: .
+    # Nomeia o container para facilitar o gerenciamento.
+    container_name: dhalugueis_container
+    # Mapeia a porta 3000 da máquina host para a porta 3000 dentro do container.
+    ports:
+      - "8094:3000"
+    # Isso é crucial para persistir seu banco de dados SQLite.
+    # Mapeia o arquivo dhalugueis.db da pasta do seu projeto no host
+    # para o arquivo /app/dhalugueis.db dentro do container.
+    # Seus dados estarão seguros mesmo que o container seja removido ou reconstruído.
+    volumes:
+      - ./dhalugueis.db:/app/dhalugueis.db
+    # Reinicia o container automaticamente se ele travar, a menos que tenha sido parado manualmente.
+    # Isso garante que a aplicação volte a funcionar após a reinicialização do servidor.
+    restart: unless-stopped
+    environment:
+      # Garante que o Next.js seja executado em modo de produção dentro do container.
+      - NODE_ENV=production

@@ -1,0 +1,109 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%; /* Off-white (derived from #ffffff) */
+    --foreground: 0 0% 10%; /* Near-black (derived from #000000) */
+
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 0 0% 10%; /* Near-black */
+
+    --popover: 0 0% 100%; /* White */
+    --popover-foreground: 0 0% 10%; /* Near-black */
+
+    --primary: 46 98% 51%; /* Amarelo #fdc309 */
+    --primary-foreground: 0 0% 0%; /* Preto (text on yellow) */
+
+    --secondary: 0 0% 92%; /* Light gray */
+    --secondary-foreground: 0 0% 20%; /* Dark gray */
+
+    --muted: 0 0% 95%; /* Lighter gray */
+    --muted-foreground: 0 0% 40%; /* Medium Gray */
+
+    --accent: 46 98% 51%; /* Amarelo #fdc309 (can be same as primary or a variation) */
+    --accent-foreground: 0 0% 0%; /* Preto (text on yellow accent) */
+
+    --destructive: 0 84.2% 60.2%; /* Existing red */
+    --destructive-foreground: 0 0% 98%; /* Existing light text for red */
+
+    --success: 134 61% 41%; /* Verde (Forest Green like) */
+    --success-foreground: 0 0% 98%; /* Off-white/Light text for success */
+
+    --border: 0 0% 88%; /* Light gray border */
+    --input: 0 0% 94%; /* Slightly darker than background for inputs */
+    --ring: 46 98% 51%; /* Amarelo for focus rings */
+    
+    /* Chart Colors */
+    --chart-1: 46 98% 51%;  /* Amarelo (usado para Receita, Alugado) */
+    --chart-2: 210 40% 50%; /* Azul Suave (usado para Despesas, Disponível) */
+    --chart-3: 120 60% 45%; /* Verde (usado para Lucro) */
+    --chart-4: 25 80% 60%;  /* Laranja */
+    --chart-5: 280 70% 65%; /* Roxo */
+
+    --radius: 0.5rem;
+
+    /* Sidebar specific theme variables (assuming a dark sidebar) */
+    --sidebar-background: 0 0% 0%; /* Preto */
+    --sidebar-foreground: 0 0% 95%; /* Off-white */
+    --sidebar-primary: 46 98% 51%; /* Amarelo for active items */
+    --sidebar-primary-foreground: 0 0% 0%; /* Preto for text on active yellow */
+    --sidebar-accent: 0 0% 10%; /* Dark gray for hover */
+    --sidebar-accent-foreground: 0 0% 98%; /* Off-white for hover text */
+    --sidebar-border: 0 0% 12%; /* Border for dark sidebar */
+    --sidebar-ring: 46 98% 51%; /* Amarelo for ring */
+  }
+
+  .dark {
+    --background: 0 0% 4%; /* Very dark gray / Near black */
+    --foreground: 0 0% 96%; /* Off-white */
+
+    --card: 0 0% 8%; /* Darker gray for cards */
+    --card-foreground: 0 0% 96%; /* Off-white */
+
+    --popover: 0 0% 8%; /* Darker gray */
+    --popover-foreground: 0 0% 96%; /* Off-white */
+
+    --primary: 46 98% 51%; /* Amarelo #fdc309 */
+    --primary-foreground: 0 0% 0%; /* Preto (text on yellow) */
+
+    --secondary: 0 0% 12%; /* Dark gray */
+    --secondary-foreground: 0 0% 80%; /* Light gray */
+
+    --muted: 0 0% 10%; /* Darker gray */
+    --muted-foreground: 0 0% 60%; /* Medium gray */
+
+    --accent: 46 98% 51%; /* Amarelo #fdc309 */
+    --accent-foreground: 0 0% 0%; /* Preto */
+
+    --destructive: 0 70% 45%; /* Adjusted red for dark mode */
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 134 50% 48%; /* Verde (ajustado para dark mode) */
+    --success-foreground: 0 0% 98%; /* Off-white/Light text for success */
+
+    --border: 0 0% 15%; /* Dark gray border */
+    --input: 0 0% 12%; /* Slightly lighter than background for inputs */
+    --ring: 46 98% 51%; /* Amarelo */
+    
+    /* Chart Colors - Dark Mode */
+    --chart-1: 46 90% 55%;  /* Amarelo (ajustado para dark mode) */
+    --chart-2: 210 50% 60%; /* Azul Suave (ajustado para dark mode) */
+    --chart-3: 120 50% 55%; /* Verde (ajustado para dark mode) */
+    --chart-4: 25 70% 65%;  /* Laranja (ajustado para dark mode) */
+    --chart-5: 280 60% 70%; /* Roxo (ajustado para dark mode) */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+    
