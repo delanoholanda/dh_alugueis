@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   dhalugueis-app:
     # Constrói a imagem Docker usando o Dockerfile no diretório atual.
     build: .
     # Nomeia o container para facilitar o gerenciamento.
     container_name: dhalugueis_container
-    # Mapeia a porta 3000 da máquina host para a porta 3000 dentro do container.
+    # Mapeia a porta 8094 da máquina host para a porta 3000 dentro do container.
     ports:
       - "8094:3000"
     # Isso é crucial para persistir seu banco de dados SQLite.

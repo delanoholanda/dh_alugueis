@@ -1,3 +1,4 @@
+
 'use client';
 
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -14,29 +15,25 @@ import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import Image from 'next/image';
 import type { CompanyDetails, UserProfile } from '@/types';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from 'zod';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { updateUser } from '@/actions/userActions';
+import { getCompanySettings, updateCompanySettings } from '@/actions/settingsActions';
 
+const companyDetailsSchema = z.object({
+  companyName: z.string().min(1, "Nome da empresa é obrigatório."),
+  responsibleName: z.string().min(1, "Nome do responsável é obrigatório."),
+  phone: z.string().min(1, "Telefone é obrigatório."),
+  address: z.string().min(1, "Endereço é obrigatório."),
+  email: z.string().email("Email inválido."),
+  pixKey: z.string().min(1, "Chave PIX é obrigatória."),
+  contractTermsAndConditions: z.string().optional(),
+  contractFooterText: z.string().optional(),
+});
 
-const COMPANY_LOGO_STORAGE_KEY = 'dhAlugueisCompanyLogo';
-const DEFAULT_COMPANY_LOGO = '/dh-alugueis-logo.png';
-const COMPANY_DETAILS_STORAGE_KEY = 'dhAlugueisCompanyDetails';
+type CompanyDetailsFormValues = z.infer<typeof companyDetailsSchema>;
 
-const DEFAULT_COMPANY_DETAILS: CompanyDetails = {
-  companyName: 'DH Alugueis',
-  responsibleName: 'Delano Holanda',
-  phone: '88982248384',
-  address: 'Rua Ana Ventura de Oliveira, 189, Ipu, CE',
-  email: 'dhalugueis@gmail.com',
-  pixKey: '+5588982248384',
-  contractTermsAndConditions: `1. O locatário é responsável por quaisquer danos, perda ou roubo do equipamento alugado.
-2. O equipamento deve ser devolvido na data e hora especificadas no contrato. Atrasos podem incorrer em taxas adicionais.
-3. O pagamento deve ser efetuado conforme acordado. Em caso de inadimplência, medidas legais poderão ser tomadas.
-4. A DH Aluguéis não se responsabiliza por acidentes ou danos causados pelo uso inadequado do equipamento.
-5. Este documento não tem valor fiscal. Solicite sua nota fiscal, se necessário.`,
-  contractFooterText: 'Obrigado por escolher a DH Aluguéis!',
-  contractLogoUrl: '',
-};
 
 export default function SettingsPage() {
   const { user, updateUserContext } = useAuth();
@@ -50,14 +47,24 @@ export default function SettingsPage() {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(false); 
-  const [companyLogo, setCompanyLogo] = useState<string>(DEFAULT_COMPANY_LOGO);
   
-  const companyDetailsForm = useForm<CompanyDetails>({
-    defaultValues: DEFAULT_COMPANY_DETAILS, 
+  // State for logos, now managed separately from the form
+  const [companyLogoUrl, setCompanyLogoUrl] = useState('');
+  const [contractLogoUrl, setContractLogoUrl] = useState('');
+
+  const companyDetailsForm = useForm<CompanyDetailsFormValues>({
+    resolver: zodResolver(companyDetailsSchema),
+    defaultValues: {
+      companyName: '',
+      responsibleName: '',
+      phone: '',
+      address: '',
+      email: '',
+      pixKey: '',
+      contractTermsAndConditions: '',
+      contractFooterText: '',
+    }
   });
-
-  const watchedContractLogoUrl = companyDetailsForm.watch("contractLogoUrl");
-
 
   useEffect(() => {
     if (user) {
@@ -74,24 +81,25 @@ export default function SettingsPage() {
       document.documentElement.classList.toggle('dark', isDarkModePreferred);
     }
 
-    const storedLogo = localStorage.getItem(COMPANY_LOGO_STORAGE_KEY);
-    if (storedLogo) {
-      setCompanyLogo(storedLogo);
-    }
-
-    const storedCompanyDetails = localStorage.getItem(COMPANY_DETAILS_STORAGE_KEY);
-    let detailsToUse = { ...DEFAULT_COMPANY_DETAILS }; 
-    if (storedCompanyDetails) {
+    const loadSettings = async () => {
       try {
-        detailsToUse = { ...DEFAULT_COMPANY_DETAILS, ...JSON.parse(storedCompanyDetails) };
-      } catch (e) {
-        console.error("Erro ao carregar detalhes da empresa do localStorage:", e);
+        const settings = await getCompanySettings();
+        companyDetailsForm.reset(settings);
+        // Set the separate state for logos
+        setCompanyLogoUrl(settings.companyLogoUrl || '');
+        setContractLogoUrl(settings.contractLogoUrl || '');
+      } catch (error) {
+        console.error("Failed to load company settings:", error);
+        toast({
+          title: "Erro ao Carregar Configurações",
+          description: "Não foi possível buscar as configurações da empresa.",
+          variant: "destructive"
+        })
       }
-    }
-    companyDetailsForm.reset(detailsToUse);
-
+    };
+    loadSettings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, companyDetailsForm.reset]);
+  }, [user]);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,66 +178,33 @@ export default function SettingsPage() {
       reader.onloadend = () => {
         const result = reader.result as string;
         if (type === 'company') {
-          setCompanyLogo(result);
-          localStorage.setItem(COMPANY_LOGO_STORAGE_KEY, result);
-          toast({
-            title: 'Logo da Empresa Atualizada',
-            description: 'A nova logo da empresa foi carregada e salva localmente.',
-            variant: 'success',
-          });
+          setCompanyLogoUrl(result);
         } else {
-          companyDetailsForm.setValue('contractLogoUrl', result, { shouldValidate: true });
-           toast({
-            title: 'Logo do Contrato Atualizada',
-            description: 'A nova logo para contratos foi carregada.',
-            variant: 'success',
-          });
+          setContractLogoUrl(result);
         }
+        // No toast here, user must click save.
       };
       reader.readAsDataURL(file);
+       event.target.value = '';
     }
   };
 
-  const handleRemoveLogo = (type: 'company' | 'contract') => {
-    if (type === 'company') {
-      localStorage.removeItem(COMPANY_LOGO_STORAGE_KEY);
-      setCompanyLogo(DEFAULT_COMPANY_LOGO);
-      toast({
-        title: 'Logo da Empresa Removida',
-        description: 'A logo personalizada da empresa foi removida. Usando a logo padrão.',
-        variant: 'success',
-      });
-    } else {
-      companyDetailsForm.setValue('contractLogoUrl', '');
-      toast({
-        title: 'Logo do Contrato Removida',
-        description: 'A logo específica para contratos foi removida.',
-        variant: 'success',
-      });
+  const handleCompanyDetailsSave = async (data: CompanyDetailsFormValues) => {
+    try {
+        const settingsToSave: CompanyDetails = {
+            ...data,
+            companyLogoUrl: companyLogoUrl,
+            contractLogoUrl: contractLogoUrl,
+        };
+        await updateCompanySettings(settingsToSave);
+        toast({
+            title: 'Informações da Empresa Atualizadas',
+            description: 'Os dados da sua empresa foram salvos com sucesso.',
+            variant: 'success',
+        });
+    } catch (error) {
+        toast({ title: "Erro ao Salvar", description: (error as Error).message, variant: "destructive" });
     }
-  };
-
-  const handleCompanyDetailsSave = (data: CompanyDetails) => {
-    let finalPixKey = data.pixKey.trim();
-    const onlyDigitsRegex = /^\\d+$/;
-
-    if (
-      onlyDigitsRegex.test(finalPixKey) &&
-      (finalPixKey.length === 10 || finalPixKey.length === 11) && 
-      !finalPixKey.startsWith('+55')
-    ) {
-      finalPixKey = `+55${finalPixKey}`;
-    }
-    
-    const updatedData = { ...data, pixKey: finalPixKey };
-
-    localStorage.setItem(COMPANY_DETAILS_STORAGE_KEY, JSON.stringify(updatedData));
-    companyDetailsForm.reset(updatedData); 
-    toast({
-      title: 'Informações da Empresa Atualizadas',
-      description: 'Os dados da sua empresa foram salvos com sucesso.',
-      variant: 'success',
-    });
   };
 
 
@@ -242,7 +217,6 @@ export default function SettingsPage() {
       />
 
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-        {/* Perfil Card */}
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><UserCircle className="mr-2 h-5 w-5 text-primary"/> Informações do Perfil</CardTitle>
@@ -262,14 +236,7 @@ export default function SettingsPage() {
                 <Label htmlFor="password">Nova Senha (Opcional)</Label>
                 <div className="relative">
                   <Input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Deixe em branco para manter a atual" />
-                   <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 text-muted-foreground hover:bg-transparent"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      tabIndex={-1}
-                    >
+                   <Button type="button" variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 py-2 text-muted-foreground hover:bg-transparent" onClick={() => setShowPassword((prev) => !prev)} tabIndex={-1}>
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       <span className="sr-only">{showPassword ? 'Ocultar senha' : 'Mostrar senha'}</span>
                     </Button>
@@ -282,7 +249,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Informações da Empresa Card */}
         <Card className="shadow-lg xl:col-span-2">
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><Building className="mr-2 h-5 w-5 text-primary"/> Detalhes da Empresa e Contratos</CardTitle>
@@ -291,190 +257,59 @@ export default function SettingsPage() {
           <CardContent>
             <Form {...companyDetailsForm}>
               <form onSubmit={companyDetailsForm.handleSubmit(handleCompanyDetailsSave)} className="space-y-6">
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={companyDetailsForm.control}
-                    name="companyName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nome da Empresa</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Nome da sua Empresa" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={companyDetailsForm.control}
-                    name="responsibleName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nome do Responsável</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Nome do Responsável" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormField control={companyDetailsForm.control} name="companyName" render={({ field }) => ( <FormItem> <FormLabel>Nome da Empresa</FormLabel> <FormControl> <Input placeholder="Nome da sua Empresa" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
+                  <FormField control={companyDetailsForm.control} name="responsibleName" render={({ field }) => ( <FormItem> <FormLabel>Nome do Responsável</FormLabel> <FormControl> <Input placeholder="Nome do Responsável" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
                 </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={companyDetailsForm.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Telefone da Empresa</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Telefone para contato" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                   <FormField
-                    control={companyDetailsForm.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email da Empresa</FormLabel>
-                        <FormControl>
-                          <Input type="email" placeholder="Email para contato" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormField control={companyDetailsForm.control} name="phone" render={({ field }) => ( <FormItem> <FormLabel>Telefone da Empresa</FormLabel> <FormControl> <Input placeholder="Telefone para contato" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
+                   <FormField control={companyDetailsForm.control} name="email" render={({ field }) => ( <FormItem> <FormLabel>Email da Empresa</FormLabel> <FormControl> <Input type="email" placeholder="Email para contato" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
                 </div>
-                <FormField
-                  control={companyDetailsForm.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Endereço da Empresa</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Rua, Número, Bairro, Cidade, Estado" {...field} />
-                      </FormControl>
-                       <FormDescription className="text-xs mt-1">
-                         Ex: Rua Exemplo, 123, Centro, Sua Cidade, SC
-                       </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={companyDetailsForm.control}
-                  name="pixKey"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Chave PIX</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Sua chave PIX" {...field} />
-                      </FormControl>
-                      <FormDescription className="text-xs mt-1">
-                        Pode ser CPF/CNPJ (só números), Telefone (+55DDD000000000 ou DDD000000000), Email ou Chave Aleatória. Se for telefone sem +55, será adicionado automaticamente.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <FormField control={companyDetailsForm.control} name="address" render={({ field }) => ( <FormItem> <FormLabel>Endereço da Empresa</FormLabel> <FormControl> <Input placeholder="Rua, Número, Bairro, Cidade, Estado" {...field} /> </FormControl> <FormDescription className="text-xs mt-1"> Ex: Rua Exemplo, 123, Centro, Sua Cidade, SC </FormDescription> <FormMessage /> </FormItem> )}/>
+                <FormField control={companyDetailsForm.control} name="pixKey" render={({ field }) => ( <FormItem> <FormLabel>Chave PIX</FormLabel> <FormControl> <Input placeholder="Sua chave PIX" {...field} /> </FormControl> <FormDescription className="text-xs mt-1"> Pode ser CPF/CNPJ (só números), Telefone (+55DDD... ou DDD...), Email ou Chave Aleatória. </FormDescription> <FormMessage /> </FormItem> )}/>
                 
-                <hr className="my-6"/>
+                <div className="pt-6 border-t">
+                    <h3 className="text-lg font-medium flex items-center mb-4"><ImageIconLucide className="mr-2 h-5 w-5 text-primary"/>Logos da Empresa</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <Label>Logo Geral (Login, etc.)</Label>
+                             <div className="flex flex-col items-center space-y-2 mt-1">
+                                <div className="w-40 h-20 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-1">
+                                    {companyLogoUrl ? (<Image src={companyLogoUrl} alt="Pré-visualização Logo Empresa" layout="fill" objectFit="contain" key={companyLogoUrl} data-ai-hint="company logo"/>) : (<ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>)}
+                                </div>
+                                <Input placeholder="Cole a URL da imagem aqui" value={companyLogoUrl || ''} onChange={(e) => setCompanyLogoUrl(e.target.value)} />
+                                <Input id="companyLogoUpload" type="file" accept="image/*" onChange={(e) => handleLogoChange(e, 'company')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                             </div>
+                        </div>
+                         <div className="space-y-2">
+                            <Label>Logo Específica do Contrato</Label>
+                            <div className="flex flex-col items-center space-y-2 mt-1">
+                                <div className="w-40 h-20 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-1">
+                                    {contractLogoUrl ? (<Image src={contractLogoUrl} alt="Pré-visualização Logo Contrato" layout="fill" objectFit="contain" key={contractLogoUrl} data-ai-hint="contract logo"/>) : (<ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>)}
+                                </div>
+                                <Input placeholder="Cole a URL da imagem aqui" value={contractLogoUrl || ''} onChange={(e) => setContractLogoUrl(e.target.value)} />
+                                <Input id="contractLogoUpload" type="file" accept="image/*" onChange={(e) => handleLogoChange(e, 'contract')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                            </div>
+                            <p className="text-xs text-muted-foreground text-center mt-1">Se vazio, a logo geral será usada.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <hr className="my-2"/>
                 <h3 className="text-lg font-medium flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/>Personalização de Contratos</h3>
 
-                <FormField
-                  control={companyDetailsForm.control}
-                  name="contractTermsAndConditions"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Termos e Condições do Contrato</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Insira os termos e condições aqui..." {...field} rows={5}/>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={companyDetailsForm.control}
-                  name="contractFooterText"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Texto do Rodapé do Contrato</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Obrigado pela preferência!" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <FormField control={companyDetailsForm.control} name="contractTermsAndConditions" render={({ field }) => ( <FormItem> <FormLabel>Termos e Condições do Contrato</FormLabel> <FormControl> <Textarea placeholder="Insira os termos e condições aqui..." {...field} value={field.value || ''} rows={5}/> </FormControl> <FormMessage /> </FormItem> )}/>
+                <FormField control={companyDetailsForm.control} name="contractFooterText" render={({ field }) => ( <FormItem> <FormLabel>Texto do Rodapé do Contrato</FormLabel> <FormControl> <Input placeholder="Ex: Obrigado pela preferência!" {...field} value={field.value || ''}/> </FormControl> <FormMessage /> </FormItem> )}/>
 
-                <FormItem>
-                  <FormLabel>Logo Específica para Contratos (Opcional)</FormLabel>
-                  <div className="flex flex-col items-center space-y-2 mt-1">
-                     <div className="w-40 h-20 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-1">
-                        {watchedContractLogoUrl ? (
-                        <Image 
-                            src={watchedContractLogoUrl} 
-                            alt="Pré-visualização Logo do Contrato" 
-                            layout="fill" 
-                            objectFit="contain" 
-                            key={watchedContractLogoUrl}
-                            data-ai-hint="contract company logo"
-                        />
-                        ) : (
-                        <ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>
-                        )}
-                    </div>
-                    <div className="w-full flex flex-col sm:flex-row gap-2 items-center">
-                        <FormField
-                        control={companyDetailsForm.control}
-                        name="contractLogoUrl"
-                        render={({ field }) => (
-                            <FormItem className="flex-grow">
-                            <FormLabel className="sr-only">URL da Logo do Contrato</FormLabel>
-                            <FormControl>
-                                <Input 
-                                placeholder="Cole uma URL ou carregue abaixo" 
-                                {...field} 
-                                />
-                            </FormControl>
-                            <FormMessage className="text-xs"/>
-                            </FormItem>
-                        )}
-                        />
-                        <Input 
-                            id="contractLogoUpload" 
-                            type="file" 
-                            accept="image/*" 
-                            onChange={(e) => handleLogoChange(e, 'contract')}
-                            className="w-full sm:w-auto file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                        />
-                    </div>
-                     <Button 
-                        type="button"
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleRemoveLogo('contract')} 
-                        disabled={!watchedContractLogoUrl}
-                        className="w-full sm:w-auto"
-                    >
-                        Remover Logo do Contrato
-                    </Button>
-                    <FormDescription className="text-xs">
-                        Se nenhuma logo específica for definida aqui, a logo geral da empresa será usada no contrato. Máx 2MB.
-                    </FormDescription>
-                  </div>
-                </FormItem>
-
-                <Button type="submit" className="w-full sm:w-auto">Salvar Dados da Empresa e Contratos</Button>
+                <Button type="submit" className="w-full sm:w-auto" disabled={companyDetailsForm.formState.isSubmitting}>
+                    {companyDetailsForm.formState.isSubmitting ? "Salvando Dados..." : "Salvar Dados da Empresa e Contratos"}
+                </Button>
               </form>
             </Form>
           </CardContent>
         </Card>
 
-        {/* Notificações e Tema Cards (agrupados se necessário ou separados como estão) */}
         <div className="space-y-6">
           <Card className="shadow-lg">
             <CardHeader>
@@ -522,56 +357,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Logo Geral Card */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center">
-              <ImageIconLucide className="mr-2 h-5 w-5 text-primary"/> Logo Geral da Empresa
-            </CardTitle>
-            <CardDescription>Personalize a logo que aparece no sistema (ex: login, sidebar). Máx 2MB.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col items-center space-y-3">
-              <Label>Pré-visualização da Logo Atual:</Label>
-              <div className="w-48 h-24 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-2">
-                {companyLogo ? (
-                  <Image 
-                    src={companyLogo} 
-                    alt="Logo da Empresa" 
-                    layout="fill" 
-                    objectFit="contain" 
-                    key={companyLogo}
-                    data-ai-hint="company logo"
-                  />
-                ) : (
-                   <ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>
-                )}
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="logoUpload">Carregar Nova Logo Geral</Label>
-              <Input 
-                id="logoUpload" 
-                type="file" 
-                accept="image/png, image/jpeg, image/gif, image/svg+xml" 
-                onChange={(e) => handleLogoChange(e, 'company')}
-                className="mt-1"
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => handleRemoveLogo('company')} 
-              disabled={companyLogo === DEFAULT_COMPANY_LOGO && !localStorage.getItem(COMPANY_LOGO_STORAGE_KEY)}
-              className="w-full"
-            >
-              Remover Logo Geral (Usar Padrão)
-            </Button>
-          </CardFooter>
-        </Card>
-
       </div>
     </div>
   );

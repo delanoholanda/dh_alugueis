@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   dhalugueis-app:
@@ -6,12 +5,12 @@ services:
     build: .
     # Name the container for easier management.
     container_name: dhalugueis_container
-    # Map port 3000 of the host machine to port 3000 inside the container.
+    # Map port 8094 of the host machine to port 3000 inside the container.
     ports:
       - "8094:3000"
-    # This is crucial for persisting your SQLite database.
-    # It maps the dhalugueis.db file from your project folder on the host
-    # to the /app/dhalugueis.db file inside the container.
+    # This is crucial for persisting your SQLite database and all uploaded images.
+    # It maps the ./data directory from your project folder on the host
+    # to the /app/data directory inside the container.
     # Your data will be safe even if the container is removed or rebuilt.
     volumes:
       - ./data:/app/data

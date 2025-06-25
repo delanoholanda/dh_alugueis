@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Rental, Customer, Equipment as InventoryEquipment, PaymentMethod, EquipmentType } from '@/types';

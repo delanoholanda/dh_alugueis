@@ -1,3 +1,4 @@
+
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
@@ -22,10 +23,12 @@ export function getDb() {
   }
 
   // Auto-migration for existing database file in root
-  if (fs.existsSync(oldDbPath) && !fs.existsSync(dataDirectory)) {
+  if (fs.existsSync(oldDbPath) && !fs.existsSync(dbPath)) {
     console.log(`[DB Migration] Found legacy database at ${oldDbPath}.`);
-    fs.mkdirSync(dataDirectory, { recursive: true });
-    console.log(`[DB Migration] Created new data directory at ${dataDirectory}.`);
+    if (!fs.existsSync(dataDirectory)) {
+        fs.mkdirSync(dataDirectory, { recursive: true });
+        console.log(`[DB Migration] Created new data directory at ${dataDirectory}.`);
+    }
     fs.renameSync(oldDbPath, dbPath);
     console.log(`[DB Migration] Successfully moved database to ${dbPath}.`);
   } else {
@@ -149,6 +152,20 @@ function initializeSchema(db: Database.Database) {
         categoryId TEXT NOT NULL,
         FOREIGN KEY (categoryId) REFERENCES expense_categories(id) ON DELETE RESTRICT
     );
+
+    CREATE TABLE IF NOT EXISTS company_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS rental_photos (
+      id TEXT PRIMARY KEY,
+      rentalId INTEGER NOT NULL,
+      imageUrl TEXT NOT NULL,
+      photoType TEXT NOT NULL CHECK(photoType IN ('delivery', 'return')),
+      uploadedAt TEXT NOT NULL,
+      FOREIGN KEY (rentalId) REFERENCES rentals(id) ON DELETE CASCADE
+    );
   `);
   
   const equipTypesStmt = db.prepare('SELECT COUNT(*) as count FROM equipment_types');
@@ -189,14 +206,43 @@ function initializeSchema(db: Database.Database) {
     console.log("[DB] Default expense categories created.");
   }
 
-  // --- Admin User Seeding ---
-  // This logic ensures a default admin user exists on the first run,
-  // but it does NOT reset the password on subsequent startups.
-  const adminUserStmt = db.prepare('SELECT id FROM users WHERE email = ?');
-  const adminUser = adminUserStmt.get('admin@dhalugueis.com') as { id: string } | undefined;
+  // Seed company settings if they don't exist
+  const settingsCountStmt = db.prepare('SELECT COUNT(*) as count FROM company_settings');
+  const settingsCount = settingsCountStmt.get() as { count: number };
+  if (settingsCount.count === 0) {
+    console.log("[DB] Company settings not found. Seeding default settings...");
+    const insertStmt = db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (@key, @value)');
+    const insertMany = db.transaction((settings) => {
+      for (const key in settings) {
+        insertStmt.run({ key, value: settings[key as keyof typeof settings] });
+      }
+    });
 
-  if (!adminUser) {
-    console.log("[DB] Default admin user not found. Creating...");
+    const defaultSettings = {
+      companyName: 'DH Alugueis',
+      responsibleName: 'Delano Holanda',
+      phone: '88982248384',
+      address: 'Rua Ana Ventura de Oliveira, 189, Ipu, CE',
+      email: 'dhalugueis@gmail.com',
+      pixKey: '+5588982248384',
+      contractTermsAndConditions: `1. O locatário é responsável por quaisquer danos, perda ou roubo do equipamento alugado.
+2. O equipamento deve ser devolvido na data e hora especificadas no contrato. Atrasos podem incorrer em taxas adicionais.
+3. O pagamento deve ser efetuado conforme acordado. Em caso de inadimplência, medidas legais poderão ser tomadas.
+4. A DH Aluguéis não se responsabiliza por acidentes ou danos causados pelo uso inadequado do equipamento.
+5. Este documento não tem valor fiscal. Solicite sua nota fiscal, se necessário.`,
+      contractFooterText: 'Obrigado por escolher a DH Aluguéis!',
+      companyLogoUrl: '',
+      contractLogoUrl: '',
+    };
+    insertMany(defaultSettings);
+    console.log("[DB] Default company settings have been seeded.");
+  }
+
+  // --- Admin User Seeding ---
+  const usersStmt = db.prepare('SELECT COUNT(*) as count FROM users');
+  const usersResult = usersStmt.get() as { count: number };
+  if (usersResult.count === 0) {
+    console.log("[DB] No users found. Creating default admin user...");
     const defaultUserId = `user_${crypto.randomBytes(8).toString('hex')}`;
     const defaultPassword = 'dhdh1234'; 
     const { salt, hash } = hashPassword(defaultPassword);

@@ -2,11 +2,29 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/hooks/use-auth';
 import { Toaster } from "@/components/ui/toaster";
+import { getCompanySettings } from '@/actions/settingsActions';
 
-export const metadata: Metadata = {
-  title: 'DH Alugueis - Gerenciador',
-  description: 'Sistema de Gerenciamento de Aluguéis',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const settings = await getCompanySettings();
+    const companyName = settings.companyName || 'DH Alugueis';
+    const iconUrl = settings.companyLogoUrl || '/dh-alugueis-logo.png';
+
+    return {
+      title: `${companyName} - Gerenciador`,
+      description: 'Sistema de Gerenciamento de Aluguéis',
+      icons: {
+        icon: iconUrl,
+      },
+    };
+  } catch (error) {
+    console.error("Falha ao gerar metadados dinâmicos:", error);
+    return {
+      title: 'DH Alugueis - Gerenciador',
+      description: 'Sistema de Gerenciamento de Aluguéis',
+    };
+  }
+}
 
 export default function RootLayout({
   children,
