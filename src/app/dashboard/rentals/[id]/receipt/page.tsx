@@ -1,8 +1,7 @@
-
 'use client';
 
-import React, { useState, useEffect as useReactEffect, use } from 'react';
-import { useParams, notFound, useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { getRentalById } from '@/actions/rentalActions';
 import { getInventoryItemById } from '@/actions/inventoryActions';
 import { getCustomerById } from '@/actions/customerActions';
@@ -180,8 +179,7 @@ export default function RentalContractPage() {
   const routeParams = useParams();
   const router = useRouter();
   const idStr = Array.isArray(routeParams.id) ? routeParams.id[0] : routeParams.id;
-  const rentalIdNum = parseInt(idStr || '', 10);
-
+  
   const [rental, setRental] = useState<Rental | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [detailedEquipment, setDetailedEquipment] = useState<DetailedEquipmentItem[]>([]);
@@ -210,15 +208,16 @@ export default function RentalContractPage() {
     return pixKey; // Return original if not a recognized phone format
   };
 
-  useReactEffect(() => {
+  useEffect(() => {
     let isMounted = true;
     
     const loadReceiptData = async () => {
       if (!isMounted) return;
+      
+      const rentalIdNum = parseInt(idStr || '', 10);
       if (isNaN(rentalIdNum)) {
         setError('ID do contrato inválido.');
         setIsLoading(false);
-        notFound();
         return;
       }
 
@@ -237,7 +236,6 @@ export default function RentalContractPage() {
         if (!fetchedRental) {
           setError('Contrato não encontrado ou erro ao buscar.');
           setIsLoading(false);
-          notFound();
           return;
         }
         setRental(fetchedRental);
@@ -300,7 +298,7 @@ export default function RentalContractPage() {
     loadReceiptData();
 
     return () => { isMounted = false; };
-  }, [idStr, rentalIdNum, router]);
+  }, [idStr]);
 
   if (isLoading || !currentCompanyDetails) {
     return (
@@ -388,171 +386,6 @@ export default function RentalContractPage() {
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .no-print { display: none !important; }
-          .contract-container {
-            box-shadow: none !important;
-            border: none !important;
-            margin: 0 !important;
-            padding: 8mm 10mm !important; 
-            max-width: 100% !important;
-            width: calc(210mm - 20mm) !important; 
-          }
-          .contract-container p,
-          .contract-container li,
-          .contract-container div:not(.signature-area):not(.signature-container),
-          .contract-container span,
-          .contract-container h1,
-          .contract-container h2,
-          .contract-container h3,
-          .contract-container th,
-          .contract-container td {
-            line-height: 0.8 !important; 
-            font-size: 6pt !important;
-            margin-top: 0.01mm !important;
-            margin-bottom: 0.01mm !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-          }
-           .contract-header .logo-container {
-             width: 20mm !important;
-             height: 8mm !important;
-             margin-bottom: 0mm !important;
-          }
-          .contract-header .logo-container .logo {
-            max-width: 100% !important;
-            max-height: 100% !important;
-            width: auto !important;
-            height: auto !important;
-            object-fit: contain !important;
-          }
-          .contract-header {
-            margin-bottom: 0.01mm !important; 
-            display: flex !important;
-            justify-content: space-between !important;
-            align-items: flex-start !important;
-          }
-          .contract-header .company-info {
-            font-size: 5.5pt !important;
-            text-align: right !important;
-            line-height: 0.8 !important; 
-          }
-          .contract-header .company-info h1 {
-            font-size: 7.5pt !important;
-            margin-bottom: 0.01mm !important; 
-            line-height: 0.8 !important;
-          }
-          .contract-header .company-info p {
-            font-size: 5.5pt !important;
-            line-height: 0.8 !important;
-            margin-bottom: 0mm !important;
-          }
-           .contract-section {
-            margin-bottom: 0.01mm !important; 
-          }
-          .contract-section.flex.justify-between.items-start {
-             margin-bottom: 0.01mm !important; 
-          }
-           .contract-section > h2.font-semibold, .contract-section > h3.font-semibold {
-              font-size: 6.5pt !important;
-              margin-bottom: 0.01mm !important; 
-              margin-top: 0.01mm !important;
-              line-height: 0.8 !important;
-          }
-          hr {
-            margin: 0.01mm 0 !important; 
-            border-top-width: 0.1px !important;
-          }
-          .contract-table {
-            width: 100% !important;
-            margin-bottom: 0.01mm !important; 
-          }
-          .contract-table th, .contract-table td {
-            border: 0.1px solid #ccc !important;
-            padding: 0.01mm 0.05mm !important; 
-            font-size: 4.5pt !important;
-            line-height: 0.8 !important; 
-          }
-          .contract-table th {
-            background-color: #fdfdfd !important;
-          }
-          .contract-summary-grid {
-            font-size: 5pt !important;
-            gap: 0rem 0.01rem !important; 
-            margin-bottom: 0.01mm !important; 
-          }
-          .total-line {
-            font-size: 6pt !important;
-            line-height: 0.8 !important;
-          }
-          .pix-section {
-              margin-top: 0.01mm !important; 
-              text-align: center !important;
-          }
-          .pix-section h3 {
-              font-size: 5.5pt !important;
-              margin-bottom: 0.01mm !important;
-              line-height: 0.8 !important;
-          }
-          .pix-section canvas {
-            width: 12mm !important;
-            height: 12mm !important;
-            margin: 0.01mm auto !important;
-            border: 0.1px solid #ccc !important;
-            padding: 0.05mm !important;
-          }
-          .pix-key-text {
-            font-size: 5pt !important;
-            word-break: break-all !important;
-            line-height: 0.8 !important;
-          }
-          .terms-conditions {
-            font-size: 3.5pt !important;
-            line-height: 0.8 !important; 
-            white-space: pre-wrap !important;
-            margin-top: 0.1mm !important;
-            margin-bottom: 0.1mm !important; 
-          }
-          .contract-section p.valor-extenso-class {
-            font-size: 4.5pt !important;
-            line-height: 0.8 !important;
-            margin-top: 0.1mm !important; 
-            margin-bottom: 0.2mm !important; 
-          }
-          
-           .contract-section.signature-container {
-            margin-top: 0.5mm !important;
-            margin-bottom: 0.3mm !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-          }
-          .signature-area {
-            text-align: center;
-            margin-top: 0.3mm !important;
-            margin-bottom: 0.01mm !important;
-          }
-          .signature-area:first-child {
-            margin-bottom: 0.5mm !important;
-          }
-          .signature-line {
-             display: block;
-             margin: 0 auto 0.01mm auto;
-             width: 30mm !important;
-             border-bottom: 0.1px solid #333 !important;
-             padding-bottom: 0.8mm !important; 
-          }
-           .signature-area p.font-semibold.text-xs,
-           .signature-area p.text-xs {
-            font-size: 4.5pt !important;
-            line-height: 0.8 !important;
-            margin-bottom: 0mm !important;
-          }
-          footer.text-center.text-xs {
-            font-size: 4.5pt !important;
-            margin-top: 0.01mm !important; 
-            padding-top: 0.01mm !important; 
-            border-top: 0.1px solid #ccc !important;
-            line-height: 0.8 !important;      
-          }
         }
         .contract-container { max-width: 750px; margin: 0 auto; background-color: white; padding: 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.1); font-family: Arial, sans-serif; font-size: 11px; color: #333; border: 1px solid #eee; overflow-x: auto; }
         .contract-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; }
@@ -720,12 +553,6 @@ export default function RentalContractPage() {
                     <tr>
                       <td>Frete:</td>
                       <td className="text-right">{formatToBRL(rental.freightValue)}</td>
-                    </tr>
-                  ) : null}
-                   {!rental.isOpenEnded && rental.discountValue !== undefined && rental.discountValue > 0 ? (
-                    <tr>
-                      <td>Desconto:</td>
-                      <td className="text-right text-red-600">-{formatToBRL(rental.discountValue)}</td>
                     </tr>
                   ) : null}
                   <tr className="total-line">
