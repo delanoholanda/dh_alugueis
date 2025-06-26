@@ -145,7 +145,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
             <Card key={customer.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start gap-4">
-                    <div className="flex-grow">
+                    <div className="flex-grow min-w-0">
                         <CardTitle className="text-lg font-headline truncate" title={customer.name}>
                             {customer.name}
                         </CardTitle>
