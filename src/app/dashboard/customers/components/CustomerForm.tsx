@@ -61,6 +61,7 @@ const customerSchema = z.object({
   imageUrl: z.string().refine(val => {
     if (val === '') return true;
     if (val.startsWith('data:image/')) return true;
+    if (val.startsWith('/uploads/')) return true;
     try {
       new URL(val);
       return val.startsWith('http://') || val.startsWith('https://');
