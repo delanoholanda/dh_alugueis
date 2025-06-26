@@ -722,12 +722,6 @@ export default function RentalContractPage() {
                       <td className="text-right">{formatToBRL(rental.freightValue)}</td>
                     </tr>
                   ) : null}
-                   {!rental.isOpenEnded && rental.discountValue !== undefined && rental.discountValue > 0 ? (
-                    <tr>
-                      <td>Desconto:</td>
-                      <td className="text-right text-red-600">-{formatToBRL(rental.discountValue)}</td>
-                    </tr>
-                  ) : null}
                   <tr className="total-line">
                     <td>{rental.isOpenEnded ? 'Valor Diária (Total):' : 'Total Geral:'}</td>
                     <td className="text-right">{formatToBRL(rental.value)}</td>
