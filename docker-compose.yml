@@ -1,21 +1,21 @@
 
 services:
   dhalugueis-app:
-    # Build the Docker image using the Dockerfile in the current directory.
+    # Constrói a imagem Docker usando o Dockerfile no diretório atual.
     build: .
-    # Name the container for easier management.
+    # Nomeia o container para facilitar o gerenciamento.
     container_name: dhalugueis_container
-    # Map port 8094 of the host machine to port 3000 inside the container.
+    # Mapeia a porta 8094 da máquina host para a porta 3000 dentro do container.
     ports:
       - "8094:3000"
-    # This is crucial for persisting your SQLite database and all uploaded images.
-    # It maps the ./data directory from your project folder on the host
-    # to the /app/data directory inside the container.
-    # Your data will be safe even if the container is removed or rebuilt.
+    # Este é o ponto mais importante para a persistência de dados.
+    # Ele mapeia a pasta `./data` do seu projeto no host para a pasta `/app/data` dentro do container.
+    # TUDO dentro desta pasta, incluindo o banco de dados (dhalugueis.db) e quaisquer uploads futuros,
+    # será salvo diretamente no seu computador, sobrevivendo a reinicializações ou recriações do container.
     volumes:
       - ./data:/app/data
-    # Automatically restart the container if it crashes, unless it was manually stopped.
+    # Reinicia o container automaticamente se ele travar, a menos que tenha sido parado manualmente.
     restart: unless-stopped
     environment:
-      # Ensures Next.js runs in production mode inside the container.
+      # Garante que o Next.js seja executado em modo de produção dentro do container.
       - NODE_ENV=production

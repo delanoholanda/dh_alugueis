@@ -22,23 +22,20 @@ export function getDb() {
     return dbInstance;
   }
 
-  // Auto-migration for existing database file in root
+  // Ensure data directory exists for new setups
+  if (!fs.existsSync(dataDirectory)) {
+    fs.mkdirSync(dataDirectory, { recursive: true });
+    console.log(`[DB] Created data directory at ${dataDirectory}.`);
+  }
+  
+  // Auto-migration for legacy database file in root
   if (fs.existsSync(oldDbPath) && !fs.existsSync(dbPath)) {
     console.log(`[DB Migration] Found legacy database at ${oldDbPath}.`);
-    if (!fs.existsSync(dataDirectory)) {
-        fs.mkdirSync(dataDirectory, { recursive: true });
-        console.log(`[DB Migration] Created new data directory at ${dataDirectory}.`);
-    }
     fs.renameSync(oldDbPath, dbPath);
     console.log(`[DB Migration] Successfully moved database to ${dbPath}.`);
-  } else {
-    // Ensure data directory exists for new setups
-    if (!fs.existsSync(dataDirectory)) {
-      fs.mkdirSync(dataDirectory, { recursive: true });
-      console.log(`[DB] Created data directory at ${dataDirectory}.`);
-    }
   }
 
+  const dbExists = fs.existsSync(dbPath);
   console.log(`[DB] Path for database file: ${dbPath}`);
   
   try {
@@ -49,10 +46,6 @@ export function getDb() {
     throw error; 
   }
   
-  // The WAL pragma was removed as it can cause "disk I/O error" in some
-  // containerized or network filesystem environments. The default journal
-  // mode is more compatible.
-
   try {
     dbInstance.pragma('foreign_keys = ON');
     console.log("[DB] PRAGMA foreign_keys set to ON.");
@@ -60,14 +53,20 @@ export function getDb() {
     console.warn(`[DB] WARNING: Failed to set PRAGMA foreign_keys = ON. Error: ${(fkError as Error).message}`);
   }
 
-  console.log("[DB] Initializing database schema...");
-  initializeSchema(dbInstance);
-  console.log("[DB] Database schema initialized/verified.");
+  // Only run schema creation and seeding if the database file did NOT exist before.
+  if (!dbExists) {
+    console.log("[DB] New database file detected. Initializing schema and seeding default data...");
+    initializeSchemaAndSeed(dbInstance);
+    console.log("[DB] Database schema and default data initialized.");
+  } else {
+    console.log("[DB] Existing database file found. Skipping schema initialization and seeding.");
+  }
 
   return dbInstance;
 }
 
-function initializeSchema(db: Database.Database) {
+function initializeSchemaAndSeed(db: Database.Database) {
+  // --- SCHEMA CREATION ---
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -168,93 +167,81 @@ function initializeSchema(db: Database.Database) {
     );
   `);
   
-  const equipTypesStmt = db.prepare('SELECT COUNT(*) as count FROM equipment_types');
-  const equipTypesResult = equipTypesStmt.get() as { count: number };
-  if (equipTypesResult.count === 0) {
-    console.log("[DB] No equipment types found. Creating default types...");
-    const insert = db.prepare('INSERT INTO equipment_types (id, name, iconName) VALUES (?, ?, ?)');
-    const initialTypes = [
-      { id: 'type_scaffolding', name: 'Andaime', iconName: 'Building2' },
-      { id: 'type_shoring', name: 'Escora', iconName: 'Construction' },
-      { id: 'type_platforms', name: 'Plataforma', iconName: 'LayoutPanelTop' },
-      { id: 'type_other', name: 'Outro', iconName: 'Package'}
-    ];
-    const insertManyTypes = db.transaction((types) => {
-      for (const type of types) insert.run(type.id, type.name, type.iconName);
-    });
-    insertManyTypes(initialTypes);
-    console.log("[DB] Default equipment types created.");
-  }
+  // --- DEFAULT DATA SEEDING ---
+  
+  // Seed default equipment types
+  console.log("[DB] Seeding default equipment types...");
+  const insertEquipTypes = db.prepare('INSERT INTO equipment_types (id, name, iconName) VALUES (?, ?, ?)');
+  const initialTypes = [
+    { id: 'type_scaffolding', name: 'Andaime', iconName: 'Building2' },
+    { id: 'type_shoring', name: 'Escora', iconName: 'Construction' },
+    { id: 'type_platforms', name: 'Plataforma', iconName: 'LayoutPanelTop' },
+    { id: 'type_other', name: 'Outro', iconName: 'Package'}
+  ];
+  const insertManyTypes = db.transaction((types) => {
+    for (const type of types) insertEquipTypes.run(type.id, type.name, type.iconName);
+  });
+  insertManyTypes(initialTypes);
+  console.log("[DB] Default equipment types seeded.");
 
-  const expenseCategoriesStmt = db.prepare('SELECT COUNT(*) as count FROM expense_categories');
-  const expenseCategoriesResult = expenseCategoriesStmt.get() as { count: number };
-  if (expenseCategoriesResult.count === 0) {
-    console.log("[DB] No expense categories found. Creating default categories...");
-    const insert = db.prepare('INSERT INTO expense_categories (id, name, iconName) VALUES (?, ?, ?)');
-    const initialCategories = [
-      { id: `expcat_maintenance_${crypto.randomBytes(3).toString('hex')}`, name: 'Manutenção Frota', iconName: 'Wrench' },
-      { id: `expcat_fuel_${crypto.randomBytes(3).toString('hex')}`, name: 'Combustível', iconName: 'Fuel' }, 
-      { id: `expcat_operational_${crypto.randomBytes(3).toString('hex')}`, name: 'Despesas Operacionais', iconName: 'Settings' },
-      { id: `expcat_marketing_${crypto.randomBytes(3).toString('hex')}`, name: 'Marketing e Publicidade', iconName: 'Megaphone' },
-      { id: `expcat_general_${crypto.randomBytes(3).toString('hex')}`, name: 'Despesas Gerais', iconName: 'DollarSign' }, 
-      { id: `expcat_other_${crypto.randomBytes(3).toString('hex')}`, name: 'Outro', iconName: 'HelpCircle' },
-    ];
-    const insertManyCategories = db.transaction((categories) => {
-      for (const cat of categories) insert.run(cat.id, cat.name, cat.iconName);
-    });
-    insertManyCategories(initialCategories);
-    console.log("[DB] Default expense categories created.");
-  }
+  // Seed default expense categories
+  console.log("[DB] Seeding default expense categories...");
+  const insertExpenseCat = db.prepare('INSERT INTO expense_categories (id, name, iconName) VALUES (?, ?, ?)');
+  const initialCategories = [
+    { id: `expcat_maintenance_${crypto.randomBytes(3).toString('hex')}`, name: 'Manutenção Frota', iconName: 'Wrench' },
+    { id: `expcat_fuel_${crypto.randomBytes(3).toString('hex')}`, name: 'Combustível', iconName: 'Fuel' }, 
+    { id: `expcat_operational_${crypto.randomBytes(3).toString('hex')}`, name: 'Despesas Operacionais', iconName: 'Settings' },
+    { id: `expcat_marketing_${crypto.randomBytes(3).toString('hex')}`, name: 'Marketing e Publicidade', iconName: 'Megaphone' },
+    { id: `expcat_general_${crypto.randomBytes(3).toString('hex')}`, name: 'Despesas Gerais', iconName: 'DollarSign' }, 
+    { id: `expcat_other_${crypto.randomBytes(3).toString('hex')}`, name: 'Outro', iconName: 'HelpCircle' },
+  ];
+  const insertManyCategories = db.transaction((categories) => {
+    for (const cat of categories) insertExpenseCat.run(cat.id, cat.name, cat.iconName);
+  });
+  insertManyCategories(initialCategories);
+  console.log("[DB] Default expense categories seeded.");
 
-  // Seed company settings if they don't exist
-  const settingsCountStmt = db.prepare('SELECT COUNT(*) as count FROM company_settings');
-  const settingsCount = settingsCountStmt.get() as { count: number };
-  if (settingsCount.count === 0) {
-    console.log("[DB] Company settings not found. Seeding default settings...");
-    const insertStmt = db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (@key, @value)');
-    const insertMany = db.transaction((settings) => {
-      for (const key in settings) {
-        insertStmt.run({ key, value: settings[key as keyof typeof settings] });
-      }
-    });
+  // Seed default company settings
+  console.log("[DB] Seeding default company settings...");
+  const insertSettingStmt = db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (@key, @value)');
+  const insertManySettings = db.transaction((settings) => {
+    for (const key in settings) {
+      insertSettingStmt.run({ key, value: settings[key as keyof typeof settings] });
+    }
+  });
 
-    const defaultSettings = {
-      companyName: 'DH Alugueis',
-      responsibleName: 'Delano Holanda',
-      phone: '88982248384',
-      address: 'Rua Ana Ventura de Oliveira, 189, Ipu, CE',
-      email: 'dhalugueis@gmail.com',
-      pixKey: '+5588982248384',
-      contractTermsAndConditions: `1. O locatário é responsável por quaisquer danos, perda ou roubo do equipamento alugado.
+  const defaultSettings = {
+    companyName: 'DH Alugueis',
+    responsibleName: 'Delano Holanda',
+    phone: '88982248384',
+    address: 'Rua Ana Ventura de Oliveira, 189, Ipu, CE',
+    email: 'dhalugueis@gmail.com',
+    pixKey: '+5588982248384',
+    contractTermsAndConditions: `1. O locatário é responsável por quaisquer danos, perda ou roubo do equipamento alugado.
 2. O equipamento deve ser devolvido na data e hora especificadas no contrato. Atrasos podem incorrer em taxas adicionais.
 3. O pagamento deve ser efetuado conforme acordado. Em caso de inadimplência, medidas legais poderão ser tomadas.
 4. A DH Aluguéis não se responsabiliza por acidentes ou danos causados pelo uso inadequado do equipamento.
 5. Este documento não tem valor fiscal. Solicite sua nota fiscal, se necessário.`,
-      contractFooterText: 'Obrigado por escolher a DH Aluguéis!',
-      companyLogoUrl: '',
-      contractLogoUrl: '',
-    };
-    insertMany(defaultSettings);
-    console.log("[DB] Default company settings have been seeded.");
-  }
+    contractFooterText: 'Obrigado por escolher a DH Aluguéis!',
+    companyLogoUrl: '',
+    contractLogoUrl: '',
+  };
+  insertManySettings(defaultSettings);
+  console.log("[DB] Default company settings have been seeded.");
 
-  // --- Admin User Seeding ---
-  const usersStmt = db.prepare('SELECT COUNT(*) as count FROM users');
-  const usersResult = usersStmt.get() as { count: number };
-  if (usersResult.count === 0) {
-    console.log("[DB] No users found. Creating default admin user...");
-    const defaultUserId = `user_${crypto.randomBytes(8).toString('hex')}`;
-    const defaultPassword = 'dhdh1234'; 
-    const { salt, hash } = hashPassword(defaultPassword);
-    
-    const insertUserStmt = db.prepare('INSERT INTO users (id, name, email, passwordHash, passwordSalt) VALUES (@id, @name, @email, @passwordHash, @passwordSalt)');
-    insertUserStmt.run({
-      id: defaultUserId,
-      name: 'DH Alugueis Admin',
-      email: 'admin@dhalugueis.com', 
-      passwordHash: hash,
-      passwordSalt: salt,
-    });
-    console.log(`[DB] Default admin user created successfully. Email: admin@dhalugueis.com, Password: ${defaultPassword}.`);
-  }
+  // Seed default admin user
+  console.log("[DB] Seeding default admin user...");
+  const defaultUserId = `user_${crypto.randomBytes(8).toString('hex')}`;
+  const defaultPassword = 'dhdh1234'; 
+  const { salt, hash } = hashPassword(defaultPassword);
+  
+  const insertUserStmt = db.prepare('INSERT INTO users (id, name, email, passwordHash, passwordSalt) VALUES (@id, @name, @email, @passwordHash, @passwordSalt)');
+  insertUserStmt.run({
+    id: defaultUserId,
+    name: 'DH Alugueis Admin',
+    email: 'admin@dhalugueis.com', 
+    passwordHash: hash,
+    passwordSalt: salt,
+  });
+  console.log(`[DB] Default admin user created successfully. Email: admin@dhalugueis.com, Password: ${defaultPassword}.`);
 }

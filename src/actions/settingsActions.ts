@@ -51,12 +51,12 @@ export async function updateCompanySettings(settings: Partial<CompanyDetails>): 
 
         // Handle companyLogoUrl
         if (settings.companyLogoUrl && settings.companyLogoUrl.startsWith('data:image/')) {
-            if (currentSettings.companyLogoUrl) {
+            if (currentSettings.companyLogoUrl && currentSettings.companyLogoUrl.startsWith('/uploads/')) {
                 await deleteFile(currentSettings.companyLogoUrl);
             }
             settingsToUpdate.companyLogoUrl = await saveFile(settings.companyLogoUrl, 'logos');
         } else if (settings.companyLogoUrl === '') {
-            if (currentSettings.companyLogoUrl) {
+            if (currentSettings.companyLogoUrl && currentSettings.companyLogoUrl.startsWith('/uploads/')) {
                 await deleteFile(currentSettings.companyLogoUrl);
             }
             settingsToUpdate.companyLogoUrl = '';
@@ -64,12 +64,12 @@ export async function updateCompanySettings(settings: Partial<CompanyDetails>): 
 
         // Handle contractLogoUrl
         if (settings.contractLogoUrl && settings.contractLogoUrl.startsWith('data:image/')) {
-            if (currentSettings.contractLogoUrl) {
+            if (currentSettings.contractLogoUrl && currentSettings.contractLogoUrl.startsWith('/uploads/')) {
                 await deleteFile(currentSettings.contractLogoUrl);
             }
             settingsToUpdate.contractLogoUrl = await saveFile(settings.contractLogoUrl, 'logos');
         } else if (settings.contractLogoUrl === '') {
-             if (currentSettings.contractLogoUrl) {
+             if (currentSettings.contractLogoUrl && currentSettings.contractLogoUrl.startsWith('/uploads/')) {
                 await deleteFile(currentSettings.contractLogoUrl);
             }
             settingsToUpdate.contractLogoUrl = '';

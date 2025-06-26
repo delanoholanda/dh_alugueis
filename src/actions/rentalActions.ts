@@ -389,7 +389,9 @@ export async function deleteRental(id: number): Promise<{ success: boolean }> {
   const getPhotosStmt = db.prepare('SELECT imageUrl FROM rental_photos WHERE rentalId = ?');
   const photos = getPhotosStmt.all(id) as { imageUrl: string }[];
   for (const photo of photos) {
-    await deleteFile(photo.imageUrl);
+    if (photo.imageUrl) {
+        await deleteFile(photo.imageUrl);
+    }
   }
 
   const deletePhotosStmt = db.prepare('DELETE FROM rental_photos WHERE rentalId = ?');
