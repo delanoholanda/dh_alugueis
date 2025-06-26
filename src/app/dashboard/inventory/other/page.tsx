@@ -10,7 +10,7 @@ import type { Rental, Equipment, EquipmentType } from '@/types';
 const TARGET_TYPE_NAME = "Outro"; // Corresponde ao nome do tipo "Outro"
 
 async function getTargetTypeId(allTypes: EquipmentType[]): Promise<string | undefined> {
-  const foundType = allTypes.find(type => type.name.toLowerCase() === TARGET_TYPE_NAME.toLowerCase());
+  const foundType = allTypes.find(type => type.name.trim().toLowerCase() === TARGET_TYPE_NAME.toLowerCase());
   return foundType?.id;
 }
 
@@ -46,4 +46,3 @@ export default async function OtherInventoryPage() {
     </div>
   );
 }
-
