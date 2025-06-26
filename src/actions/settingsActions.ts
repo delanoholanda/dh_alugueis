@@ -4,6 +4,7 @@
 import { getDb } from '@/lib/database';
 import type { CompanyDetails } from '@/types';
 import { revalidatePath } from 'next/cache';
+import { saveFile, deleteFile } from '@/lib/file-storage';
 
 const defaultSettings: CompanyDetails = {
     companyName: 'DH Alugueis',
@@ -45,20 +46,49 @@ export async function getCompanySettings(): Promise<CompanyDetails> {
 export async function updateCompanySettings(settings: Partial<CompanyDetails>): Promise<{ success: boolean }> {
     const db = getDb();
     try {
+        const currentSettings = await getCompanySettings();
+        const settingsToUpdate: Partial<CompanyDetails> = { ...settings };
+
+        // Handle companyLogoUrl
+        if (settings.companyLogoUrl && settings.companyLogoUrl.startsWith('data:image/')) {
+            if (currentSettings.companyLogoUrl) {
+                await deleteFile(currentSettings.companyLogoUrl);
+            }
+            settingsToUpdate.companyLogoUrl = await saveFile(settings.companyLogoUrl, 'logos');
+        } else if (settings.companyLogoUrl === '') {
+            if (currentSettings.companyLogoUrl) {
+                await deleteFile(currentSettings.companyLogoUrl);
+            }
+            settingsToUpdate.companyLogoUrl = '';
+        }
+
+        // Handle contractLogoUrl
+        if (settings.contractLogoUrl && settings.contractLogoUrl.startsWith('data:image/')) {
+            if (currentSettings.contractLogoUrl) {
+                await deleteFile(currentSettings.contractLogoUrl);
+            }
+            settingsToUpdate.contractLogoUrl = await saveFile(settings.contractLogoUrl, 'logos');
+        } else if (settings.contractLogoUrl === '') {
+             if (currentSettings.contractLogoUrl) {
+                await deleteFile(currentSettings.contractLogoUrl);
+            }
+            settingsToUpdate.contractLogoUrl = '';
+        }
+        
         const stmt = db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (@key, @value)');
         
-        const updateMany = db.transaction((settingsToUpdate) => {
-            for (const key in settingsToUpdate) {
-                // Ensure the value is a string, especially for potentially undefined optional fields
-                const value = settingsToUpdate[key as keyof typeof settingsToUpdate] ?? '';
+        const updateMany = db.transaction((s) => {
+            for (const key in s) {
+                const value = s[key as keyof typeof s] ?? '';
                 stmt.run({ key, value: String(value) });
             }
         });
 
-        updateMany(settings);
+        updateMany(settingsToUpdate);
         
         revalidatePath('/dashboard/settings');
         revalidatePath('/dashboard/rentals/[id]/receipt', 'page');
+        revalidatePath('/', 'layout'); // Revalidate the root layout to update favicon
         
         return { success: true };
     } catch (error) {

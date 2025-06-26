@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { addRentalPhoto, deleteRentalPhoto } from '@/actions/rentalActions';
 import type { RentalPhoto } from '@/types';
-import { Camera, Upload, Trash2, Loader2, Image as ImageIcon, PackageX } from 'lucide-react';
+import { Camera, Trash2, Loader2, ImageIcon } from 'lucide-react';
 
 interface RentalPhotoGalleryProps {
   rentalId: number;
@@ -31,17 +31,17 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
 
     setIsLoading(true);
     let successfulUploads = 0;
+    const maxFileSize = 8 * 1024 * 1024; // 8MB
 
     try {
       const uploadPromises = Array.from(files).map(file => {
         return new Promise<void>((resolve, reject) => {
-          if (file.size > 8 * 1024 * 1024) { // 8MB limit
+          if (file.size > maxFileSize) {
             toast({
               title: 'Arquivo Muito Grande',
               description: `A imagem "${file.name}" excede o limite de 8MB.`,
               variant: 'destructive',
             });
-            // Don't reject the whole batch, just this file.
             resolve();
             return;
           }
@@ -81,7 +81,6 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
         variant: 'destructive',
       });
     } finally {
-      // Reset file input to allow re-uploading the same file if needed
       if(event.target) event.target.value = '';
       setIsLoading(false);
     }
@@ -128,7 +127,7 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
               onChange={handleFileChange}
               disabled={isLoading}
               className="cursor-pointer file:mr-2 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary file:border-0 file:rounded file:px-2 file:py-1 hover:file:bg-primary/20"
-              multiple
+              multiple // Allow multiple file selection
             />
             {isLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin" />}
           </div>
@@ -144,6 +143,7 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
                   layout="fill"
                   objectFit="cover"
                   className="rounded-md"
+                  data-ai-hint="equipment photo"
                 />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                    <AlertDialog>

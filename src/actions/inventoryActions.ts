@@ -1,79 +1,123 @@
 
 'use server';
 
-import type { Equipment } from '@/types';
+import type { Customer } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
+import { saveFile, deleteFile } from '@/lib/file-storage';
 
-export async function getInventoryItems(): Promise<Equipment[]> {
+export async function getCustomers(): Promise<Customer[]> {
   const db = getDb();
   try {
-    const stmt = db.prepare('SELECT * FROM inventory ORDER BY name ASC');
-    const items = stmt.all() as Equipment[];
-    return items;
+    const stmt = db.prepare('SELECT id, name, phone, address, cpf, imageUrl, responsiveness, rentalHistory FROM customers ORDER BY name ASC');
+    const customers = stmt.all() as Customer[];
+    return customers;
   } catch (error) {
-    console.error("Failed to fetch inventory items:", error);
+    console.error("Failed to fetch customers:", error);
     return [];
   }
 }
 
-export async function getInventoryItemById(id: string): Promise<Equipment | undefined> {
+export async function getCustomerById(id: string): Promise<Customer | undefined> {
   const db = getDb();
   try {
-    const stmt = db.prepare('SELECT * FROM inventory WHERE id = ?');
-    const item = stmt.get(id) as Equipment | undefined;
-    return item;
+    const stmt = db.prepare('SELECT id, name, phone, address, cpf, imageUrl, responsiveness, rentalHistory FROM customers WHERE id = ?');
+    const customer = stmt.get(id) as Customer | undefined;
+    return customer;
   } catch (error) {
-    console.error(`Failed to fetch inventory item with id ${id}:`, error);
+    console.error(`Failed to fetch customer with id ${id}:`, error);
     return undefined;
   }
 }
 
-export async function createInventoryItem(itemData: Omit<Equipment, 'id'>): Promise<Equipment> {
+export async function createCustomer(customerData: Omit<Customer, 'id'>): Promise<Customer> {
   const db = getDb();
-  const newId = `eq_${crypto.randomBytes(8).toString('hex')}`;
-  const newItem: Equipment = { ...itemData, id: newId };
+  let savedImageUrl: string | undefined = customerData.imageUrl;
+  
+  if (customerData.imageUrl && customerData.imageUrl.startsWith('data:image/')) {
+    savedImageUrl = await saveFile(customerData.imageUrl, 'customers');
+  }
+
+  const newId = `cust_${crypto.randomBytes(8).toString('hex')}`;
+  const newCustomer: Customer = { 
+    ...customerData, 
+    id: newId,
+    cpf: customerData.cpf || null,
+    imageUrl: savedImageUrl || ''
+  };
 
   try {
-    const stmt = db.prepare('INSERT INTO inventory (id, name, typeId, quantity, status, imageUrl, dailyRentalRate) VALUES (@id, @name, @typeId, @quantity, @status, @imageUrl, @dailyRentalRate)');
-    stmt.run(newItem);
-    revalidatePath('/dashboard/inventory');
-    return newItem;
+    const stmt = db.prepare('INSERT INTO customers (id, name, phone, address, cpf, imageUrl, responsiveness, rentalHistory) VALUES (@id, @name, @phone, @address, @cpf, @imageUrl, @responsiveness, @rentalHistory)');
+    stmt.run(newCustomer);
+    revalidatePath('/dashboard/customers');
+    return newCustomer;
   } catch (error) {
-    console.error("Failed to create inventory item:", error);
-    throw new Error('Failed to create inventory item in database.');
+    if (savedImageUrl && savedImageUrl.startsWith('/uploads/')) {
+      await deleteFile(savedImageUrl);
+    }
+    console.error("Failed to create customer:", error);
+    throw new Error('Failed to create customer in database.');
   }
 }
 
-export async function updateInventoryItem(id: string, itemData: Partial<Omit<Equipment, 'id'>>): Promise<Equipment | null> {
+export async function updateCustomer(id: string, customerData: Partial<Omit<Customer, 'id'>>): Promise<Customer | null> {
   const db = getDb();
   try {
-    const existingItem = await getInventoryItemById(id);
-    if (!existingItem) return null;
+    const existingCustomer = await getCustomerById(id);
+    if (!existingCustomer) return null;
 
-    const updatedItem = { ...existingItem, ...itemData };
+    const finalUpdateData: Partial<Customer> = { ...customerData };
 
-    const stmt = db.prepare('UPDATE inventory SET name = @name, typeId = @typeId, quantity = @quantity, status = @status, imageUrl = @imageUrl, dailyRentalRate = @dailyRentalRate WHERE id = @id');
-    stmt.run(updatedItem);
-    revalidatePath('/dashboard/inventory');
-    revalidatePath(`/dashboard/inventory/${id}`);
-    return updatedItem;
+    if (customerData.imageUrl && customerData.imageUrl.startsWith('data:image/')) {
+        if (existingCustomer.imageUrl) {
+            await deleteFile(existingCustomer.imageUrl);
+        }
+        finalUpdateData.imageUrl = await saveFile(customerData.imageUrl, 'customers');
+    } else if (customerData.imageUrl === '') {
+        if (existingCustomer.imageUrl) {
+            await deleteFile(existingCustomer.imageUrl);
+        }
+        finalUpdateData.imageUrl = '';
+    }
+
+    const updatedCustomerForDb = { ...existingCustomer, ...finalUpdateData };
+
+    const stmt = db.prepare('UPDATE customers SET name = @name, phone = @phone, address = @address, cpf = @cpf, imageUrl = @imageUrl, responsiveness = @responsiveness, rentalHistory = @rentalHistory WHERE id = @id');
+    stmt.run(updatedCustomerForDb);
+    revalidatePath('/dashboard/customers');
+    const updatedCustomer = await getCustomerById(id);
+    return updatedCustomer || null;
   } catch (error) {
-    console.error(`Failed to update inventory item with id ${id}:`, error);
-    throw new Error('Failed to update inventory item in database.');
+    console.error(`Failed to update customer with id ${id}:`, error);
+    throw new Error('Failed to update customer in database.');
   }
 }
 
-export async function deleteInventoryItem(id: string): Promise<{ success: boolean }> {
+export async function deleteCustomer(id: string): Promise<{ success: boolean }> {
   const db = getDb();
   try {
-    const stmt = db.prepare('DELETE FROM inventory WHERE id = ?');
+    const rentalCheckStmt = db.prepare('SELECT COUNT(*) as count FROM rentals WHERE customerId = ?');
+    const rentalUsage = rentalCheckStmt.get(id) as { count: number };
+
+    if (rentalUsage.count > 0) {
+      throw new Error('Não é possível excluir o cliente: Existem contratos de aluguel associados a este cliente.');
+    }
+
+    const customerToDelete = await getCustomerById(id);
+    if(customerToDelete?.imageUrl) {
+        await deleteFile(customerToDelete.imageUrl);
+    }
+
+    const stmt = db.prepare('DELETE FROM customers WHERE id = ?');
     const result = stmt.run(id);
-    revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard/customers');
     return { success: result.changes > 0 };
   } catch (error) {
-    console.error(`Failed to delete inventory item with id ${id}:`, error);
-    throw error; 
+    console.error(`Failed to delete customer with id ${id}:`, error);
+    if (error instanceof Error) {
+        throw error;
+    }
+    throw new Error('Falha ao excluir cliente do banco de dados.');
   }
 }

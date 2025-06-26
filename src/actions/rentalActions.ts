@@ -7,7 +7,7 @@ import { getCustomerById } from './customerActions';
 import { getInventoryItemById } from './inventoryActions';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
-
+import { saveFile, deleteFile } from '@/lib/file-storage';
 import { addDays, format, parseISO, eachDayOfInterval, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -384,6 +384,14 @@ export async function updateRental(
 
 export async function deleteRental(id: number): Promise<{ success: boolean }> { 
   const db = getDb();
+  
+  // First, get all photo URLs for this rental to delete the files
+  const getPhotosStmt = db.prepare('SELECT imageUrl FROM rental_photos WHERE rentalId = ?');
+  const photos = getPhotosStmt.all(id) as { imageUrl: string }[];
+  for (const photo of photos) {
+    await deleteFile(photo.imageUrl);
+  }
+
   const deletePhotosStmt = db.prepare('DELETE FROM rental_photos WHERE rentalId = ?');
   const deleteEquipmentStmt = db.prepare('DELETE FROM rental_equipment WHERE rentalId = ?');
   const deleteRentalStmt = db.prepare('DELETE FROM rentals WHERE id = ?');
@@ -582,13 +590,17 @@ export async function finalizeRental(id: number): Promise<Rental | null> {
   }
 }
 
-export async function addRentalPhoto(rentalId: number, imageUrl: string, photoType: 'delivery' | 'return'): Promise<RentalPhoto> {
+export async function addRentalPhoto(rentalId: number, imageDataUrl: string, photoType: 'delivery' | 'return'): Promise<RentalPhoto> {
   const db = getDb();
+
+  // Save the file and get the public URL
+  const imageUrl = await saveFile(imageDataUrl, 'rentals');
+
   const newId = `rpho_${crypto.randomBytes(8).toString('hex')}`;
   const newPhoto: RentalPhoto = {
     id: newId,
     rentalId,
-    imageUrl,
+    imageUrl, // Store the public path
     photoType,
     uploadedAt: new Date().toISOString(),
   };
@@ -599,6 +611,8 @@ export async function addRentalPhoto(rentalId: number, imageUrl: string, photoTy
     revalidatePath(`/dashboard/rentals/${rentalId}/details`);
     return newPhoto;
   } catch (error) {
+    // If DB insert fails, try to delete the file we just saved
+    await deleteFile(imageUrl);
     console.error("Failed to add rental photo:", error);
     throw new Error('Failed to add photo to database.');
   }
@@ -607,9 +621,17 @@ export async function addRentalPhoto(rentalId: number, imageUrl: string, photoTy
 export async function deleteRentalPhoto(photoId: string): Promise<{ success: boolean }> {
   const db = getDb();
   try {
-    const getRentalIdStmt = db.prepare('SELECT rentalId FROM rental_photos WHERE id = ?');
-    const photo = getRentalIdStmt.get(photoId) as { rentalId: number } | undefined;
+    const getPhotoStmt = db.prepare('SELECT rentalId, imageUrl FROM rental_photos WHERE id = ?');
+    const photo = getPhotoStmt.get(photoId) as { rentalId: number; imageUrl: string } | undefined;
 
+    if (!photo) {
+      throw new Error("Photo not found.");
+    }
+
+    // Delete the file from the filesystem first
+    await deleteFile(photo.imageUrl);
+
+    // Then delete the record from the database
     const stmt = db.prepare('DELETE FROM rental_photos WHERE id = ?');
     const result = stmt.run(photoId);
     
