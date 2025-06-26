@@ -898,29 +898,27 @@ export function RentalForm({
                 )}
             />
 
-            {!watchedIsOpenEnded && (
-                <FormField
-                    control={form.control}
-                    name="freightValue"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel className="flex items-center"><Truck className="mr-2 h-4 w-4 text-muted-foreground"/>Valor do Frete (R$)</FormLabel>
-                        <FormControl>
-                        <Input
-                            type="text"
-                            placeholder="R$ 0,00"
-                            value={field.value === undefined ? '' : formatToBRL(field.value)}
-                            onChange={(e) => {
-                                const parsedValue = parseFromBRL(e.target.value);
-                                field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
-                            }}
-                        />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
-            )}
+            <FormField
+              control={form.control}
+              name="freightValue"
+              render={({ field }) => (
+              <FormItem>
+                  <FormLabel className="flex items-center"><Truck className="mr-2 h-4 w-4 text-muted-foreground"/>Valor do Frete (R$)</FormLabel>
+                  <FormControl>
+                  <Input
+                      type="text"
+                      placeholder="R$ 0,00"
+                      value={field.value === undefined ? '' : formatToBRL(field.value)}
+                      onChange={(e) => {
+                          const parsedValue = parseFromBRL(e.target.value);
+                          field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
+                      }}
+                  />
+                  </FormControl>
+                  <FormMessage />
+              </FormItem>
+              )}
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <FormField

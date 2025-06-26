@@ -716,7 +716,7 @@ export default function RentalContractPage() {
                     <td>{rental.isOpenEnded ? 'Soma das Diárias:' : 'Soma dos itens/serviços:'}</td>
                     <td className="text-right">{formatToBRL(rental.isOpenEnded ? rental.value : itemsSubtotal)}</td>
                   </tr>
-                  {!rental.isOpenEnded && rental.freightValue !== undefined && rental.freightValue > 0 ? (
+                  {rental.freightValue !== undefined && rental.freightValue > 0 ? (
                     <tr>
                       <td>Frete:</td>
                       <td className="text-right">{formatToBRL(rental.freightValue)}</td>
