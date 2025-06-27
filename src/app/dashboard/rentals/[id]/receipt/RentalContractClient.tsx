@@ -300,50 +300,49 @@ export default function RentalContractClient({ rental, customer, companySettings
           .no-print { display: none !important; }
         }
         .contract-container { max-width: 750px; margin: 0 auto; background-color: white; padding: 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.1); font-family: Arial, sans-serif; font-size: 11px; color: #333; border: 1px solid #eee; overflow-x: auto; }
-        .contract-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; }
-        .contract-header .logo-container { width: 200px; height: 100px; display: flex; align-items: center; justify-content: flex-start;}
-        .contract-header .logo { max-width: 100%; height: 100%; object-fit: contain; }
-        .contract-header .company-info { text-align: right; font-size: 10px; }
+        .contract-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+        .contract-header .logo-container { position: relative; width: 150px; height: 75px; flex-shrink: 0; }
+        .contract-header .company-info { text-align: right; font-size: 10px; line-height: 1.1; }
         .contract-header .company-info h1 { font-size: 14px; margin-bottom: 2px;}
-        .contract-section { margin-bottom: 1rem; } 
-        .contract-table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
-        .contract-table th, .contract-table td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+        .contract-section { margin-bottom: 0.5rem; line-height: 1.1; } 
+        .contract-table { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; }
+        .contract-table th, .contract-table td { border: 1px solid #ddd; padding: 0.25rem 0.4rem 0.5rem 0.4rem; text-align: left; vertical-align: middle; }
         .contract-table th { background-color: #f8f8f8; font-size: 10px; }
         .contract-table .text-right { text-align: right; }
         .contract-summary-grid { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 1rem; }
         .total-line { font-weight: bold; font-size: 12px; }
-        hr { border: 0; border-top: 1px solid #eee; margin: 1rem 0;}
-        .pix-section { text-align: center; margin-top: 1rem; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 0.5rem 0;}
+        .pix-section { text-align: center; margin-top: 0.5rem; }
         .pix-section canvas { margin: 0.5rem auto; border: 1px solid #eee; padding: 5px; background: white; }
         .pix-key-text { font-size: 9px; word-break: break-all; }
-        .terms-conditions { white-space: pre-wrap; font-size: 8px; line-height: 1.3; margin-bottom: 0.5rem; }
-        .contract-section p.valor-extenso-class { margin-top: 0.5rem; margin-bottom: 1rem; }
+        .terms-conditions { white-space: pre-wrap; font-size: 9px; line-height: 1.2; margin-bottom: 0.25rem; }
+        .contract-section p.valor-extenso-class { margin-top: 0.25rem; margin-bottom: 0.5rem; }
         .contract-section.signature-container {
-          margin-top: 2rem !important;     
-          margin-bottom: 1.5rem !important;  
+          margin-top: 1rem !important;     
+          margin-bottom: 0.5rem !important;  
           display: flex !important;
           flex-direction: column !important;
           align-items: center !important;
         }
         .signature-area {
           text-align: center;
-          margin-top: 1.5rem !important;     
-          margin-bottom: 0.5rem !important;
+          margin-top: 1rem !important;     
+          margin-bottom: 0.25rem !important;
         }
         .signature-area:first-child {
-           margin-bottom: 1.5rem !important; 
+           margin-bottom: 1rem !important; 
         }
         .signature-line {
           display: block;
           margin: 0 auto 0.25rem auto;
-          width: 280px;
+          width: 250px;
           border-bottom: 1px solid #333;
-          padding-bottom: 25px !important; 
+          padding-bottom: 20px !important; 
         }
         footer.text-center.text-xs {
             font-size: 10px !important;
-            margin-top: 1.5rem !important;
-            padding-top: 0.75rem !important;
+            margin-top: 1rem !important;
+            padding-top: 0.5rem !important;
         }
       `}</style>
 
@@ -352,7 +351,15 @@ export default function RentalContractClient({ rental, customer, companySettings
 
         <header className="contract-header">
           <div className="logo-container">
-            {displayContractLogo && <Image src={displayContractLogo} alt={`${companySettings.companyName} Logo`} width={200} height={100} className="logo" data-ai-hint="company logo" key={displayContractLogo}/>}
+             <Image 
+                src={displayContractLogo} 
+                alt={`${companySettings.companyName} Logo`}
+                fill
+                style={{ objectFit: 'contain' }}
+                priority
+                key={displayContractLogo}
+                data-ai-hint="company logo"
+            />
           </div>
           <div className="company-info">
             <h1 className="font-bold">{contractTitle}</h1>
@@ -391,7 +398,7 @@ export default function RentalContractClient({ rental, customer, companySettings
         </section>
 
         <section className="contract-section">
-          <h3 className="font-semibold text-sm mb-2">Itens / Serviços:</h3>
+          <h3 className="font-semibold text-sm mb-1">Itens / Serviços:</h3>
           <table className="contract-table">
             <thead>
               <tr>
@@ -420,10 +427,10 @@ export default function RentalContractClient({ rental, customer, companySettings
 
         <div className="contract-summary-grid contract-section">
           <div> {/* Coluna da esquerda */}
-            <h3 className="font-semibold text-sm mb-2">Observações:</h3>
+            <h3 className="font-semibold text-sm mb-1">Observações:</h3>
             <p className="text-xs whitespace-pre-wrap">{rental.notes || 'Nenhuma observação.'}</p>
             
-            <div className="mt-4">
+            <div className="mt-2">
                 <h3 className="font-semibold text-sm mb-1">Regras de Cobrança:</h3>
                 <ul className="text-xs list-disc list-inside">
                     {rental.isOpenEnded && (
@@ -434,11 +441,11 @@ export default function RentalContractClient({ rental, customer, companySettings
                 </ul>
             </div>
 
-            <h3 className="font-semibold text-sm mb-2 mt-4">Termos e Condições:</h3>
+            <h3 className="font-semibold text-sm mb-1 mt-2">Termos e Condições:</h3>
             <p className="terms-conditions">
               {companySettings.contractTermsAndConditions || ''}
             </p>
-             <p className="text-xs mt-4 valor-extenso-class">
+             <p className="text-xs mt-2 valor-extenso-class">
               Valor por extenso: {valorPorExtenso || 'Não especificado'}. {rental.isOpenEnded && <span className="font-semibold">(Valor referente à diária)</span>}
             </p>
             <section className="contract-section signature-container">
@@ -473,19 +480,19 @@ export default function RentalContractClient({ rental, customer, companySettings
                   </tr>
                 </tbody></table>
 
-            <div className="mt-2">
+            <div className="mt-1">
                 <h3 className="font-semibold text-sm mb-1">Forma de Pagamento:</h3>
                 <p className="text-xs">{paymentMethodMap[rental.paymentMethod || 'nao_definido']}</p>
                 {rental.paymentStatus === 'paid' && rental.paymentDate && (
                     <p className="text-xs">Pago em: {format(parseISO(rental.paymentDate), "dd/MM/yyyy", { locale: ptBR })}</p>
                 )}
                 {rental.paymentStatus === 'paid' && (
-                  <p className="text-sm font-semibold text-green-600 mt-2">{rental.isOpenEnded ? 'PAGAMENTO INICIAL OK' : 'CONTRATO QUITADO'}</p>
+                  <p className="text-sm font-semibold text-green-600 mt-1">{rental.isOpenEnded ? 'PAGAMENTO INICIAL OK' : 'CONTRATO QUITADO'}</p>
                 )}
             </div>
             
             {rental.isOpenEnded && !rental.paymentDate && (
-                <div className="mt-4 p-2 border border-orange-400 bg-orange-50 text-orange-800 rounded-md text-xs">
+                <div className="mt-2 p-2 border border-orange-400 bg-orange-50 text-orange-800 rounded-md text-xs">
                    <AlertCircle className="inline-block h-4 w-4 mr-1"/>
                     Este é um contrato em aberto. O valor total será calculado no momento da devolução do equipamento.
                 </div>
@@ -494,8 +501,8 @@ export default function RentalContractClient({ rental, customer, companySettings
             {rental.paymentMethod === 'pix' && pixPayload && (
               <div className="pix-section">
                 <h3 className="font-semibold text-sm mb-1">Pagar com PIX:</h3>
-                <QRCodeCanvas value={pixPayload} size={128} level="M" includeMargin={true} />
-                <div className="mt-2 text-center">
+                <QRCodeCanvas value={pixPayload} size={110} level="M" includeMargin={true} />
+                <div className="mt-1 text-center">
                     <p className="font-semibold text-sm">Chave PIX:</p>
                     <p className="font-mono font-bold text-base tracking-wider">{formattedPixKey}</p>
                 </div>
@@ -504,7 +511,7 @@ export default function RentalContractClient({ rental, customer, companySettings
              {rental.paymentMethod === 'pix' && !pixPayload && companySettings.pixKey && rental.value > 0 && !rental.isOpenEnded && (
                 <div className="pix-section">
                     <p className="text-xs text-muted-foreground">Gerando QR Code PIX...</p>
-                    <div className="mt-2 text-center">
+                    <div className="mt-1 text-center">
                         <p className="font-semibold text-sm">Chave PIX:</p>
                         <p className="font-mono font-bold text-base tracking-wider">{formattedPixKey}</p>
                     </div>
@@ -518,7 +525,7 @@ export default function RentalContractClient({ rental, customer, companySettings
           </div>
         </div>
 
-        <footer className="text-center text-xs text-gray-500 mt-8 pt-4 border-t">
+        <footer className="text-center text-xs text-gray-500 mt-4 pt-2 border-t">
             <p>{companySettings.contractFooterText || ''}</p>
             <p>Em caso de dúvidas, entre em contato: {companySettings.phone}</p>
         </footer>

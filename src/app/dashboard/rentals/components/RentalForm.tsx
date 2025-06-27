@@ -198,7 +198,6 @@ export function RentalForm({
   const watchedRentalDays = form.watch("rentalDays");
   const watchedFreightValue = form.watch("freightValue");
   const watchedPaymentStatus = form.watch("paymentStatus");
-  const watchedCustomerId = form.watch("customerId");
 
   useEffect(() => {
     if (watchedIsOpenEnded) {
@@ -210,42 +209,6 @@ export function RentalForm({
         }
     }
   }, [watchedIsOpenEnded, form]);
-
-  useEffect(() => {
-    if (watchedCustomerId) {
-      const selectedCustomer = customerList.find(c => c.id === watchedCustomerId);
-      const currentDeliveryAddressValue = form.getValues('deliveryAddress');
-      
-      const isDeliveryAddressConsideredEmpty = 
-        currentDeliveryAddressValue === undefined ||
-        currentDeliveryAddressValue === null ||
-        currentDeliveryAddressValue.trim() === '' ||
-        currentDeliveryAddressValue === 'A definir';
-
-      if (selectedCustomer) {
-        if (isDeliveryAddressConsideredEmpty) {
-          if (selectedCustomer.address && selectedCustomer.address.trim() !== '') {
-            form.setValue('deliveryAddress', selectedCustomer.address, { shouldValidate: true });
-          } else {
-            form.setValue('deliveryAddress', '', { shouldValidate: true });
-          }
-        }
-      }
-    } else {
-      const currentDeliveryAddressValue = form.getValues('deliveryAddress');
-      const isDeliveryAddressConsideredEmpty = 
-        currentDeliveryAddressValue === undefined ||
-        currentDeliveryAddressValue === null ||
-        currentDeliveryAddressValue.trim() === '' ||
-        currentDeliveryAddressValue === 'A definir';
-      if (isDeliveryAddressConsideredEmpty) {
-         form.setValue('deliveryAddress', '', { shouldValidate: true });
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps 
-  }, [watchedCustomerId, customerList, form]); 
-
-
   
   useEffect(() => {
     let subTotalBasedOnCustomRates = 0;
@@ -885,14 +848,14 @@ export function RentalForm({
                     <FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground"/>Endereço de Entrega (Opcional)</FormLabel>
                     <FormControl>
                       <Textarea 
-                        placeholder="Endereço do cliente (se houver) ou digite um específico" 
+                        placeholder="Digite o endereço para entrega e montagem do equipamento." 
                         {...field}
                         onChange={(e) => field.onChange(e.target.value === 'A definir' ? '' : e.target.value)}
                         value={field.value === 'A definir' ? '' : field.value || ''}
                         rows={3}
                       />
                     </FormControl>
-                    <FormDescription>Será preenchido com o endereço do cliente se disponível e este campo estiver vazio. Caso contrário, será "A definir" se não preenchido.</FormDescription>
+                    <FormDescription>Se não for preenchido, será registrado como "A definir".</FormDescription>
                     <FormMessage />
                 </FormItem>
                 )}
