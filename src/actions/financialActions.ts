@@ -35,6 +35,7 @@ export async function createExpense(expenseData: Omit<Expense, 'id' | 'categoryN
     const stmt = db.prepare('INSERT INTO expenses (id, date, description, amount, categoryId) VALUES (@id, @date, @description, @amount, @categoryId)');
     stmt.run(newExpense);
     revalidatePath('/dashboard/financials');
+    revalidatePath('/dashboard', 'layout');
     // To return the full Expense object with categoryName, we'd need to fetch it or find it from existing categories
     // For simplicity, we'll return what was inserted. The list will refresh with categoryName anyway.
     const createdExpense = db.prepare(`
@@ -57,6 +58,7 @@ export async function deleteExpense(id: string): Promise<{ success: boolean }> {
     const stmt = db.prepare('DELETE FROM expenses WHERE id = ?');
     const result = stmt.run(id);
     revalidatePath('/dashboard/financials');
+    revalidatePath('/dashboard', 'layout');
     return { success: result.changes > 0 };
   } catch (error) {
     console.error(`Failed to delete expense with id ${id}:`, error);

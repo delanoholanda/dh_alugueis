@@ -49,7 +49,8 @@ export async function createInventoryItem(itemData: Omit<Equipment, 'id'>): Prom
   try {
     const stmt = db.prepare('INSERT INTO inventory (id, name, typeId, quantity, status, imageUrl, dailyRentalRate) VALUES (@id, @name, @typeId, @quantity, @status, @imageUrl, @dailyRentalRate)');
     stmt.run(newItem);
-    revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard/inventory', 'layout');
+    revalidatePath('/dashboard', 'layout');
     return newItem;
   } catch (error) {
      if (savedImageUrl && savedImageUrl.startsWith('/uploads/')) {
@@ -84,8 +85,9 @@ export async function updateInventoryItem(id: string, itemData: Partial<Omit<Equ
 
     const stmt = db.prepare('UPDATE inventory SET name = @name, typeId = @typeId, quantity = @quantity, status = @status, imageUrl = @imageUrl, dailyRentalRate = @dailyRentalRate WHERE id = @id');
     stmt.run(updatedItemForDb);
-    revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard/inventory', 'layout');
     revalidatePath(`/dashboard/inventory/${id}`);
+    revalidatePath('/dashboard', 'layout');
     return updatedItemForDb;
   } catch (error) {
     console.error(`Failed to update inventory item with id ${id}:`, error);
@@ -103,7 +105,8 @@ export async function deleteInventoryItem(id: string): Promise<{ success: boolea
 
     const stmt = db.prepare('DELETE FROM inventory WHERE id = ?');
     const result = stmt.run(id);
-    revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard/inventory', 'layout');
+    revalidatePath('/dashboard', 'layout');
     return { success: result.changes > 0 };
   } catch (error) {
     console.error(`Failed to delete inventory item with id ${id}:`, error);

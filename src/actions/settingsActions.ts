@@ -86,7 +86,7 @@ export async function updateCompanySettings(settings: Partial<CompanyDetails>): 
 
         updateMany(settingsToUpdate);
         
-        revalidatePath('/dashboard/settings');
+        revalidatePath('/dashboard', 'layout');
         revalidatePath('/dashboard/rentals/[id]/receipt', 'page');
         revalidatePath('/', 'layout'); // Revalidate the root layout to update favicon
         

@@ -8,31 +8,9 @@ import { getInventoryItemById } from './inventoryActions';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
 import { saveFile, deleteFile } from '@/lib/file-storage';
-import { addDays, format, parseISO, eachDayOfInterval, getDay } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-const countBillableDaysOnServer = (startDateStr: string, endDateStr: string, chargeSaturdays: boolean, chargeSundays: boolean): number => {
-    try {
-        const startDate = parseISO(startDateStr);
-        const endDate = parseISO(endDateStr);
-        if (startDate > endDate) return 0;
-
-        const interval = { start: startDate, end: endDate };
-        const daysInInterval = eachDayOfInterval(interval);
-        
-        let billableDays = 0;
-        for (const day of daysInInterval) {
-            const dayOfWeek = getDay(day); // 0=Sun, 6=Sat
-            if (dayOfWeek === 6 && !chargeSaturdays) continue;
-            if (dayOfWeek === 0 && !chargeSundays) continue;
-            billableDays++;
-        }
-        return billableDays;
-    } catch (e) {
-      console.error("Error in countBillableDaysOnServer:", e);
-      return 0;
-    }
-};
+import { countBillableDays } from '@/lib/utils';
 
 
 export async function getRentals(): Promise<Rental[]> {
@@ -190,8 +168,7 @@ export async function createRental(
         });
       }
     })();
-    revalidatePath('/dashboard/rentals');
-    revalidatePath('/dashboard/inventory'); 
+    revalidatePath('/dashboard', 'layout'); 
     
     const finalNewRental: Rental = {
       ...newRentalForDbBase,
@@ -356,11 +333,10 @@ export async function updateRental(
         }
       }
     })();
-    revalidatePath('/dashboard/rentals');
+    revalidatePath('/dashboard', 'layout');
     revalidatePath(`/dashboard/rentals/${id}`);
     revalidatePath(`/dashboard/rentals/${id}/details`);
     revalidatePath(`/dashboard/rentals/${id}/receipt`);
-    revalidatePath('/dashboard/inventory');
     const finalUpdatedRental = await getRentalById(id);
     return finalUpdatedRental || null;
   } catch (error) {
@@ -405,8 +381,7 @@ export async function deleteRental(id: number): Promise<{ success: boolean }> {
         deleteRentalStmt.run(id);
     })();
     
-    revalidatePath('/dashboard/rentals');
-    revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error(`Failed to delete rental with id ${id}:`, error);
@@ -439,7 +414,7 @@ export async function extendRental(
   const newRentalStartDate = format(newRentalStartDateObj, 'yyyy-MM-dd');
   const newRentalEndDate = format(newRentalEndDateObj, 'yyyy-MM-dd');
   
-  const billableDaysForExtension = countBillableDaysOnServer(
+  const billableDaysForExtension = countBillableDays(
     newRentalStartDate,
     newRentalEndDate,
     chargeSaturdays,
@@ -489,8 +464,7 @@ export async function extendRental(
 
   try {
     const newRental = await createRental(newRentalData);
-    revalidatePath('/dashboard/rentals');
-    revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard', 'layout');
     return newRental;
   } catch (error) {
     console.error(`Failed to create extension rental for original ID ${rentalId}:`, error);
@@ -513,7 +487,7 @@ export async function calculateAndCloseOpenEndedRental(id: number): Promise<Rent
   const today = new Date();
   const formattedToday = format(today, 'yyyy-MM-dd');
   
-  const billableDays = countBillableDaysOnServer(
+  const billableDays = countBillableDays(
     existingRental.rentalStartDate,
     formattedToday,
     existingRental.chargeSaturdays ?? true,
@@ -544,7 +518,7 @@ export async function calculateAndCloseOpenEndedRental(id: number): Promise<Rent
 
   try {
     stmt.run(updatePayload);
-    revalidatePath('/dashboard/rentals');
+    revalidatePath('/dashboard', 'layout');
     revalidatePath(`/dashboard/rentals/${id}/details`);
     const updatedRental = await getRentalById(id);
     return updatedRental || null;
@@ -581,8 +555,7 @@ export async function finalizeRental(id: number): Promise<Rental | null> {
     // This action now only marks the physical return of items.
     const updatedRental = await updateRental(id, { actualReturnDate: formattedActualReturnDate });
     if (updatedRental) {
-      revalidatePath('/dashboard/rentals');
-      revalidatePath('/dashboard/inventory'); 
+      revalidatePath('/dashboard', 'layout'); 
       console.log(`Rental ${id} marked as returned with date ${formattedActualReturnDate}.`);
     }
     return updatedRental;

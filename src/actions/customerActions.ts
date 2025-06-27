@@ -51,7 +51,7 @@ export async function createCustomer(customerData: Omit<Customer, 'id'>): Promis
     const stmt = db.prepare('INSERT INTO customers (id, name, phone, address, cpf, imageUrl, responsiveness, rentalHistory) VALUES (@id, @name, @phone, @address, @cpf, @imageUrl, @responsiveness, @rentalHistory)');
     stmt.run(newCustomer);
     revalidatePath('/dashboard/customers');
-    revalidatePath('/dashboard/rentals', 'layout'); // Revalidate all rental pages
+    revalidatePath('/dashboard', 'layout'); 
     return newCustomer;
   } catch (error) {
     if (savedImageUrl && savedImageUrl.startsWith('/uploads/')) {
@@ -87,7 +87,7 @@ export async function updateCustomer(id: string, customerData: Partial<Omit<Cust
     const stmt = db.prepare('UPDATE customers SET name = @name, phone = @phone, address = @address, cpf = @cpf, imageUrl = @imageUrl, responsiveness = @responsiveness, rentalHistory = @rentalHistory WHERE id = @id');
     stmt.run(updatedCustomerForDb);
     revalidatePath('/dashboard/customers');
-    revalidatePath('/dashboard/rentals', 'layout'); // Revalidate all rental pages
+    revalidatePath('/dashboard', 'layout'); 
     const updatedCustomer = await getCustomerById(id);
     return updatedCustomer || null;
   } catch (error) {
@@ -114,7 +114,7 @@ export async function deleteCustomer(id: string): Promise<{ success: boolean }> 
     const stmt = db.prepare('DELETE FROM customers WHERE id = ?');
     const result = stmt.run(id);
     revalidatePath('/dashboard/customers');
-    revalidatePath('/dashboard/rentals', 'layout'); // Revalidate all rental pages
+    revalidatePath('/dashboard', 'layout');
     return { success: result.changes > 0 };
   } catch (error) {
     console.error(`Failed to delete customer with id ${id}:`, error);
