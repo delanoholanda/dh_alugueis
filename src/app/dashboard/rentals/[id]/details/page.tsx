@@ -1,20 +1,24 @@
+'use client';
 
-
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useParams, notFound } from 'next/navigation';
 import { getRentalById } from '@/actions/rentalActions';
-import { getCustomerById } from '@/actions/customerActions'; 
+import { getCustomerById } from '@/actions/customerActions';
 import { getInventoryItems } from '@/actions/inventoryActions';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { notFound } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatToBRL } from '@/lib/utils';
+import { formatToBRL, cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX } from 'lucide-react'; 
-import type { Rental, PaymentMethod, Customer, RentalPhoto } from '@/types';
+import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2 } from 'lucide-react';
+import type { Rental, PaymentMethod, Customer, RentalPhoto, Equipment as InventoryEquipment } from '@/types';
 import RentalPhotoGallery from '../../components/RentalPhotoGallery';
+import { MarkAsPaidDialog } from '../../components/MarkAsPaidDialog';
+import { Skeleton } from '@/components/ui/skeleton';
+
 
 const paymentStatusMap: Record<Rental['paymentStatus'], string> = {
   paid: 'Pago',
@@ -43,37 +47,160 @@ function getPaymentStatusVariant(status: Rental['paymentStatus']) {
 const formatCpfForDisplay = (cpf: string | null | undefined): string => {
   if (!cpf) return 'Não informado';
   const digits = cpf.replace(/\D/g, "");
-  if (digits.length !== 11) return cpf; 
+  if (digits.length !== 11) return cpf;
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
 };
 
-interface RentalDetailsPageProps {
-  params: { id: string };
-}
-
-export default async function RentalDetailsPage({ params }: RentalDetailsPageProps) {
+export default function RentalDetailsPage() {
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
   const rentalId = Number(params.id);
-  if (isNaN(rentalId)) {
-    notFound();
+
+  const [rental, setRental] = useState<Rental | null>(null);
+  const [customer, setCustomer] = useState<Customer | undefined | null>(null);
+  const [inventory, setInventory] = useState<InventoryEquipment[]>([]);
+  const [totalDailyRate, setTotalDailyRate] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPaidDialogOpen, setIsPaidDialogOpen] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    if (isNaN(rentalId)) {
+        setIsLoading(false);
+        return;
+    }
+    try {
+        const fetchedRental = await getRentalById(rentalId);
+        if (!fetchedRental) {
+            setRental(null);
+            setIsLoading(false);
+            return;
+        }
+
+        const [fetchedInventory, fetchedCustomer] = await Promise.all([
+            getInventoryItems(),
+            fetchedRental.customerId ? getCustomerById(fetchedRental.customerId) : Promise.resolve(null),
+        ]);
+
+        let calculatedDailyRate = 0;
+        fetchedRental.equipment.forEach(eq => {
+            const inventoryItem = fetchedInventory.find(i => i.id === eq.equipmentId);
+            const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+            calculatedDailyRate += rateToUse * eq.quantity;
+        });
+
+        setRental(fetchedRental);
+        setCustomer(fetchedCustomer);
+        setInventory(fetchedInventory);
+        setTotalDailyRate(calculatedDailyRate);
+
+    } catch (error) {
+        console.error("Failed to fetch rental details:", error);
+    } finally {
+        setIsLoading(false);
+    }
+  }, [rentalId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handlePaymentSuccess = async () => {
+    await fetchData();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-2">
+        {/* Page Header Skeleton */}
+        <div className="mb-6 p-6 rounded-lg shadow bg-card">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <Skeleton className="h-8 w-8" />
+                    <div>
+                        <Skeleton className="h-7 w-64 md:w-80" />
+                        <Skeleton className="h-4 w-80 md:w-96 mt-2" />
+                    </div>
+                </div>
+                <Skeleton className="h-10 w-40" />
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Main info cards skeleton */}
+            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* General Info Card Skeleton */}
+                <Card className="shadow-lg">
+                    <CardHeader><Skeleton className="h-6 w-3/4" /></CardHeader>
+                    <CardContent className="space-y-4">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-5/6" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-4/6" />
+                        <Skeleton className="h-4 w-full" />
+                    </CardContent>
+                </Card>
+                {/* Equipment Card Skeleton */}
+                <Card className="shadow-lg">
+                    <CardHeader><Skeleton className="h-6 w-3/4" /></CardHeader>
+                    <CardContent className="space-y-4">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </CardContent>
+                </Card>
+                {/* Financial Card Skeleton */}
+                <Card className="shadow-lg">
+                    <CardHeader><Skeleton className="h-6 w-3/4" /></CardHeader>
+                    <CardContent className="space-y-4">
+                        <Skeleton className="h-12 w-1/2" />
+                        <Skeleton className="h-8 w-3/4" />
+                        <Skeleton className="h-8 w-2/3" />
+                        <Skeleton className="h-8 w-4/5" />
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Photo Galleries Skeletons */}
+            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <Card className="shadow-lg">
+                    <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
+                    <CardContent><Skeleton className="aspect-square w-full" /></CardContent>
+                </Card>
+                <Card className="shadow-lg">
+                    <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
+                    <CardContent><Skeleton className="aspect-square w-full" /></CardContent>
+                </Card>
+            </div>
+        </div>
+      </div>
+    );
   }
-  const rental = await getRentalById(rentalId);
 
   if (!rental) {
-    notFound();
+    return (
+        <div className="container mx-auto py-2">
+        <PageHeader
+            title="Aluguel não encontrado"
+            icon={Info}
+            description="O aluguel que você está procurando não existe ou foi removido."
+            actions={
+            <Button variant="outline" asChild>
+                <Link href="/dashboard/rentals">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Voltar para Aluguéis
+                </Link>
+            </Button>
+            }
+        />
+        </div>
+    );
   }
 
-  let customer: Customer | undefined = undefined;
-  if (rental.customerId) {
-    customer = await getCustomerById(rental.customerId);
-  }
-
-  const inventory = await getInventoryItems();
-  let totalDailyRate = 0;
-  rental.equipment.forEach(eq => {
-      const inventoryItem = inventory.find(i => i.id === eq.equipmentId);
-      const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
-      totalDailyRate += rateToUse * eq.quantity;
-  });
+  const isPayable = (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue') && !rental.isOpenEnded;
+  const handleBadgeClick = () => {
+    if (isPayable) {
+        setIsPaidDialogOpen(true);
+    }
+  };
 
   const valorConsideradoPago = rental.paymentStatus === 'paid' ? rental.value : 0;
   const valorPendente = rental.paymentStatus !== 'paid' && !rental.isOpenEnded ? rental.value : 0;
@@ -85,6 +212,7 @@ export default async function RentalDetailsPage({ params }: RentalDetailsPagePro
   const returnPhotos = rental.photos?.filter(p => p.photoType === 'return') || [];
 
   return (
+    <>
     <div className="container mx-auto py-2">
       <PageHeader
         title={`Detalhes do Aluguel - ID: ${rental.id.toString().padStart(4,'0')}`}
@@ -240,8 +368,13 @@ export default async function RentalDetailsPage({ params }: RentalDetailsPagePro
               )}
               <div>
                 <p className="text-sm text-muted-foreground">Status do Pagamento</p>
-                <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="text-sm">
-                  {paymentStatusMap[rental.paymentStatus]}
+                <Badge 
+                    variant={getPaymentStatusVariant(rental.paymentStatus)} 
+                    className={cn("text-sm", isPayable && "cursor-pointer hover:opacity-80 transition-opacity")}
+                    onClick={handleBadgeClick}
+                    title={isPayable ? "Clique para marcar como pago" : ""}
+                >
+                    {paymentStatusMap[rental.paymentStatus]}
                 </Badge>
               </div>
               <div>
@@ -293,5 +426,14 @@ export default async function RentalDetailsPage({ params }: RentalDetailsPagePro
         </div>
       </div>
     </div>
+    {isPayable && (
+        <MarkAsPaidDialog
+            rental={rental}
+            isOpen={isPaidDialogOpen}
+            onOpenChange={setIsPaidDialogOpen}
+            onSuccess={handlePaymentSuccess}
+        />
+    )}
+    </>
   );
 }

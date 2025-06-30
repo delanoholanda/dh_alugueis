@@ -404,88 +404,109 @@ function isNonBillableWeekend(date: Date, chargeSaturdays: boolean, chargeSunday
 }
 
 export async function extendRental(
-  rentalId: number, 
-  additionalDays: number,
-  chargeSaturdays: boolean,
-  chargeSundays: boolean
-): Promise<Rental | null> { 
+  rentalId: number,
+  options: {
+    type: 'fixed' | 'open_ended';
+    additionalDays?: number;
+    chargeSaturdays: boolean;
+    chargeSundays: boolean;
+  }
+): Promise<Rental | null> {
   const existingRental = await getRentalById(rentalId);
 
   if (!existingRental) {
     console.error(`extendRental: Rental with id ${rentalId} not found.`);
     return null;
   }
-  
+
   if (existingRental.isOpenEnded) {
     console.error(`extendRental: Cannot extend an open-ended rental (ID: ${rentalId}).`);
     throw new Error('Não é possível prorrogar um aluguel que já está em aberto.');
   }
 
-  // 1. Find the actual start date of the extension by skipping non-billable weekend days.
-  let newRentalStartDateObj = addDays(parseISO(existingRental.expectedReturnDate), 1);
-  while (isNonBillableWeekend(newRentalStartDateObj, chargeSaturdays, chargeSundays)) {
-    newRentalStartDateObj = addDays(newRentalStartDateObj, 1);
-  }
-
-  // 2. Find the end date by adding the specified number of BILLABLE days.
-  let newRentalEndDateObj = newRentalStartDateObj;
-  if (additionalDays > 0) {
-    let billableDaysCounted = 1;
-    // We start from the first billable day, so we need to find (additionalDays - 1) more.
-    while (billableDaysCounted < additionalDays) {
-      newRentalEndDateObj = addDays(newRentalEndDateObj, 1);
-      if (!isNonBillableWeekend(newRentalEndDateObj, chargeSaturdays, chargeSundays)) {
-        billableDaysCounted++;
-      }
+  if (existingRental.paymentStatus === 'paid') {
+    try {
+      await finalizeRental(rentalId);
+      console.log(`[Action extendRental] Original rental ${rentalId} was paid and is now marked as finalized.`);
+    } catch (finalizeError) {
+      console.warn(`[Action extendRental] Could not automatically finalize original rental ${rentalId}. Proceeding with extension creation. Error: ${(finalizeError as Error).message}`);
     }
   }
   
-  // 3. Calculate the total number of calendar days for createRental's logic.
-  const totalCalendarDays = differenceInDays(newRentalEndDateObj, newRentalStartDateObj) + 1;
+  // -- Common Logic for both extension types --
 
-  // 4. Calculate the cost of the extension based on BILLABLE days.
+  // 1. Find the actual start date of the extension by skipping non-billable weekend days.
+  let newRentalStartDateObj = addDays(parseISO(existingRental.expectedReturnDate), 1);
+  while (isNonBillableWeekend(newRentalStartDateObj, options.chargeSaturdays, options.chargeSundays)) {
+    newRentalStartDateObj = addDays(newRentalStartDateObj, 1);
+  }
+
+  // 2. Calculate daily rate and prepare equipment list for the new rental.
   let dailyRateSum = 0;
   const equipmentForNewRental: Array<{ equipmentId: string; quantity: number; name?: string; customDailyRentalRate?: number | null }> = [];
-
   for (const eqEntry of existingRental.equipment) {
     let rateToUse = eqEntry.customDailyRentalRate;
-    
     if (rateToUse === undefined || rateToUse === null) {
-        const itemDetails = await getInventoryItemById(eqEntry.equipmentId);
-        rateToUse = itemDetails?.dailyRentalRate ?? 0;
+      const itemDetails = await getInventoryItemById(eqEntry.equipmentId);
+      rateToUse = itemDetails?.dailyRentalRate ?? 0;
     }
     dailyRateSum += eqEntry.quantity * rateToUse;
-    
     equipmentForNewRental.push({
       equipmentId: eqEntry.equipmentId,
       quantity: eqEntry.quantity,
-      name: eqEntry.name, 
-      customDailyRentalRate: eqEntry.customDailyRentalRate 
+      name: eqEntry.name,
+      customDailyRentalRate: eqEntry.customDailyRentalRate,
     });
   }
 
-  // Value is based on the number of BILLABLE days requested.
-  const newRentalValue = dailyRateSum * additionalDays;
+  // --- Type-Specific Logic ---
+  let newRentalData: Omit<Rental, 'id' | 'expectedReturnDate' | 'customerName'> & { equipment: any[] };
 
-  // 5. Prepare the data for creating the new extension rental.
-  const newRentalData: Omit<Rental, 'id' | 'expectedReturnDate' | 'customerName'> & {
-    equipment: Array<{ equipmentId: string; quantity: number; name?: string; customDailyRentalRate?: number | null }>;
-  } = {
+  const baseRentalData = {
     customerId: existingRental.customerId,
     rentalStartDate: format(newRentalStartDateObj, 'yyyy-MM-dd'),
-    rentalDays: totalCalendarDays, // Use the calculated calendar days
     equipment: equipmentForNewRental,
-    value: newRentalValue,
-    paymentStatus: 'pending', 
-    paymentMethod: existingRental.paymentMethod || 'pix', 
-    freightValue: 0, 
-    discountValue: 0, 
+    paymentStatus: 'pending' as const,
+    paymentMethod: existingRental.paymentMethod || 'pix',
+    freightValue: 0,
+    discountValue: 0,
     notes: `Extensão do aluguel ID: ${rentalId}. Período original de ${format(parseISO(existingRental.rentalStartDate), 'dd/MM/yyyy', { locale: ptBR })} a ${format(parseISO(existingRental.expectedReturnDate), 'dd/MM/yyyy', { locale: ptBR })}.`,
     deliveryAddress: existingRental.deliveryAddress || 'A definir',
-    isOpenEnded: false,
-    chargeSaturdays: chargeSaturdays,
-    chargeSundays: chargeSundays,
+    chargeSaturdays: options.chargeSaturdays,
+    chargeSundays: options.chargeSundays,
   };
+
+  if (options.type === 'open_ended') {
+    newRentalData = {
+      ...baseRentalData,
+      rentalDays: 0, // Open-ended starts with 0 days
+      value: dailyRateSum, // For open-ended, 'value' is the daily rate
+      isOpenEnded: true,
+    };
+  } else { // type === 'fixed'
+    const additionalDays = options.additionalDays ?? 1;
+    if (additionalDays <= 0) throw new Error("Additional days must be positive for a fixed extension.");
+
+    // Find the end date by adding the specified number of BILLABLE days.
+    let newRentalEndDateObj = newRentalStartDateObj;
+    let billableDaysCounted = 1;
+    while (billableDaysCounted < additionalDays) {
+      newRentalEndDateObj = addDays(newRentalEndDateObj, 1);
+      if (!isNonBillableWeekend(newRentalEndDateObj, options.chargeSaturdays, options.chargeSundays)) {
+        billableDaysCounted++;
+      }
+    }
+    
+    const totalCalendarDays = differenceInDays(newRentalEndDateObj, newRentalStartDateObj) + 1;
+    const newRentalValue = dailyRateSum * additionalDays;
+
+    newRentalData = {
+      ...baseRentalData,
+      rentalDays: totalCalendarDays,
+      value: newRentalValue,
+      isOpenEnded: false,
+    };
+  }
 
   try {
     const newRental = await createRental(newRentalData);
@@ -494,7 +515,7 @@ export async function extendRental(
     return newRental;
   } catch (error) {
     console.error(`Failed to create extension rental for original ID ${rentalId}:`, error);
-    return null; 
+    return null;
   }
 }
 

@@ -154,7 +154,11 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                                 <Phone className="h-3 w-3 mr-1.5 text-muted-foreground" /> {customer.phone}
                             </div>
                             <div className="flex items-center">
-                                <Fingerprint className="h-3 w-3 mr-1.5 text-muted-foreground" /> CPF: {formatCpf(customer.cpf)}
+                                <Fingerprint className="h-3 w-3 mr-1.5 text-muted-foreground" />
+                                <span>CPF:&nbsp;</span>
+                                <span className={cn(!customer.cpf && "text-destructive font-semibold")}>
+                                    {formatCpf(customer.cpf)}
+                                </span>
                             </div>
                         </CardDescription>
                     </div>
@@ -175,12 +179,14 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm flex-grow">
-                {customer.address && (
-                    <div className="flex items-start">
-                        <Home className="h-4 w-4 mr-1.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                 <div className="flex items-start">
+                    <Home className="h-4 w-4 mr-1.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    {customer.address ? (
                         <span className="text-muted-foreground text-xs whitespace-pre-wrap">{customer.address}</span>
-                    </div>
-                )}
+                    ) : (
+                        <span className="text-destructive font-semibold text-xs">Não Informado</span>
+                    )}
+                </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant={customer.responsiveness === 'very responsive' || customer.responsiveness === 'responsive' ? 'default' : 'secondary'} className="whitespace-nowrap text-xs py-0.5 px-1.5">
                         <UsersRound className="h-3 w-3 mr-1"/> {responsivenessMap[customer.responsiveness]}

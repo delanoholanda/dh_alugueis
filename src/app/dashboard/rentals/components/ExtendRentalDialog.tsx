@@ -7,13 +7,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { extendRental as extendRentalAction } from '@/actions/rentalActions';
 import type { Rental, Equipment as InventoryEquipment } from '@/types';
-import { Loader2, CalendarPlus, AlertCircle } from 'lucide-react';
-import { format, parseISO, addDays } from 'date-fns';
+import { Loader2, CalendarPlus, AlertCircle, InfinityIcon } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatToBRL, countBillableDays } from '@/lib/utils';
+import { formatToBRL } from '@/lib/utils';
 
 interface ExtendRentalDialogProps {
   rental: Rental;
@@ -24,60 +25,65 @@ interface ExtendRentalDialogProps {
 }
 
 export function ExtendRentalDialog({ rental, inventory, isOpen, onOpenChange, onExtensionSuccess }: ExtendRentalDialogProps) {
+  const [extensionType, setExtensionType] = useState<'fixed' | 'open_ended'>('fixed');
   const [additionalDays, setAdditionalDays] = useState<number>(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [extensionCostPreview, setExtensionCostPreview] = useState<number>(0);
+  const [costPreview, setCostPreview] = useState<number>(0);
   const { toast } = useToast();
   
   const [chargeSaturday, setChargeSaturday] = useState(rental.chargeSaturdays ?? true);
   const [chargeSunday, setChargeSunday] = useState(rental.chargeSundays ?? true);
+  const [dailyRate, setDailyRate] = useState<number>(0);
 
   useEffect(() => {
     if (isOpen) {
         setChargeSaturday(rental.chargeSaturdays ?? true);
         setChargeSunday(rental.chargeSundays ?? true);
+        setExtensionType('fixed');
+        setAdditionalDays(1);
+
+        let calculatedDailyRate = 0;
+        if (inventory.length > 0 && !rental.isOpenEnded) {
+            for (const rentedEq of rental.equipment) {
+                const inventoryItem = inventory.find(inv => inv.id === rentedEq.equipmentId);
+                let rateToUse = rentedEq.customDailyRentalRate;
+                if (rateToUse === undefined || rateToUse === null) {
+                    rateToUse = inventoryItem?.dailyRentalRate ?? 0;
+                }
+                if (inventoryItem && typeof rateToUse === 'number') {
+                    calculatedDailyRate += rentedEq.quantity * rateToUse;
+                }
+            }
+        }
+        setDailyRate(calculatedDailyRate);
     }
-  }, [isOpen, rental.chargeSaturdays, rental.chargeSundays]);
-
-
+  }, [isOpen, rental, inventory]);
+  
   useEffect(() => {
-    if (additionalDays > 0 && rental && inventory.length > 0 && !rental.isOpenEnded) {
-      const originalReturnDate = parseISO(rental.expectedReturnDate);
-      const extensionStartDate = addDays(originalReturnDate, 1);
-      const extensionEndDate = addDays(extensionStartDate, additionalDays - 1);
-      
-      const billableDays = countBillableDays(
-        format(extensionStartDate, 'yyyy-MM-dd'),
-        format(extensionEndDate, 'yyyy-MM-dd'),
-        chargeSaturday,
-        chargeSunday
-      );
-
-      let dailyRate = 0;
-      for (const rentedEq of rental.equipment) {
-        const inventoryItem = inventory.find(inv => inv.id === rentedEq.equipmentId);
-        let rateToUse = rentedEq.customDailyRentalRate;
-        if (rateToUse === undefined || rateToUse === null) {
-            rateToUse = inventoryItem?.dailyRentalRate ?? 0;
-        }
-        if (inventoryItem && typeof rateToUse === 'number') {
-          dailyRate += rentedEq.quantity * rateToUse;
-        }
-      }
-      setExtensionCostPreview(dailyRate * billableDays);
-    } else {
-      setExtensionCostPreview(0);
+    if (extensionType === 'fixed') {
+        setCostPreview(dailyRate * additionalDays);
+    } else { // open_ended
+        setCostPreview(dailyRate);
     }
-  }, [additionalDays, rental, inventory, chargeSaturday, chargeSunday]);
+  }, [extensionType, additionalDays, dailyRate]);
+
 
   const handleExtensionSubmit = async () => {
-    if (additionalDays <= 0) {
+    if (extensionType === 'fixed' && additionalDays <= 0) {
       toast({ title: 'Erro', description: 'Número de dias adicionais deve ser positivo.', variant: 'destructive' });
       return;
     }
     setIsLoading(true);
+
+    const options = {
+        type: extensionType,
+        additionalDays: extensionType === 'fixed' ? additionalDays : undefined,
+        chargeSaturdays: chargeSaturday,
+        chargeSundays: chargeSunday
+    };
+
     try {
-      const updatedRental = await extendRentalAction(rental.id, additionalDays, chargeSaturday, chargeSunday);
+      const updatedRental = await extendRentalAction(rental.id, options);
       if (updatedRental) {
         toast({ 
           title: 'Aluguel Prorrogado', 
@@ -93,8 +99,6 @@ export function ExtendRentalDialog({ rental, inventory, isOpen, onOpenChange, on
       toast({ title: 'Erro', description: `Ocorreu um erro: ${(error as Error).message}`, variant: 'destructive' });
     } finally {
       setIsLoading(false);
-      setAdditionalDays(1); 
-      setExtensionCostPreview(0);
     }
   };
   
@@ -103,7 +107,7 @@ export function ExtendRentalDialog({ rental, inventory, isOpen, onOpenChange, on
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { onOpenChange(open); if (!open) { setAdditionalDays(1); setExtensionCostPreview(0); }}}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center">
@@ -123,17 +127,34 @@ export function ExtendRentalDialog({ rental, inventory, isOpen, onOpenChange, on
                   <p>Retorno Atual: <span className="font-semibold">{displayDate(rental.expectedReturnDate)}</span></p>
                   <p>Valor Atual: <span className="font-semibold">{formatToBRL(rental.value)}</span></p>
               </div>
-              <div>
-                  <Label htmlFor="additionalDays" className="text-sm font-medium">Dias Adicionais de Aluguel</Label>
-                  <Input
-                  id="additionalDays"
-                  type="number"
-                  min="1"
-                  value={additionalDays}
-                  onChange={(e) => setAdditionalDays(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                  className="mt-1"
-                  />
-              </div>
+
+              <RadioGroup value={extensionType} onValueChange={(value: 'fixed' | 'open_ended') => setExtensionType(value)}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="fixed" id="r-fixed" />
+                    <Label htmlFor="r-fixed">Prorrogar por período fixo</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="open_ended" id="r-open" />
+                    <Label htmlFor="r-open">Prorrogar como contrato em aberto</Label>
+                  </div>
+              </RadioGroup>
+              
+              {extensionType === 'fixed' && (
+                <div className="pl-6 pt-2 space-y-4">
+                  <div>
+                      <Label htmlFor="additionalDays" className="text-sm font-medium">Dias Adicionais de Aluguel</Label>
+                      <Input
+                      id="additionalDays"
+                      type="number"
+                      min="1"
+                      value={additionalDays}
+                      onChange={(e) => setAdditionalDays(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      className="mt-1"
+                      />
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2">
                       <Checkbox id="chargeSaturday" checked={chargeSaturday} onCheckedChange={(checked) => setChargeSaturday(!!checked)} />
@@ -145,23 +166,24 @@ export function ExtendRentalDialog({ rental, inventory, isOpen, onOpenChange, on
                   </div>
               </div>
               
-              {extensionCostPreview > 0 && (
-                  <div className="mt-2 mb-4 p-3 border rounded-md bg-muted/50">
-                  <p className="text-sm text-foreground">
-                      Custo adicional da prorrogação: <span className="font-bold">{formatToBRL(extensionCostPreview)}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                      Um novo contrato será criado para esta extensão.
-                  </p>
-                  </div>
-              )}
+              <div className="mt-2 mb-4 p-3 border rounded-md bg-muted/50">
+                <p className="text-sm text-foreground">
+                    {extensionType === 'fixed' 
+                        ? <>Custo adicional da prorrogação: <span className="font-bold">{formatToBRL(costPreview)}</span></>
+                        : <><InfinityIcon className="inline h-4 w-4 mr-1"/>Nova diária do contrato: <span className="font-bold">{formatToBRL(costPreview)}</span></>
+                    }
+                </p>
+                <p className="text-xs text-muted-foreground">
+                    Um novo contrato será criado para esta extensão.
+                </p>
+              </div>
 
             </div>
             <DialogFooter>
             <DialogClose asChild>
                 <Button variant="outline" disabled={isLoading}>Cancelar</Button>
             </DialogClose>
-            <Button onClick={handleExtensionSubmit} disabled={isLoading || additionalDays <=0} className="bg-primary hover:bg-primary/90">
+            <Button onClick={handleExtensionSubmit} disabled={isLoading || (extensionType === 'fixed' && additionalDays <= 0)} className="bg-primary hover:bg-primary/90">
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarPlus className="mr-2 h-4 w-4" />}
                 Confirmar Prorrogação
             </Button>
