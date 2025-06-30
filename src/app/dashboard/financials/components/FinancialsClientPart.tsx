@@ -8,8 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { ExpenseForm } from './ExpenseForm';
-import { createExpense, deleteExpense } from '@/actions/financialActions';
-import { PlusCircle, Trash2 } from 'lucide-react';
+import { createExpense, deleteExpense, updateExpense } from '@/actions/financialActions';
+import { PlusCircle, Trash2, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -24,38 +24,40 @@ import {
 } from '@/components/ui/alert-dialog';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatToBRL } from '@/lib/utils';
 
 interface FinancialsClientPartProps {
   initialExpenses: Expense[];
   initialExpenseCategories: ExpenseCategory[];
-  onDataShouldRefresh: () => Promise<void>; // Callback to refresh parent data
+  onDataShouldRefresh: () => Promise<void>;
 }
 
 export default function FinancialsClientPart({ initialExpenses, initialExpenseCategories, onDataShouldRefresh }: FinancialsClientPartProps) {
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
-  const [isExpenseFormOpen, setIsExpenseFormOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
   const { toast } = useToast();
 
   useEffect(() => {
     setExpenses(initialExpenses);
   }, [initialExpenses]);
 
-  const handleAddExpense = async (data: Omit<Expense, 'id' | 'categoryName'>) => {
+  const handleFormSubmit = async (data: any) => { // data is ExpenseFormValues from the form
+    const submitData = { ...data, date: format(data.date, 'yyyy-MM-dd') };
     try {
-      const newExpense = await createExpense(data);
-      if (newExpense) {
-        toast({ title: 'Despesa Adicionada', description: 'A despesa foi registrada com sucesso.', variant: 'success' });
-        await onDataShouldRefresh(); 
+      if (editingExpense) {
+        await updateExpense(editingExpense.id, submitData);
+        toast({ title: 'Despesa Atualizada', description: 'A despesa foi atualizada com sucesso.', variant: 'success' });
       } else {
-        // This case implies createExpense returned null/undefined without throwing an error, which is unlikely with current action.
-        toast({ title: 'Aviso', description: 'A despesa foi processada, mas não retornou dados atualizados.', variant: 'default' });
-        await onDataShouldRefresh(); // Still refresh to be safe
+        await createExpense(submitData);
+        toast({ title: 'Despesa Adicionada', description: 'A despesa foi registrada com sucesso.', variant: 'success' });
       }
+      await onDataShouldRefresh();
     } catch (error) {
-      toast({ title: 'Erro ao Adicionar Despesa', description: (error as Error).message || "Falha ao criar despesa.", variant: 'destructive' });
-      // No need to call onDataShouldRefresh() here if the operation failed, unless we want to ensure client is in sync with DB state
+      toast({ title: `Erro ao ${editingExpense ? 'Atualizar' : 'Adicionar'} Despesa`, description: (error as Error).message, variant: 'destructive' });
     } finally {
-        setIsExpenseFormOpen(false);
+        setIsFormOpen(false);
+        setEditingExpense(undefined);
     }
   };
 
@@ -68,22 +70,33 @@ export default function FinancialsClientPart({ initialExpenses, initialExpenseCa
       toast({ title: 'Erro', description: 'Falha ao excluir despesa.', variant: 'destructive' });
     }
   };
+  
+  const openEditForm = (expense: Expense) => {
+    setEditingExpense(expense);
+    setIsFormOpen(true);
+  };
+
+  const openNewForm = () => {
+    setEditingExpense(undefined);
+    setIsFormOpen(true);
+  };
 
   return (
     <Card className="shadow-lg">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="font-headline">Registro de Despesas</CardTitle>
-        <Dialog open={isExpenseFormOpen} onOpenChange={setIsExpenseFormOpen}>
+        <Dialog open={isFormOpen} onOpenChange={(open) => { setIsFormOpen(open); if (!open) setEditingExpense(undefined); }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={openNewForm}>
               <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Despesa
             </Button>
           </DialogTrigger>
-          {isExpenseFormOpen && (
+          {isFormOpen && (
             <ExpenseForm
-              onSubmitAction={handleAddExpense}
-              onClose={() => setIsExpenseFormOpen(false)}
-              initialExpenseCategories={initialExpenseCategories} 
+              initialData={editingExpense}
+              onSubmit={handleFormSubmit}
+              onClose={() => { setIsFormOpen(false); setEditingExpense(undefined); }}
+              initialExpenseCategories={initialExpenseCategories}
             />
           )}
         </Dialog>
@@ -107,29 +120,34 @@ export default function FinancialsClientPart({ initialExpenses, initialExpenseCa
                     <TableCell>{format(parseISO(expense.date), 'PP', { locale: ptBR })}</TableCell>
                     <TableCell className="font-medium">{expense.description}</TableCell>
                     <TableCell className="capitalize hidden sm:table-cell">{expense.categoryName || 'N/A'}</TableCell>
-                    <TableCell className="text-right">R$ {expense.amount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{formatToBRL(expense.amount)}</TableCell>
                     <TableCell className="text-center">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" title="Excluir Despesa">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Excluir Despesa: {expense.description}?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta ação não pode ser desfeita. Isso excluirá permanentemente este registro de despesa.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteExpense(expense.id)} className="bg-destructive hover:bg-destructive/90">
-                              Excluir
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="ghost" size="icon" title="Editar Despesa" onClick={() => openEditForm(expense)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" title="Excluir Despesa">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir Despesa: {expense.description}?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta ação não pode ser desfeita. Isso excluirá permanentemente este registro de despesa.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteExpense(expense.id)} className="bg-destructive hover:bg-destructive/90">
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

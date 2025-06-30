@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { CalendarIcon, Tag } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect } from 'react';
@@ -33,12 +33,13 @@ const expenseSchema = z.object({
 type ExpenseFormValues = z.infer<typeof expenseSchema>;
 
 interface ExpenseFormProps {
-  onSubmitAction: (data: Omit<Expense, 'id' | 'categoryName'>) => Promise<void>;
+  initialData?: Expense;
+  onSubmit: (data: ExpenseFormValues) => Promise<void>;
   onClose: () => void;
   initialExpenseCategories: ExpenseCategory[];
 }
 
-export function ExpenseForm({ onSubmitAction, onClose, initialExpenseCategories }: ExpenseFormProps) {
+export function ExpenseForm({ initialData, onSubmit, onClose, initialExpenseCategories }: ExpenseFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [currentExpenseCategories, setCurrentExpenseCategories] = useState<ExpenseCategory[]>(initialExpenseCategories);
@@ -50,7 +51,10 @@ export function ExpenseForm({ onSubmitAction, onClose, initialExpenseCategories 
 
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
-    defaultValues: {
+    defaultValues: initialData ? {
+      ...initialData,
+      date: initialData.date ? parseISO(initialData.date) : new Date(),
+    } : {
       date: new Date(),
       description: '',
       amount: 0,
@@ -82,11 +86,10 @@ export function ExpenseForm({ onSubmitAction, onClose, initialExpenseCategories 
   };
 
 
-  const onSubmit = async (data: ExpenseFormValues) => {
+  const handleFormSubmit = async (data: ExpenseFormValues) => {
     setIsLoading(true);
-    const submitData = { ...data, date: format(data.date, 'yyyy-MM-dd') };
     try {
-      await onSubmitAction(submitData);
+      await onSubmit(data);
     } catch (error) {
       toast({
         title: 'Erro Inesperado no Formulário',
@@ -101,10 +104,10 @@ export function ExpenseForm({ onSubmitAction, onClose, initialExpenseCategories 
   return (
     <DialogContent className="sm:max-w-md">
       <DialogHeader>
-        <DialogTitle>Adicionar Nova Despesa</DialogTitle>
+        <DialogTitle>{initialData ? 'Editar Despesa' : 'Adicionar Nova Despesa'}</DialogTitle>
       </DialogHeader>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+        <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 py-4">
           <FormField
             control={form.control}
             name="date"
@@ -197,7 +200,7 @@ export function ExpenseForm({ onSubmitAction, onClose, initialExpenseCategories 
           />
           <DialogFooter>
             <DialogClose asChild><Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancelar</Button></DialogClose>
-            <Button type="submit" disabled={isLoading}>{isLoading ? 'Salvando...' : 'Adicionar Despesa'}</Button>
+            <Button type="submit" disabled={isLoading}>{isLoading ? 'Salvando...' : (initialData ? 'Salvar Alterações' : 'Adicionar Despesa')}</Button>
           </DialogFooter>
         </form>
       </Form>

@@ -59,6 +59,28 @@ A aplicação foi projetada para ser robusta e garantir que seus dados não seja
     *   **Senha**: `dhdh1234`
     É altamente recomendável alterar essa senha após o primeiro login.
 
+### Backup e Restauração
+
+Para garantir a segurança de todos os seus dados, é fundamental entender como fazer o backup corretamente.
+
+*   **O Que Fazer Backup?** Para um backup completo, você deve copiar a **pasta `data` inteira**, que está na raiz do projeto.
+
+*   **Por Que a Pasta Inteira?**
+    *   `data/dhalugueis.db`: Este arquivo contém todo o seu banco de dados (clientes, aluguéis, inventário, finanças, etc.).
+    *   `data/uploads/`: Esta pasta contém todas as imagens que você salvou na aplicação (logos da empresa, fotos de clientes, de equipamentos e de aluguéis).
+
+*   **Como Fazer Backup:**
+    1.  Pare a aplicação, se estiver rodando.
+    2.  Copie toda a pasta `data` para um local seguro (um HD externo, um serviço de nuvem, etc.).
+
+*   **Como Restaurar um Backup:**
+    1.  Pare a aplicação.
+    2.  Se existir uma pasta `data` no seu projeto, apague-a ou renomeie-a.
+    3.  Copie a sua pasta `data` de backup para a raiz do projeto.
+    4.  Inicie a aplicação novamente. Todos os seus dados estarão restaurados.
+
+**Importante:** Apenas salvar o arquivo `dhalugueis.db` **NÃO** é suficiente, pois você perderia todas as imagens.
+
 ### Funcionalidades de Inteligência Artificial (Genkit)
 
 *   As funcionalidades que utilizam Genkit para interagir com modelos de IA (como a determinação de notificação do WhatsApp) requerem conexão com a internet para se comunicar com os serviços do Google AI.

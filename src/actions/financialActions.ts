@@ -24,31 +24,67 @@ export async function getExpenses(): Promise<Expense[]> {
   }
 }
 
-export async function createExpense(expenseData: Omit<Expense, 'id' | 'categoryName'>): Promise<Expense> {
+async function getExpenseById(id: string): Promise<Expense | undefined> {
   const db = getDb();
-  const newId = `exp_${crypto.randomBytes(8).toString('hex')}`;
-  // categoryName is not stored, it's derived from categoryId via join
-  const newExpense: Omit<Expense, 'categoryName'> = { ...expenseData, id: newId };
-
   try {
-    // Insert categoryId instead of category (enum string)
-    const stmt = db.prepare('INSERT INTO expenses (id, date, description, amount, categoryId) VALUES (@id, @date, @description, @amount, @categoryId)');
-    stmt.run(newExpense);
-    revalidatePath('/dashboard/financials');
-    revalidatePath('/dashboard', 'layout');
-    // To return the full Expense object with categoryName, we'd need to fetch it or find it from existing categories
-    // For simplicity, we'll return what was inserted. The list will refresh with categoryName anyway.
-    const createdExpense = db.prepare(`
+    const stmt = db.prepare(`
         SELECT e.*, ec.name as categoryName 
         FROM expenses e
         JOIN expense_categories ec ON e.categoryId = ec.id
         WHERE e.id = ?
-    `).get(newId) as Expense;
-    return createdExpense;
+    `);
+    const expense = stmt.get(id) as Expense | undefined;
+    return expense;
+  } catch (error) {
+    console.error(`Failed to fetch expense with id ${id}:`, error);
+    return undefined;
+  }
+}
 
+export async function createExpense(expenseData: Omit<Expense, 'id' | 'categoryName'>): Promise<Expense> {
+  const db = getDb();
+  const newId = `exp_${crypto.randomBytes(8).toString('hex')}`;
+  const newExpense: Omit<Expense, 'categoryName'> = { ...expenseData, id: newId };
+
+  try {
+    const stmt = db.prepare('INSERT INTO expenses (id, date, description, amount, categoryId) VALUES (@id, @date, @description, @amount, @categoryId)');
+    stmt.run(newExpense);
+    revalidatePath('/dashboard/financials');
+    revalidatePath('/dashboard', 'layout');
+    
+    const createdExpense = await getExpenseById(newId);
+    if (!createdExpense) {
+        throw new Error('Failed to retrieve created expense after insert.');
+    }
+    return createdExpense;
   } catch (error) {
     console.error("Failed to create expense:", error);
     throw new Error('Failed to create expense in database.');
+  }
+}
+
+export async function updateExpense(id: string, expenseData: Partial<Omit<Expense, 'id' | 'categoryName'>>): Promise<Expense | null> {
+  const db = getDb();
+  try {
+    const getExpenseStmt = db.prepare('SELECT * FROM expenses WHERE id = ?');
+    const existingExpense = getExpenseStmt.get(id) as Omit<Expense, 'categoryName'> | undefined;
+    if (!existingExpense) {
+      return null;
+    }
+
+    const updatedExpenseForDb = { ...existingExpense, ...expenseData };
+
+    const stmt = db.prepare('UPDATE expenses SET date = @date, description = @description, amount = @amount, categoryId = @categoryId WHERE id = @id');
+    stmt.run(updatedExpenseForDb);
+
+    revalidatePath('/dashboard/financials');
+    revalidatePath('/dashboard', 'layout');
+
+    const updatedExpense = await getExpenseById(id);
+    return updatedExpense || null;
+  } catch (error) {
+    console.error(`Failed to update expense with id ${id}:`, error);
+    throw new Error('Failed to update expense in database.');
   }
 }
 
