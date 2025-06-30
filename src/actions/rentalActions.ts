@@ -8,7 +8,7 @@ import { getInventoryItemById } from './inventoryActions';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
 import { saveFile, deleteFile } from '@/lib/file-storage';
-import { addDays, format, parseISO } from 'date-fns';
+import { addDays, format, parseISO, getDay, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { countBillableDays } from '@/lib/utils';
 
@@ -168,6 +168,7 @@ export async function createRental(
         });
       }
     })();
+    revalidatePath('/dashboard/rentals');
     revalidatePath('/dashboard', 'layout'); 
     
     const finalNewRental: Rental = {
@@ -333,10 +334,11 @@ export async function updateRental(
         }
       }
     })();
-    revalidatePath('/dashboard', 'layout');
+    revalidatePath('/dashboard/rentals');
     revalidatePath(`/dashboard/rentals/${id}`);
     revalidatePath(`/dashboard/rentals/${id}/details`);
     revalidatePath(`/dashboard/rentals/${id}/receipt`);
+    revalidatePath('/dashboard', 'layout');
     const finalUpdatedRental = await getRentalById(id);
     return finalUpdatedRental || null;
   } catch (error) {
@@ -381,12 +383,24 @@ export async function deleteRental(id: number): Promise<{ success: boolean }> {
         deleteRentalStmt.run(id);
     })();
     
+    revalidatePath('/dashboard/rentals');
     revalidatePath('/dashboard', 'layout');
     return { success: true };
   } catch (error) {
     console.error(`Failed to delete rental with id ${id}:`, error);
     return { success: false };
   }
+}
+
+function isNonBillableWeekend(date: Date, chargeSaturdays: boolean, chargeSundays: boolean): boolean {
+    const dayOfWeek = getDay(date); // Sunday is 0, Saturday is 6
+    if (dayOfWeek === 6 && !chargeSaturdays) {
+        return true;
+    }
+    if (dayOfWeek === 0 && !chargeSundays) {
+        return true;
+    }
+    return false;
 }
 
 export async function extendRental(
@@ -407,20 +421,29 @@ export async function extendRental(
     throw new Error('Não é possível prorrogar um aluguel que já está em aberto.');
   }
 
-  const originalExpectedReturnDate = parseISO(existingRental.expectedReturnDate);
-  const newRentalStartDateObj = addDays(originalExpectedReturnDate, 1);
-  const newRentalEndDateObj = addDays(newRentalStartDateObj, additionalDays - 1);
-  
-  const newRentalStartDate = format(newRentalStartDateObj, 'yyyy-MM-dd');
-  const newRentalEndDate = format(newRentalEndDateObj, 'yyyy-MM-dd');
-  
-  const billableDaysForExtension = countBillableDays(
-    newRentalStartDate,
-    newRentalEndDate,
-    chargeSaturdays,
-    chargeSundays
-  );
+  // 1. Find the actual start date of the extension by skipping non-billable weekend days.
+  let newRentalStartDateObj = addDays(parseISO(existingRental.expectedReturnDate), 1);
+  while (isNonBillableWeekend(newRentalStartDateObj, chargeSaturdays, chargeSundays)) {
+    newRentalStartDateObj = addDays(newRentalStartDateObj, 1);
+  }
 
+  // 2. Find the end date by adding the specified number of BILLABLE days.
+  let newRentalEndDateObj = newRentalStartDateObj;
+  if (additionalDays > 0) {
+    let billableDaysCounted = 1;
+    // We start from the first billable day, so we need to find (additionalDays - 1) more.
+    while (billableDaysCounted < additionalDays) {
+      newRentalEndDateObj = addDays(newRentalEndDateObj, 1);
+      if (!isNonBillableWeekend(newRentalEndDateObj, chargeSaturdays, chargeSundays)) {
+        billableDaysCounted++;
+      }
+    }
+  }
+  
+  // 3. Calculate the total number of calendar days for createRental's logic.
+  const totalCalendarDays = differenceInDays(newRentalEndDateObj, newRentalStartDateObj) + 1;
+
+  // 4. Calculate the cost of the extension based on BILLABLE days.
   let dailyRateSum = 0;
   const equipmentForNewRental: Array<{ equipmentId: string; quantity: number; name?: string; customDailyRentalRate?: number | null }> = [];
 
@@ -441,21 +464,23 @@ export async function extendRental(
     });
   }
 
-  const newRentalValue = dailyRateSum * billableDaysForExtension;
+  // Value is based on the number of BILLABLE days requested.
+  const newRentalValue = dailyRateSum * additionalDays;
 
+  // 5. Prepare the data for creating the new extension rental.
   const newRentalData: Omit<Rental, 'id' | 'expectedReturnDate' | 'customerName'> & {
     equipment: Array<{ equipmentId: string; quantity: number; name?: string; customDailyRentalRate?: number | null }>;
   } = {
     customerId: existingRental.customerId,
-    rentalStartDate: newRentalStartDate, 
-    rentalDays: additionalDays,
+    rentalStartDate: format(newRentalStartDateObj, 'yyyy-MM-dd'),
+    rentalDays: totalCalendarDays, // Use the calculated calendar days
     equipment: equipmentForNewRental,
     value: newRentalValue,
     paymentStatus: 'pending', 
     paymentMethod: existingRental.paymentMethod || 'pix', 
     freightValue: 0, 
     discountValue: 0, 
-    notes: `Extensão do aluguel ID: ${rentalId}. Período original de ${format(parseISO(existingRental.rentalStartDate), 'dd/MM/yyyy', { locale: ptBR })} a ${format(originalExpectedReturnDate, 'dd/MM/yyyy', { locale: ptBR })}.`,
+    notes: `Extensão do aluguel ID: ${rentalId}. Período original de ${format(parseISO(existingRental.rentalStartDate), 'dd/MM/yyyy', { locale: ptBR })} a ${format(parseISO(existingRental.expectedReturnDate), 'dd/MM/yyyy', { locale: ptBR })}.`,
     deliveryAddress: existingRental.deliveryAddress || 'A definir',
     isOpenEnded: false,
     chargeSaturdays: chargeSaturdays,
@@ -464,6 +489,7 @@ export async function extendRental(
 
   try {
     const newRental = await createRental(newRentalData);
+    revalidatePath('/dashboard/rentals');
     revalidatePath('/dashboard', 'layout');
     return newRental;
   } catch (error) {
@@ -518,6 +544,7 @@ export async function calculateAndCloseOpenEndedRental(id: number): Promise<Rent
 
   try {
     stmt.run(updatePayload);
+    revalidatePath('/dashboard/rentals');
     revalidatePath('/dashboard', 'layout');
     revalidatePath(`/dashboard/rentals/${id}/details`);
     const updatedRental = await getRentalById(id);
@@ -555,6 +582,7 @@ export async function finalizeRental(id: number): Promise<Rental | null> {
     // This action now only marks the physical return of items.
     const updatedRental = await updateRental(id, { actualReturnDate: formattedActualReturnDate });
     if (updatedRental) {
+      revalidatePath('/dashboard/rentals');
       revalidatePath('/dashboard', 'layout'); 
       console.log(`Rental ${id} marked as returned with date ${formattedActualReturnDate}.`);
     }
