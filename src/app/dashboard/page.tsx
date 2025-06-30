@@ -8,7 +8,7 @@ import { getEquipmentTypes } from '@/actions/equipmentTypeActions';
 import type { Rental, Expense, Equipment, Customer, EquipmentType } from '@/types';
 import { LayoutDashboard } from 'lucide-react';
 import DashboardDisplay from './components/DashboardDisplay';
-import { format, parseISO, startOfMonth, eachMonthOfInterval, parse, isToday, isPast, addDays, isBefore, startOfDay } from 'date-fns';
+import { format, parseISO, startOfMonth, eachMonthOfInterval, parse, isToday, isPast, addDays, isBefore, startOfDay, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, countBillableDays } from '@/lib/utils';
 
@@ -159,11 +159,27 @@ export default async function DashboardPage() {
     }
   });
   
-  const activeRentals = rentals.filter(r => !r.actualReturnDate);
-  let dailyRevenueFromActiveRentals = 0;
-  activeRentals.forEach(rental => {
+  const activeRentals = rentals.filter(r => !r.actualReturnDate || r.paymentStatus !== 'paid');
+
+  // Calculate daily revenue only from rentals that are actually generating revenue today
+  const revenueGeneratingRentals = rentals.filter(rental => {
+    if (rental.actualReturnDate) {
+      return false; // Not generating revenue if returned
+    }
     if (rental.isOpenEnded) {
-      dailyRevenueFromActiveRentals += rental.value;
+      return true; // Is generating revenue if open-ended and not returned
+    }
+    // Is generating revenue if it's fixed-term, not returned, and today is within the rental period
+    return isWithinInterval(today, { 
+      start: parseISO(rental.rentalStartDate), 
+      end: parseISO(rental.expectedReturnDate) 
+    });
+  });
+
+  let dailyRevenueFromActiveRentals = 0;
+  revenueGeneratingRentals.forEach(rental => {
+    if (rental.isOpenEnded) {
+      dailyRevenueFromActiveRentals += rental.value; // 'value' is the daily rate for open-ended
     } else {
       let rentalDailyRateSum = 0;
       rental.equipment.forEach(eq => {
@@ -173,6 +189,7 @@ export default async function DashboardPage() {
       dailyRevenueFromActiveRentals += rentalDailyRateSum;
     }
   });
+
 
   const aggregatedMonthly = aggregateMonthlyFinancials(rentals, expenses);
   let expensesTrendText: string | null = null;

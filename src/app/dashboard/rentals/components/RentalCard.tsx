@@ -44,8 +44,14 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
   let returnDateSuffix = '';
 
   const customer = customers.find((c) => c.id === rental.customerId);
+  
+  const isPhysicallyReturned = !!rental.actualReturnDate;
+  const isPaid = rental.paymentStatus === 'paid';
+  const isFullyFinalized = isPhysicallyReturned && isPaid;
 
-  if (!rental.actualReturnDate && !rental.isOpenEnded) {
+  const isPaymentPending = rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue';
+
+  if (!isPhysicallyReturned && !rental.isOpenEnded) {
     if (isPast(expectedReturnDateObj) && !isToday(expectedReturnDateObj)) {
       returnDateColorClass = 'text-destructive font-semibold';
       returnDateSuffix = ' (Atrasado)';
@@ -55,15 +61,23 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
     }
   }
 
-  const isFinalized = !!rental.actualReturnDate;
-  const isPayable = (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue') && !rental.isOpenEnded;
-  const cardBorderColor = isFinalized ? 'border-green-500/30' : 
-                         rental.isOpenEnded ? 'border-blue-500/30' :
-                         (returnDateSuffix.includes('Atrasado') ? 'border-destructive/30' : 
-                         (returnDateSuffix.includes('Hoje') ? 'border-orange-500/30' : 'border-border'));
+  const isPayable = isPaymentPending && !rental.isOpenEnded;
 
+  let cardBorderColor = 'border-border';
+  if (isFullyFinalized) {
+    cardBorderColor = 'border-green-500/30';
+  } else if (isPhysicallyReturned && isPaymentPending) {
+    cardBorderColor = 'border-orange-500/40';
+  } else if (rental.isOpenEnded && !isPhysicallyReturned) {
+    cardBorderColor = 'border-blue-500/30';
+  } else if (returnDateSuffix.includes('Atrasado')) {
+    cardBorderColor = 'border-destructive/30';
+  } else if (returnDateSuffix.includes('Hoje')) {
+    cardBorderColor = 'border-orange-500/30';
+  }
+  
   let dailyRevenue = 0;
-  if (!isFinalized) {
+  if (!isFullyFinalized) {
     if (rental.isOpenEnded) {
         dailyRevenue = rental.value; // In open-ended, the value IS the daily rate
     } else {
@@ -79,7 +93,7 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
   }
 
   let currentAccumulated = 0;
-  if (rental.isOpenEnded && !isFinalized) {
+  if (rental.isOpenEnded && !isPhysicallyReturned) {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const billableDays = countBillableDays(
       rental.rentalStartDate,
@@ -117,9 +131,9 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
                   </div>
               </div>
               <div className="flex flex-col items-end flex-shrink-0 gap-1">
-                  {isFinalized && <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-xs whitespace-nowrap"><CircleCheck className="h-3 w-3 mr-1"/>Finalizado</Badge>}
-                  {rental.isOpenEnded && !isFinalized && <Badge variant="secondary" className="border-blue-500/50 text-xs whitespace-nowrap"><Infinity className="h-3 w-3 mr-1"/>Em Aberto</Badge>}
-                  {!isFinalized && !rental.isOpenEnded && returnDateSuffix.includes('Atrasado') && <Badge variant="destructive" className="text-xs whitespace-nowrap"><CircleAlert className="h-3 w-3 mr-1"/>Atrasado</Badge>}
+                  {isFullyFinalized && <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-xs whitespace-nowrap"><CircleCheck className="h-3 w-3 mr-1"/>Finalizado</Badge>}
+                  {rental.isOpenEnded && !isPhysicallyReturned && <Badge variant="secondary" className="border-blue-500/50 text-xs whitespace-nowrap"><Infinity className="h-3 w-3 mr-1"/>Em Aberto</Badge>}
+                  {!isPhysicallyReturned && !rental.isOpenEnded && returnDateSuffix.includes('Atrasado') && <Badge variant="destructive" className="text-xs whitespace-nowrap"><CircleAlert className="h-3 w-3 mr-1"/>Atrasado</Badge>}
               </div>
           </div>
         </CardHeader>
@@ -143,7 +157,7 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
             <span className="ml-1 font-medium">{formatToBRL(rental.value)}</span>
           </div>
           
-          {rental.isOpenEnded && !isFinalized && (
+          {rental.isOpenEnded && !isPhysicallyReturned && (
               <div className="flex items-center text-blue-600 dark:text-blue-400">
                   <TrendingUp className="h-4 w-4 mr-2" />
                   <span className="text-muted-foreground">Acumulado (hoje):</span>
@@ -151,7 +165,7 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
               </div>
           )}
 
-          {!rental.isOpenEnded && !isFinalized && dailyRevenue > 0 && (
+          {!rental.isOpenEnded && !isFullyFinalized && dailyRevenue > 0 && (
             <div className="flex items-center">
               <TrendingUp className="h-4 w-4 mr-2 text-green-500" />
               <span className="text-muted-foreground">Renda Diária Est.:</span>

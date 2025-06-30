@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -64,8 +65,9 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
 
     if (rentalStatusFilter !== 'all') {
       currentFiltered = currentFiltered.filter(rental => {
-        if (rentalStatusFilter === 'active') return !rental.actualReturnDate;
-        if (rentalStatusFilter === 'finalized') return !!rental.actualReturnDate;
+        const isFullyFinalized = !!rental.actualReturnDate && rental.paymentStatus === 'paid';
+        if (rentalStatusFilter === 'active') return !isFullyFinalized;
+        if (rentalStatusFilter === 'finalized') return isFullyFinalized;
         return true;
       });
     }
@@ -75,25 +77,43 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
     }
     
     currentFiltered.sort((a, b) => {
-        const isFinalizedA = !!a.actualReturnDate;
-        const isFinalizedB = !!b.actualReturnDate;
+        const isFullyFinalized = (rental: Rental) => !!rental.actualReturnDate && rental.paymentStatus === 'paid';
 
-        if (isFinalizedA && !isFinalizedB) return 1;
-        if (!isFinalizedA && isFinalizedB) return -1;
-        
-        if (a.isOpenEnded && !b.isOpenEnded) return -1;
-        if (!a.isOpenEnded && b.isOpenEnded) return 1;
-        
-        const isOverdueOrTodayA = !a.actualReturnDate && !a.isOpenEnded && (isPast(parseISO(a.expectedReturnDate)) || isToday(parseISO(a.expectedReturnDate)));
-        const isOverdueOrTodayB = !b.actualReturnDate && !b.isOpenEnded && (isPast(parseISO(b.expectedReturnDate)) || isToday(parseISO(b.expectedReturnDate)));
+        const finalA = isFullyFinalized(a);
+        const finalB = isFullyFinalized(b);
 
-        if (isOverdueOrTodayA && !isOverdueOrTodayB) return -1;
-        if (!isOverdueOrTodayA && isOverdueOrTodayB) return 1;
+        if (finalA !== finalB) {
+            return finalA ? 1 : -1; // Finalized items go to the bottom
+        }
         
-        const dateA = parseISO(a.rentalStartDate).getTime();
-        const dateB = parseISO(b.rentalStartDate).getTime();
-        return dateB - dateA; 
+        // If both are finalized, sort by return date (most recent first)
+        if (finalA && finalB) {
+            return parseISO(b.actualReturnDate!).getTime() - parseISO(a.actualReturnDate!).getTime();
+        }
+
+        // --- Both are active/pending attention ---
+        const getPriorityScore = (rental: Rental) => {
+            if (!rental.actualReturnDate && !rental.isOpenEnded && isPast(parseISO(rental.expectedReturnDate)) && !isToday(parseISO(rental.expectedReturnDate))) return 1; // Overdue
+            if (!!rental.actualReturnDate && rental.paymentStatus !== 'paid') return 2; // Returned, pending payment
+            if (!rental.actualReturnDate && !rental.isOpenEnded && isToday(parseISO(rental.expectedReturnDate))) return 3; // Due today
+            if (rental.isOpenEnded && !rental.actualReturnDate) return 4; // Open-ended
+            return 5; // Other active
+        };
+
+        const scoreA = getPriorityScore(a);
+        const scoreB = getPriorityScore(b);
+
+        if (scoreA !== scoreB) {
+            return scoreA - scoreB;
+        }
+
+        // Fallback sort for items with the same priority
+        if (scoreA === 1 || scoreA === 3) {
+            return parseISO(a.expectedReturnDate).getTime() - parseISO(b.expectedReturnDate).getTime();
+        }
+        return parseISO(b.rentalStartDate).getTime() - parseISO(a.rentalStartDate).getTime();
     });
+
 
     setFilteredRentals(currentFiltered);
   }, [searchTerm, rentalStatusFilter, paymentStatusFilter, allRentals]);
