@@ -17,6 +17,27 @@ function hashPassword(password: string): { salt: string; hash: string } {
   return { salt, hash };
 }
 
+function runMigrations(db: Database.Database) {
+    console.log("[DB Migration] Checking for necessary schema migrations...");
+
+    // Migration for returnNotificationSent column in rentals table
+    try {
+        const columns = db.pragma('table_info(rentals)') as { name: string }[];
+        const hasNotificationColumn = columns.some(col => col.name === 'returnNotificationSent');
+
+        if (!hasNotificationColumn) {
+            console.log("[DB Migration] Applying migration: Adding 'returnNotificationSent' column to 'rentals' table.");
+            db.exec('ALTER TABLE rentals ADD COLUMN returnNotificationSent TEXT');
+            console.log("[DB Migration] 'returnNotificationSent' column added successfully.");
+        }
+    } catch (error) {
+        console.error("[DB Migration] Error during 'returnNotificationSent' column check/add:", error);
+    }
+    
+    // Future migrations can be added here...
+    console.log("[DB Migration] Schema check complete.");
+}
+
 export function getDb() {
   if (dbInstance) {
     return dbInstance;
@@ -53,13 +74,14 @@ export function getDb() {
     console.warn(`[DB] WARNING: Failed to set PRAGMA foreign_keys = ON. Error: ${(fkError as Error).message}`);
   }
 
-  // Only run schema creation and seeding if the database file did NOT exist before.
+  // Handle schema creation or migration
   if (!dbExists) {
     console.log("[DB] New database file detected. Initializing schema and seeding default data...");
     initializeSchemaAndSeed(dbInstance);
     console.log("[DB] Database schema and default data initialized.");
   } else {
-    console.log("[DB] Existing database file found. Skipping schema initialization and seeding.");
+    console.log("[DB] Existing database file found. Running migrations if needed.");
+    runMigrations(dbInstance);
   }
 
   return dbInstance;
@@ -123,6 +145,7 @@ function initializeSchemaAndSeed(db: Database.Database) {
         isOpenEnded INTEGER DEFAULT 0,
         chargeSaturdays INTEGER DEFAULT 1,
         chargeSundays INTEGER DEFAULT 1,
+        returnNotificationSent TEXT,
         FOREIGN KEY (customerId) REFERENCES customers(id) ON DELETE RESTRICT
     );
 

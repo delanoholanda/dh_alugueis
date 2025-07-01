@@ -64,6 +64,7 @@ export interface Rental {
   isOpenEnded?: boolean;
   chargeSaturdays?: boolean;
   chargeSundays?: boolean;
+  returnNotificationSent?: string | null;
   photos?: RentalPhoto[];
 }
 
