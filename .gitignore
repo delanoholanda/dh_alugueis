@@ -34,10 +34,12 @@ pnpm-debug.log*
 # System files
 .DS_Store
 *.pem
-
+.env
 # Vercel
 .vercel
 
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+package-lock.json
