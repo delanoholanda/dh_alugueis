@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save } from 'lucide-react';
+import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
@@ -16,6 +16,8 @@ import Image from 'next/image';
 import type { CompanyDetails, UserProfile } from '@/types';
 import { updateUser } from '@/actions/userActions';
 import { getCompanySettings, updateCompanySettings } from '@/actions/settingsActions';
+import { sendTestEmail } from '@/actions/emailActions';
+
 
 export default function SettingsPage() {
   const { user, updateUserContext } = useAuth();
@@ -46,6 +48,8 @@ export default function SettingsPage() {
     contractLogoUrl: '',
   });
   const [isSavingCompanyDetails, setIsSavingCompanyDetails] = useState(false);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+
 
   // Load all settings on component mount
   useEffect(() => {
@@ -189,6 +193,31 @@ export default function SettingsPage() {
         setIsSavingCompanyDetails(false);
     }
   };
+
+  const handleSendTestEmail = async () => {
+      setIsSendingTestEmail(true);
+      toast({
+        title: 'Enviando Email de Teste...',
+        description: 'Aguarde enquanto nos comunicamos com seu servidor de email.',
+      });
+
+      const result = await sendTestEmail();
+
+      if (result.success) {
+        toast({
+          title: 'Sucesso!',
+          description: result.message,
+          variant: 'success',
+        });
+      } else {
+        toast({
+          title: 'Falha no Envio',
+          description: result.message,
+          variant: 'destructive',
+        });
+      }
+      setIsSendingTestEmail(false);
+    };
 
   return (
     <div className="container mx-auto py-2">
@@ -368,6 +397,27 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+          
+           <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="font-headline flex items-center">
+                  <Mail className="mr-2 h-5 w-5 text-primary"/> Teste de Email
+                </CardTitle>
+                <CardDescription>Verifique se suas configurações de servidor SMTP estão corretas.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Clique no botão abaixo para enviar um email de teste para o endereço configurado para sua empresa: <span className="font-semibold text-foreground">{companyDetails.email}</span>.
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button onClick={handleSendTestEmail} className="w-full sm:w-auto" disabled={isSendingTestEmail}>
+                  {isSendingTestEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                  {isSendingTestEmail ? 'Enviando...' : 'Enviar Email de Teste'}
+                </Button>
+              </CardFooter>
+            </Card>
+
         </div>
       </div>
     </div>
