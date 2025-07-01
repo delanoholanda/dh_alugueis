@@ -1,3 +1,4 @@
+
 'use server';
 
 import nodemailer from 'nodemailer';
@@ -10,48 +11,43 @@ interface MailOptions {
   text?: string; // Optional plain text version
 }
 
-// Check if environment variables are set. In a real app, you might use a validation library like Zod.
-if (!process.env.EMAIL_SERVER_HOST || !process.env.EMAIL_SERVER_PORT || !process.env.EMAIL_SERVER_USER || !process.env.EMAIL_SERVER_PASS || !process.env.EMAIL_FROM_ADDRESS) {
-    // Only show warning in development to avoid log spam in production if email is optional
-    if (process.env.NODE_ENV !== 'production') {
-        console.warn(
-            "Email server environment variables are not fully set. Email functionality will be disabled. " +
-            "Please check EMAIL_SERVER_HOST, EMAIL_SERVER_PORT, EMAIL_SERVER_USER, EMAIL_SERVER_PASS, and EMAIL_FROM_ADDRESS in your .env file."
-        );
-    }
-}
-
-// Create a reusable transporter object using the SMTP transport.
-// It reads connection data from environment variables.
-const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_SERVER_HOST,
-    port: Number(process.env.EMAIL_SERVER_PORT || 587),
-    secure: Number(process.env.EMAIL_SERVER_PORT) === 465, // true for 465, false for other ports
-    auth: {
-        user: process.env.EMAIL_SERVER_USER,
-        pass: process.env.EMAIL_SERVER_PASS,
-    },
-});
-
 /**
- * Sends an email using the pre-configured transporter.
+ * Sends an email using a dynamically created transporter.
+ * This ensures the latest environment variables are always used.
  * @param {MailOptions} mailOptions - The mail options object.
- * @param {string} mailOptions.to - The recipient's email address.
- * @param {string} mailOptions.subject - The subject line of the email.
- * @param {string} mailOptions.html - The HTML body of the email.
- * @param {string} [mailOptions.text] - The plain text body of the email.
  * @returns {Promise<{ success: boolean; message: string }>} - An object indicating success or failure.
  */
 export async function sendEmail({ to, subject, html, text }: MailOptions): Promise<{ success: boolean; message: string }> {
-    // Check if the required variables are set before trying to send
-    if (!process.env.EMAIL_SERVER_HOST || !process.env.EMAIL_FROM_ADDRESS) {
-        const errorMessage = "Email service is not configured. Cannot send email.";
+    // Check for all required environment variables on every call
+    const requiredVars = [
+        'EMAIL_SERVER_HOST',
+        'EMAIL_SERVER_PORT',
+        'EMAIL_SERVER_USER',
+        'EMAIL_SERVER_PASS',
+        'EMAIL_FROM_ADDRESS'
+    ];
+    
+    const missingVars = requiredVars.filter(v => !(process.env as any)[v]);
+
+    if (missingVars.length > 0) {
+        const errorMessage = `Serviço de email não configurado. Variáveis de ambiente faltando: ${missingVars.join(', ')}. Verifique seu arquivo .env e reinicie o servidor.`;
         console.error(errorMessage);
         return { success: false, message: errorMessage };
     }
+    
+    // Create the transporter inside the function to use the latest env vars
+    const transporter = nodemailer.createTransport({
+        host: process.env.EMAIL_SERVER_HOST,
+        port: Number(process.env.EMAIL_SERVER_PORT),
+        secure: Number(process.env.EMAIL_SERVER_PORT) === 465, // true for 465, false for other ports
+        auth: {
+            user: process.env.EMAIL_SERVER_USER,
+            pass: process.env.EMAIL_SERVER_PASS,
+        },
+    });
 
     const mailData = {
-        from: `"${process.env.EMAIL_FROM_NAME || 'DH Alugueis'}" <${process.env.EMAIL_FROM_ADDRESS}>`,
+        from: `"${process.env.EMAIL_FROM_NAME || 'DH Alugueis'}" <${process.env.EMAIL_FROM_ADDRESS!}>`,
         to: to,
         subject: subject,
         html: html,
@@ -64,6 +60,19 @@ export async function sendEmail({ to, subject, html, text }: MailOptions): Promi
         return { success: true, message: 'Email sent successfully.' };
     } catch (error) {
         console.error(`Failed to send email to ${to}:`, error);
-        return { success: false, message: `Failed to send email: ${(error as Error).message}` };
+        
+        // Provide more specific, user-friendly error messages for common issues
+        const nodemailerError = error as Error & { code?: string; responseCode?: number; command?: string };
+        let friendlyMessage = `Falha ao enviar email: ${nodemailerError.message}`;
+
+        if (nodemailerError.code === 'EAUTH' || nodemailerError.responseCode === 535) {
+            friendlyMessage = 'Falha na autenticação. Verifique se EMAIL_SERVER_USER e EMAIL_SERVER_PASS estão corretos.';
+        } else if (nodemailerError.code === 'ECONNRESET' || nodemailerError.code === 'ECONNREFUSED') {
+            friendlyMessage = 'Conexão recusada pelo servidor. Verifique se EMAIL_SERVER_HOST e EMAIL_SERVER_PORT estão corretos.';
+        } else if (nodemailerError.command === 'CONN') {
+            friendlyMessage = 'Não foi possível conectar ao servidor de email. Verifique as configurações de host e porta.';
+        }
+        
+        return { success: false, message: friendlyMessage };
     }
 }

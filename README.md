@@ -46,6 +46,38 @@ Siga os passos abaixo para configurar e rodar esta aplicação no seu ambiente l
     Após o servidor iniciar com sucesso (você verá uma mensagem no terminal, geralmente indicando que está pronto em `http://localhost:3000`), abra seu navegador e acesse:
     [http://localhost:3000](http://localhost:3000)
 
+### Configuração de Email (Opcional)
+
+Para habilitar o envio de emails (ex: notificações de aluguel), você precisa configurar as variáveis de ambiente no arquivo `.env`. Adicione as seguintes linhas e preencha com as informações do seu servidor SMTP.
+
+**Regra geral:** Não use aspas (`'` ou `"`), a menos que o valor contenha espaços. Se houver espaços, use aspas duplas.
+
+**Exemplo de preenchimento no arquivo `.env`:**
+
+```env
+# Configurações do Servidor de Email SMTP
+
+# O endereço do seu servidor. Ex: smtp.gmail.com
+EMAIL_SERVER_HOST=smtp.example.com
+# A porta do seu servidor. Ex: 587
+EMAIL_SERVER_PORT=587
+# O email completo que você usa para fazer login no servidor. Ex: seu_usuario@example.com
+EMAIL_SERVER_USER=seu_usuario@example.com
+# A senha correspondente ao email acima. Ex: umaSenhaForte123!
+EMAIL_SERVER_PASS=sua_senha_aqui
+# O nome que aparecerá como remetente. Use aspas duplas por causa dos espaços. Ex: "Minha Empresa"
+EMAIL_FROM_NAME="DH Alugueis"
+# O endereço de email que aparecerá como remetente. Ex: nao-responda@suaempresa.com
+EMAIL_FROM_ADDRESS=nao-responda@example.com
+```
+
+*   `EMAIL_SERVER_HOST`: O endereço do seu servidor SMTP.
+*   `EMAIL_SERVER_PORT`: A porta do seu servidor SMTP (geralmente 587 para TLS ou 465 para SSL).
+*   `EMAIL_SERVER_USER`: O nome de usuário para autenticação no servidor.
+*   `EMAIL_SERVER_PASS`: A senha para autenticação.
+*   `EMAIL_FROM_NAME`: O nome que aparecerá como remetente (ex: "DH Alugueis").
+*   `EMAIL_FROM_ADDRESS`: O endereço de email que aparecerá como remetente.
+
 ### Banco de Dados e Persistência de Dados
 
 A aplicação foi projetada para ser robusta e garantir que seus dados não sejam perdidos.
@@ -96,7 +128,7 @@ Para garantir a segurança de todos os seus dados, é fundamental entender como 
 
 ### Observações
 
-*   **Modo Offline**: A maior parte da aplicação (gerenciamento de clientes, inventário, aluguéis, finanças, usuários) funcionará offline uma vez que o servidor local esteja rodando, pois depende do banco de dados SQLite local. A exceção são as funcionalidades de IA.
+*   **Modo Offline**: A maior parte da aplicação (gerenciamento de clientes, inventário, aluguéis, finanças, usuários) funcionará offline uma vez que o servidor local esteja rodando, pois depende do banco de dados SQLite local. A exceção são as funcionalidades de IA e de envio de email.
 *   **Primeiro Carregamento**: No primeiro acesso ou após limpar o cache do navegador, pode ser necessária conexão com a internet para baixar assets como fontes do Google Fonts ou imagens de placeholder.
 
 ### Solução de Problemas (Troubleshooting)
