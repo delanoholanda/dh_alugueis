@@ -14,6 +14,10 @@ services:
     # será salvo diretamente no seu computador, sobrevivendo a reinicializações ou recriações do container.
     volumes:
       - ./data:/app/data
+    # Esta linha instrui o Docker a carregar as variáveis de ambiente do arquivo .env
+    # para que a aplicação dentro do container possa acessá-las (ex: credenciais de email).
+    env_file:
+      - .env
     # Reinicia o container automaticamente se ele travar, a menos que tenha sido parado manualmente.
     restart: unless-stopped
     environment:

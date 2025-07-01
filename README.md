@@ -86,6 +86,8 @@ A aplicação foi projetada para ser robusta e garantir que seus dados não seja
 
 *   **Persistência com Docker:** Ao usar o Docker com o arquivo `docker-compose.yml` fornecido, a linha `volumes: - ./data:/app/data` é crucial. Ela "espelha" a pasta `data` do seu computador para dentro do container. Isso significa que, mesmo que você pare, remova ou reconstrua o container, **seus dados estarão sempre seguros**, pois estão fisicamente armazenados no seu computador.
 
+*   **Variáveis de Ambiente com Docker**: O arquivo `docker-compose.yml` também está configurado para ler seu arquivo `.env` na raiz do projeto. Isso garante que configurações sensíveis, como as credenciais do servidor de email, sejam carregadas para dentro do container. **Importante:** Se você alterar o arquivo `.env`, precisará recriar o container com os comandos `docker-compose down` seguido de `docker-compose up -d --build` para que as mudanças tenham efeito.
+
 *   **Usuário Padrão:** Se a aplicação for iniciada sem um banco de dados existente, um novo será criado com um usuário administrador padrão:
     *   **Email**: `admin@dhalugueis.com`
     *   **Senha**: `dhdh1234`
