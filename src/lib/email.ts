@@ -2,6 +2,11 @@
 'use server';
 
 import nodemailer from 'nodemailer';
+import { config } from 'dotenv';
+
+// Explicitly load environment variables from .env file
+config();
+
 
 // Type for the mail options to ensure type safety.
 interface MailOptions {
