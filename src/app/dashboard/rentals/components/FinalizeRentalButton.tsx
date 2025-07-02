@@ -54,16 +54,15 @@ export default function FinalizeRentalButton({ rental, isFinalized, onFinalized 
 
   if (isFinalized) {
     return (
-      <Button variant="ghost" size="icon" title="Aluguel já finalizado" disabled>
-        <CheckSquare className="h-4 w-4 text-green-500" />
+      <Button variant="outline" title="Aluguel já finalizado (devolvido)" disabled>
+        <CheckSquare className="h-4 w-4 mr-2 text-green-500" /> Itens Devolvidos
       </Button>
     );
   }
 
-  const isDisabled = rental.isOpenEnded || rental.paymentStatus !== 'paid';
+  const isDisabled = !!rental.isOpenEnded;
   const getTitle = () => {
     if (rental.isOpenEnded) return "Calcule e feche o contrato primeiro";
-    if (rental.paymentStatus !== 'paid') return "O aluguel deve estar pago para finalizar";
     return "Finalizar Aluguel (Marcar como Devolvido)";
   }
 
@@ -71,12 +70,12 @@ export default function FinalizeRentalButton({ rental, isFinalized, onFinalized 
     <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <AlertDialogTrigger asChild>
         <Button 
-          variant="ghost" 
-          size="icon" 
+          variant="outline" 
           title={getTitle()} 
           disabled={isDisabled}
+          className="text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700"
         >
-          <CheckSquare className="h-4 w-4 text-green-600 hover:text-green-700" />
+          <CheckSquare className="h-4 w-4 mr-2" /> Marcar como Devolvido
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -97,5 +96,3 @@ export default function FinalizeRentalButton({ rental, isFinalized, onFinalized 
     </AlertDialog>
   );
 }
-
-    

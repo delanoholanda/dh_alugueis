@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, Info, CreditCard, Landmark, CircleDollarSign, UserPlus, PackagePlus, MapPin, AlertCircle, ChevronsUpDown, Check, Package } from 'lucide-react';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, addDays, parseISO, isSameDay, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -47,6 +47,7 @@ const rentalFormSchema = z.object({
     ),
   })).min(1, "Pelo menos um item de equipamento é obrigatório"),
   rentalStartDate: z.date({ required_error: "Data de início do aluguel é obrigatória." }),
+  expectedReturnDate: z.date().optional(),
   isOpenEnded: z.boolean().default(false),
   chargeSaturdays: z.boolean().default(true),
   chargeSundays: z.boolean().default(true),
@@ -71,12 +72,28 @@ const rentalFormSchema = z.object({
   deliveryAddress: z.string().optional(),
 }).refine(data => {
     if (!data.isOpenEnded) {
+        return !!data.expectedReturnDate;
+    }
+    return true;
+}, {
+    message: "Data de devolução é obrigatória.",
+    path: ["expectedReturnDate"],
+}).refine(data => {
+    if (!data.isOpenEnded) {
         return data.rentalDays >= 1;
     }
     return true;
 }, {
     message: "Deve ser pelo menos 1 para contratos com data final.",
     path: ["rentalDays"],
+}).refine(data => {
+    if (!data.isOpenEnded && data.rentalStartDate && data.expectedReturnDate) {
+        return data.expectedReturnDate >= data.rentalStartDate;
+    }
+    return true;
+}, {
+    message: "A data de devolução não pode ser anterior à data de início.",
+    path: ["expectedReturnDate"],
 });
 
 
@@ -154,6 +171,7 @@ export function RentalForm({
     defaultValues: initialData ? {
       ...initialData,
       rentalStartDate: initialData.rentalStartDate ? parseISO(initialData.rentalStartDate) : new Date(),
+      expectedReturnDate: initialData.expectedReturnDate ? parseISO(initialData.expectedReturnDate) : undefined,
       equipment: initialData.equipment.map(eq => ({
         equipmentId: eq.equipmentId,
         quantity: eq.quantity,
@@ -173,6 +191,7 @@ export function RentalForm({
       customerId: '',
       equipment: [{ equipmentId: '', quantity: 1, customDailyRentalRate: undefined }],
       rentalStartDate: new Date(),
+      expectedReturnDate: addDays(new Date(), 6), // Default to 7 days
       isOpenEnded: false,
       chargeSaturdays: true,
       chargeSundays: true,
@@ -198,18 +217,55 @@ export function RentalForm({
   const watchedRentalDays = form.watch("rentalDays");
   const watchedFreightValue = form.watch("freightValue");
   const watchedPaymentStatus = form.watch("paymentStatus");
+  const watchedRentalStartDate = form.watch("rentalStartDate");
+  const watchedExpectedReturnDate = form.watch("expectedReturnDate");
 
+  // Effect to handle isOpenEnded toggling
   useEffect(() => {
     if (watchedIsOpenEnded) {
         form.setValue('rentalDays', 0);
-        form.clearErrors('rentalDays');
+        form.setValue('expectedReturnDate', form.getValues('rentalStartDate'));
+        form.clearErrors(['rentalDays', 'expectedReturnDate']);
     } else {
         if (form.getValues('rentalDays') === 0) {
             form.setValue('rentalDays', 1);
         }
     }
-  }, [watchedIsOpenEnded, form]);
+  }, [watchedIsOpenEnded, form, watchedRentalStartDate]);
   
+  // Effect for bidirectional update: Days/Start Date -> End Date
+  useEffect(() => {
+    if (watchedIsOpenEnded) return;
+    
+    const startDate = form.getValues('rentalStartDate');
+    const days = form.getValues('rentalDays');
+    
+    if (startDate && typeof days === 'number' && days >= 1) {
+        const newExpectedDate = addDays(startDate, days - 1);
+        const currentExpectedDate = form.getValues('expectedReturnDate');
+        if (!currentExpectedDate || !isSameDay(newExpectedDate, currentExpectedDate)) {
+            form.setValue('expectedReturnDate', newExpectedDate, { shouldValidate: true });
+        }
+    }
+  }, [watchedRentalDays, watchedRentalStartDate, watchedIsOpenEnded, form]);
+
+  // Effect for bidirectional update: Start/End Date -> Days
+  useEffect(() => {
+    if (watchedIsOpenEnded) return;
+
+    const startDate = form.getValues('rentalStartDate');
+    const endDate = form.getValues('expectedReturnDate');
+
+    if (startDate && endDate && endDate >= startDate) {
+        const newDays = differenceInDays(endDate, startDate) + 1;
+        const currentDays = form.getValues('rentalDays');
+        if (newDays !== currentDays && newDays >= 1) {
+            form.setValue('rentalDays', newDays, { shouldValidate: true });
+        }
+    }
+  }, [watchedExpectedReturnDate, watchedRentalStartDate, watchedIsOpenEnded, form]);
+
+  // Effect to calculate final value
   useEffect(() => {
     let subTotalBasedOnCustomRates = 0;
     let subTotalBasedOnStandardRates = 0;
@@ -420,9 +476,11 @@ export function RentalForm({
         customDailyRentalRate: rate === null ? null : Number(rate) 
       };
     });
+    
+    const { expectedReturnDate, ...restOfData } = data;
 
     const actionData = {
-      ...data,
+      ...restOfData,
       equipment: equipmentProcessed,
       rentalStartDate: format(data.rentalStartDate, 'yyyy-MM-dd'),
       paymentDate: data.paymentDate ? format(data.paymentDate, 'yyyy-MM-dd') : undefined,
@@ -453,19 +511,6 @@ export function RentalForm({
       setIsLoading(false);
     }
   };
-
-  const rentalStartDateFromForm = form.watch("rentalStartDate");
-  const rentalDaysFromForm = form.watch("rentalDays");
-  
-  const rentalDaysAsNumberForDisplay = Number(rentalDaysFromForm); 
-  
-  const expectedReturnDateForDisplay = !watchedIsOpenEnded && rentalStartDateFromForm && 
-                             !isNaN(rentalDaysAsNumberForDisplay) && 
-                             rentalDaysAsNumberForDisplay >= 1 && 
-                             Number.isInteger(rentalDaysAsNumberForDisplay) 
-                             ? addDays(rentalStartDateFromForm, Math.max(0, rentalDaysAsNumberForDisplay - 1)) 
-                             : null;
-
 
   return (
     <Card className="max-w-4xl mx-auto shadow-xl">
@@ -791,11 +836,41 @@ export function RentalForm({
               )}
             </div>
             
-            {expectedReturnDateForDisplay && !watchedIsOpenEnded && (
-              <FormItem>
-                <FormLabel>Data de Retorno Esperada</FormLabel>
-                <Input type="text" value={format(expectedReturnDateForDisplay, "PPP", { locale: ptBR })} readOnly disabled className="bg-muted" />
-              </FormItem>
+            {!watchedIsOpenEnded && (
+              <FormField
+                  control={form.control}
+                  name="expectedReturnDate"
+                  render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                      <FormLabel>Data de Retorno Esperada</FormLabel>
+                      <Popover>
+                      <PopoverTrigger asChild>
+                          <FormControl>
+                          <Button
+                              variant={"outline"}
+                              className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                              disabled={watchedIsOpenEnded}
+                          >
+                              {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                          </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={field.onChange}
+                              disabled={(date) => date < form.getValues('rentalStartDate')}
+                              initialFocus
+                              locale={ptBR}
+                          />
+                      </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                  </FormItem>
+                  )}
+              />
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

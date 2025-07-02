@@ -2,10 +2,11 @@
 import { getRentalById } from '@/actions/rentalActions';
 import { getCustomerById } from '@/actions/customerActions';
 import { getCompanySettings } from '@/actions/settingsActions';
+import { getInventoryItems } from '@/actions/inventoryActions';
 import { notFound } from 'next/navigation';
 import { generatePixPayload } from '@/lib/pix';
 import RentalContractClient from './RentalContractClient';
-import type { Rental, CompanyDetails, Customer } from '@/types';
+import type { Rental, CompanyDetails, Customer, Equipment } from '@/types';
 
 function extractCityFromAddress(address?: string): string {
   if (!address) return 'CIDADE';
@@ -33,9 +34,12 @@ export default async function RentalContractPage({ params }: { params: { id: str
     notFound();
   }
   
-  // Now that rental is confirmed to exist, fetch dependent data
-  const companySettings = await getCompanySettings();
-  const customer = rental.customerId ? await getCustomerById(rental.customerId) : null;
+  // Now that rental is confirmed to exist, fetch dependent data in parallel
+  const [companySettings, customer, inventory] = await Promise.all([
+    getCompanySettings(),
+    rental.customerId ? getCustomerById(rental.customerId) : Promise.resolve(null),
+    getInventoryItems()
+  ]);
 
   let pixPayload: string | null = null;
   const pixAmount = rental.isOpenEnded ? 0 : rental.value;
@@ -60,6 +64,7 @@ export default async function RentalContractPage({ params }: { params: { id: str
       customer={customer}
       companySettings={companySettings}
       pixPayload={pixPayload}
+      inventory={inventory}
     />
   );
 }

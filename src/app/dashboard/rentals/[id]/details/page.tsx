@@ -13,11 +13,12 @@ import { formatToBRL, cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2 } from 'lucide-react';
+import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare } from 'lucide-react';
 import type { Rental, PaymentMethod, Customer, RentalPhoto, Equipment as InventoryEquipment } from '@/types';
 import RentalPhotoGallery from '../../components/RentalPhotoGallery';
 import { MarkAsPaidDialog } from '../../components/MarkAsPaidDialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import FinalizeRentalButton from '../../components/FinalizeRentalButton';
 
 
 const paymentStatusMap: Record<Rental['paymentStatus'], string> = {
@@ -68,6 +69,7 @@ export default function RentalDetailsPage() {
         setIsLoading(false);
         return;
     }
+    setIsLoading(true); // Set loading to true at the beginning of fetch
     try {
         const fetchedRental = await getRentalById(rentalId);
         if (!fetchedRental) {
@@ -104,7 +106,7 @@ export default function RentalDetailsPage() {
     fetchData();
   }, [fetchData]);
 
-  const handlePaymentSuccess = async () => {
+  const handleActionSuccess = async () => {
     await fetchData();
   };
 
@@ -121,7 +123,10 @@ export default function RentalDetailsPage() {
                         <Skeleton className="h-4 w-80 md:w-96 mt-2" />
                     </div>
                 </div>
-                <Skeleton className="h-10 w-40" />
+                <div className="flex gap-2">
+                   <Skeleton className="h-10 w-24" />
+                   <Skeleton className="h-10 w-24" />
+                </div>
             </div>
         </div>
 
@@ -219,11 +224,18 @@ export default function RentalDetailsPage() {
         icon={Info}
         description="Visualize todas as informações sobre este contrato de aluguel."
         actions={
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/rentals">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Voltar para Aluguéis
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <FinalizeRentalButton
+              rental={rental}
+              isFinalized={!!rental.actualReturnDate}
+              onFinalized={handleActionSuccess}
+            />
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/rentals">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Voltar para Aluguéis
+              </Link>
+            </Button>
+          </div>
         }
       />
 
@@ -301,7 +313,7 @@ export default function RentalDetailsPage() {
               {rental.actualReturnDate && (
                 <div>
                   <p className="text-sm text-muted-foreground">Data de Retorno Efetiva</p>
-                  <p className="font-medium">{format(parseISO(rental.actualReturnDate), 'PPP', { locale: ptBR })}</p>
+                  <p className="font-medium text-green-600">{format(parseISO(rental.actualReturnDate), 'PPP', { locale: ptBR })}</p>
                 </div>
               )}
                {rental.notes && (
@@ -431,7 +443,7 @@ export default function RentalDetailsPage() {
             rental={rental}
             isOpen={isPaidDialogOpen}
             onOpenChange={setIsPaidDialogOpen}
-            onSuccess={handlePaymentSuccess}
+            onSuccess={handleActionSuccess}
         />
     )}
     </>

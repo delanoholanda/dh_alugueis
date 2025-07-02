@@ -1,8 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { getInventoryItemById } from '@/actions/inventoryActions';
+import React, { useMemo } from 'react';
 import Image from 'next/image';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -10,7 +9,6 @@ import { formatToBRL } from '@/lib/utils';
 import type { Rental, Equipment as InventoryItem, PaymentMethod, CompanyDetails, Customer } from '@/types';
 import ContractPrintActions from './ContractPrintActions';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Skeleton } from '@/components/ui/skeleton';
 import { MapPin, AlertCircle } from 'lucide-react';
 
 const DEFAULT_COMPANY_LOGO = '/dh-alugueis-logo.png';
@@ -162,12 +160,31 @@ interface RentalContractClientProps {
     customer: Customer | null | undefined;
     companySettings: CompanyDetails;
     pixPayload: string | null;
+    inventory: InventoryItem[];
 }
 
-export default function RentalContractClient({ rental, customer, companySettings, pixPayload }: RentalContractClientProps) {
-  const [detailedEquipment, setDetailedEquipment] = useState<DetailedEquipmentItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export default function RentalContractClient({ rental, customer, companySettings, pixPayload, inventory }: RentalContractClientProps) {
 
+  const detailedEquipment = useMemo(() => {
+    const inventoryMap = new Map(inventory.map(item => [item.id, item]));
+
+    return rental.equipment.map((eq) => {
+      const inventoryItem = inventoryMap.get(eq.equipmentId);
+      const dailyRateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+      const itemSubtotal = dailyRateToUse * (rental.isOpenEnded ? 1 : (rental.rentalDays || 0)) * eq.quantity;
+      return {
+        ...inventoryItem,
+        id: eq.equipmentId,
+        name: eq.name || inventoryItem?.name || 'Equipamento Desconhecido',
+        quantity: eq.quantity,
+        equipmentId: eq.equipmentId,
+        customDailyRentalRate: eq.customDailyRentalRate,
+        dailyRentalRateUsed: dailyRateToUse,
+        lineTotal: itemSubtotal,
+      } as DetailedEquipmentItem;
+    });
+  }, [rental, inventory]);
+  
   const formatPixKeyForDisplay = (pixKey: string): string => {
     if (!pixKey) return '';
     let digits = pixKey.replace(/\D/g, "");
@@ -186,100 +203,6 @@ export default function RentalContractClient({ rental, customer, companySettings
     
     return pixKey;
   };
-  
-  useEffect(() => {
-    let isMounted = true;
-    setIsLoading(true);
-    
-    const resolveEquipmentDetails = async () => {
-        const equipmentDetailsPromises = rental.equipment.map(async (eq) => {
-          const inventoryItem = await getInventoryItemById(eq.equipmentId);
-          const dailyRateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
-          const itemSubtotal = dailyRateToUse * (rental.isOpenEnded ? 1 : (rental.rentalDays || 0)) * eq.quantity;
-          return {
-            ...inventoryItem,
-            id: eq.equipmentId,
-            name: eq.name || inventoryItem?.name || 'Equipamento Desconhecido',
-            quantity: eq.quantity,
-            equipmentId: eq.equipmentId,
-            customDailyRentalRate: eq.customDailyRentalRate,
-            dailyRentalRateUsed: dailyRateToUse,
-            lineTotal: itemSubtotal,
-          } as DetailedEquipmentItem;
-        });
-
-        const resolvedEquipmentDetails = await Promise.all(equipmentDetailsPromises);
-        if (isMounted) {
-            setDetailedEquipment(resolvedEquipmentDetails);
-            setIsLoading(false);
-        }
-    }
-    
-    resolveEquipmentDetails();
-
-    return () => { isMounted = false };
-  }, [rental]);
-
-  if (isLoading) {
-    return (
-      <div className="bg-gray-100 min-h-screen py-8 px-4 print:bg-white print:py-0 print:px-0">
-        <div className="contract-container max-w-3xl mx-auto bg-white p-8 shadow-lg print:shadow-none print:border-none font-['Arial',_sans-serif] text-xs text-gray-800 print:p-0">
-          <div className="flex justify-end mb-6 no-print">
-            <Skeleton className="h-10 w-24 mr-2" />
-            <Skeleton className="h-10 w-32 mr-2" />
-            <Skeleton className="h-10 w-36" />
-          </div>
-          <header className="flex justify-between items-start mb-6 print:mb-4">
-            <Skeleton className="w-40 h-20" />
-            <div className="text-right w-1/2">
-              <Skeleton className="h-6 w-3/4 mb-1 ml-auto" />
-              <Skeleton className="h-4 w-full mb-0.5 ml-auto" />
-              <Skeleton className="h-4 w-full mb-0.5 ml-auto" />
-              <Skeleton className="h-4 w-full mb-0.5 ml-auto" />
-              <Skeleton className="h-4 w-full ml-auto" />
-            </div>
-          </header>
-          <hr className="print:border-gray-400" />
-          <section className="my-6 print:my-4 flex justify-between items-start">
-            <div className="w-1/2">
-              <Skeleton className="h-5 w-1/4 mb-1" />
-              <Skeleton className="h-4 w-3/4 mb-0.5" />
-              <Skeleton className="h-4 w-1/2" />
-            </div>
-            <div className="text-xs text-right w-1/2">
-              <Skeleton className="h-4 w-3/5 mb-0.5 ml-auto" />
-              <Skeleton className="h-4 w-1/2 mb-0.5 ml-auto" />
-              <Skeleton className="h-4 w-3/4 mb-0.5 ml-auto" />
-              <Skeleton className="h-4 w-2/3 mb-0.5 ml-auto" />
-            </div>
-          </section>
-          <section className="mb-6 print:mb-4">
-            <Skeleton className="h-5 w-1/3 mb-2" />
-            <div className="space-y-2">
-              {[1,2].map(i => <Skeleton key={i} className="h-8 w-full" />)}
-            </div>
-          </section>
-          <div className="grid grid-cols-2 gap-8 mb-6 print:mb-4">
-            <div>
-              <Skeleton className="h-5 w-1/2 mb-2" />
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-5 w-3/4 mt-4 mb-2" />
-              <Skeleton className="h-20 w-full" />
-            </div>
-            <div>
-              <Skeleton className="h-8 w-full mb-2" />
-              <Skeleton className="h-8 w-full mb-2" />
-              <Skeleton className="h-10 w-full font-bold" />
-            </div>
-          </div>
-           <footer className="text-center text-xs text-gray-500 mt-8 pt-4 border-t print:mt-4 print:pt-2 print:border-gray-400">
-            <Skeleton className="h-4 w-3/4 mx-auto mb-1"/>
-            <Skeleton className="h-4 w-1/2 mx-auto"/>
-        </footer>
-        </div>
-      </div>
-    );
-  }
 
   const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
