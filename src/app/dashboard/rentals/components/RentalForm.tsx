@@ -20,7 +20,7 @@ import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useMemo } from 'react';
-import { formatToBRL, parseFromBRL, cn } from '@/lib/utils';
+import { formatToBRL, parseFromBRL, cn, countBillableDays } from '@/lib/utils';
 import { CustomerForm } from '@/app/dashboard/customers/components/CustomerForm';
 import { createCustomer, getCustomers } from '@/actions/customerActions';
 import { InventoryItemForm } from '@/app/dashboard/inventory/components/InventoryItemForm';
@@ -191,11 +191,11 @@ export function RentalForm({
       customerId: '',
       equipment: [{ equipmentId: '', quantity: 1, customDailyRentalRate: undefined }],
       rentalStartDate: new Date(),
-      expectedReturnDate: addDays(new Date(), 6), // Default to 7 days
+      expectedReturnDate: addDays(new Date(), 4), // Default to 5 days
       isOpenEnded: false,
       chargeSaturdays: true,
       chargeSundays: true,
-      rentalDays: 7,
+      rentalDays: 5,
       freightValue: 0,
       discountValue: 0,
       value: 0,
@@ -219,6 +219,9 @@ export function RentalForm({
   const watchedPaymentStatus = form.watch("paymentStatus");
   const watchedRentalStartDate = form.watch("rentalStartDate");
   const watchedExpectedReturnDate = form.watch("expectedReturnDate");
+  const watchedChargeSaturdays = form.watch("chargeSaturdays");
+  const watchedChargeSundays = form.watch("chargeSundays");
+
 
   // Effect to handle isOpenEnded toggling
   useEffect(() => {
@@ -233,23 +236,7 @@ export function RentalForm({
     }
   }, [watchedIsOpenEnded, form, watchedRentalStartDate]);
   
-  // Effect for bidirectional update: Days/Start Date -> End Date
-  useEffect(() => {
-    if (watchedIsOpenEnded) return;
-    
-    const startDate = form.getValues('rentalStartDate');
-    const days = form.getValues('rentalDays');
-    
-    if (startDate && typeof days === 'number' && days >= 1) {
-        const newExpectedDate = addDays(startDate, days - 1);
-        const currentExpectedDate = form.getValues('expectedReturnDate');
-        if (!currentExpectedDate || !isSameDay(newExpectedDate, currentExpectedDate)) {
-            form.setValue('expectedReturnDate', newExpectedDate, { shouldValidate: true });
-        }
-    }
-  }, [watchedRentalDays, watchedRentalStartDate, watchedIsOpenEnded, form]);
-
-  // Effect for bidirectional update: Start/End Date -> Days
+  // Effect for updating days when dates or weekend options change.
   useEffect(() => {
     if (watchedIsOpenEnded) return;
 
@@ -257,13 +244,19 @@ export function RentalForm({
     const endDate = form.getValues('expectedReturnDate');
 
     if (startDate && endDate && endDate >= startDate) {
-        const newDays = differenceInDays(endDate, startDate) + 1;
+        const newDays = countBillableDays(
+            format(startDate, 'yyyy-MM-dd'), 
+            format(endDate, 'yyyy-MM-dd'),
+            watchedChargeSaturdays,
+            watchedChargeSundays
+        );
+        
         const currentDays = form.getValues('rentalDays');
-        if (newDays !== currentDays && newDays >= 1) {
+        if (newDays !== currentDays) {
             form.setValue('rentalDays', newDays, { shouldValidate: true });
         }
     }
-  }, [watchedExpectedReturnDate, watchedRentalStartDate, watchedIsOpenEnded, form]);
+  }, [watchedExpectedReturnDate, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, watchedIsOpenEnded, form]);
 
   // Effect to calculate final value
   useEffect(() => {
@@ -483,6 +476,7 @@ export function RentalForm({
       ...restOfData,
       equipment: equipmentProcessed,
       rentalStartDate: format(data.rentalStartDate, 'yyyy-MM-dd'),
+      expectedReturnDate: data.expectedReturnDate ? format(data.expectedReturnDate, 'yyyy-MM-dd') : undefined,
       paymentDate: data.paymentDate ? format(data.paymentDate, 'yyyy-MM-dd') : undefined,
       rentalDays: data.isOpenEnded ? 0 : data.rentalDays,
       freightValue: (typeof data.freightValue === 'number' && !isNaN(data.freightValue)) ? data.freightValue : 0,
@@ -820,15 +814,21 @@ export function RentalForm({
                 )}
               />
               {!watchedIsOpenEnded && (
-                <FormField
+                 <FormField
                   control={form.control}
                   name="rentalDays"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Dias de Aluguel</FormLabel>
+                      <FormLabel>Dias de Aluguel (Calculado)</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="ex: 7" {...field} min="1"/>
+                        <Input 
+                          type="number" 
+                          {...field} 
+                          disabled
+                          className="bg-muted/50 font-bold"
+                        />
                       </FormControl>
+                      <FormDescription>Este campo é calculado automaticamente.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

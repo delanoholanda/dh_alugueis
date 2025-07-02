@@ -1,7 +1,7 @@
 
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { eachDayOfInterval, getDay, parseISO } from 'date-fns';
+import { eachDayOfInterval, getDay, parseISO, addDays } from 'date-fns';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -35,6 +35,27 @@ export function parseFromBRL(value: string): number {
   // parseFloat itself returns NaN for invalid strings like "abc"
   return parsed; 
 }
+
+export function findNthBillableDay(startDate: Date, totalBillableDays: number, chargeSaturdays: boolean, chargeSundays: boolean): Date {
+  if (totalBillableDays < 1) {
+    return startDate; 
+  }
+
+  let endDate = addDays(startDate, -1); // Start checking from the day before the start date
+  let daysCounted = 0;
+
+  while (daysCounted < totalBillableDays) {
+    endDate = addDays(endDate, 1);
+    const dayOfWeek = getDay(endDate);
+    // Only count if it's NOT a non-billable weekend day
+    if (!((dayOfWeek === 6 && !chargeSaturdays) || (dayOfWeek === 0 && !chargeSundays))) {
+      daysCounted++;
+    }
+  }
+
+  return endDate;
+}
+
 
 export function countBillableDays(startDateStr: string, endDateStr: string, chargeSaturdays: boolean, chargeSundays: boolean): number {
     try {
