@@ -155,9 +155,11 @@ export default function InventoryClientPage({ initialItems, rentedQuantities: in
                        <Image
                          src={item.imageUrl}
                          alt={item.name}
-                         layout="fill"
-                         objectFit="contain"
-                         className="p-1"
+                         fill
+                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw, 25vw"
+                         className="object-contain p-1"
+                         placeholder="blur"
+                         blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
                          data-ai-hint={getAINTHintForItem(item)}
                        />
                     ) : (
