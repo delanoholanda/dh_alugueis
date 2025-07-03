@@ -1,29 +1,35 @@
-
 'use client';
 
 import { useState, type ChangeEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { addRentalPhoto, deleteRentalPhoto } from '@/actions/rentalActions';
+import { addRentalPhoto } from '@/actions/rentalActions';
 import type { RentalPhoto } from '@/types';
-import { Camera, Trash2, Loader2, ImageIcon } from 'lucide-react';
+import { Camera, Loader2, ImageIcon, ZoomIn } from 'lucide-react';
+import { ImageLightbox } from './ImageLightbox'; 
 
 interface RentalPhotoGalleryProps {
   rentalId: number;
   photos: RentalPhoto[];
   photoType: 'delivery' | 'return';
   title: string;
+  onPhotosChange: () => Promise<void>;
 }
 
-export default function RentalPhotoGallery({ rentalId, photos, photoType, title }: RentalPhotoGalleryProps) {
+export default function RentalPhotoGallery({ rentalId, photos, photoType, title, onPhotosChange }: RentalPhotoGalleryProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
   const { toast } = useToast();
+
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+
+  const openLightbox = (index: number) => {
+    setSelectedImageIndex(index);
+    setIsLightboxOpen(true);
+  };
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -72,7 +78,7 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
           description: `${successfulUploads} imagem(ns) foram salvas com sucesso.`,
           variant: 'success',
         });
-        router.refresh();
+        await onPhotosChange();
       }
     } catch (error) {
       toast({
@@ -86,25 +92,8 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
     }
   };
 
-  const handleDelete = async (photoId: string) => {
-    try {
-        await deleteRentalPhoto(photoId);
-        toast({
-            title: 'Foto Removida',
-            description: 'A imagem foi removida com sucesso.',
-            variant: 'success'
-        });
-        router.refresh();
-    } catch (error) {
-        toast({
-            title: 'Erro ao Remover Foto',
-            description: (error as Error).message || 'Ocorreu um problema ao remover a imagem.',
-            variant: 'destructive'
-        });
-    }
-  }
-
   return (
+    <>
     <Card className="shadow-lg">
       <CardHeader>
         <CardTitle className="font-headline flex items-center">
@@ -127,7 +116,7 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
               onChange={handleFileChange}
               disabled={isLoading}
               className="cursor-pointer file:mr-2 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary file:border-0 file:rounded file:px-2 file:py-1 hover:file:bg-primary/20"
-              multiple // Allow multiple file selection
+              multiple
             />
             {isLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin" />}
           </div>
@@ -135,38 +124,18 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
 
         {photos.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {photos.map((photo) => (
-              <div key={photo.id} className="relative group aspect-square">
+            {photos.map((photo, index) => (
+              <div key={photo.id} className="relative group aspect-square" onClick={() => openLightbox(index)}>
                 <Image
                   src={photo.imageUrl}
                   alt={`Foto de ${photoType} - ${photo.id}`}
                   layout="fill"
                   objectFit="cover"
-                  className="rounded-md"
+                  className="rounded-md cursor-pointer"
                   data-ai-hint="equipment photo"
                 />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                   <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="icon">
-                                <Trash2 className="h-5 w-5" />
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Excluir esta foto?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    Esta ação não pode ser desfeita. A imagem será removida permanentemente.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(photo.id)} className="bg-destructive hover:bg-destructive/90">
-                                Confirmar Exclusão
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-md">
+                   <ZoomIn className="h-8 w-8 text-white" />
                 </div>
               </div>
             ))}
@@ -179,5 +148,16 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
         )}
       </CardContent>
     </Card>
+
+    {isLightboxOpen && (
+      <ImageLightbox
+        images={photos}
+        startIndex={selectedImageIndex}
+        isOpen={isLightboxOpen}
+        onOpenChange={setIsLightboxOpen}
+        onPhotoDeleted={onPhotosChange}
+      />
+    )}
+    </>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams, notFound } from 'next/navigation';
+import Link from 'next/link';
 import { getRentalById } from '@/actions/rentalActions';
 import { getCustomerById } from '@/actions/customerActions';
 import { getInventoryItems } from '@/actions/inventoryActions';
@@ -11,9 +12,8 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare } from 'lucide-react';
+import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit } from 'lucide-react';
 import type { Rental, PaymentMethod, Customer, RentalPhoto, Equipment as InventoryEquipment } from '@/types';
 import RentalPhotoGallery from '../../components/RentalPhotoGallery';
 import { MarkAsPaidDialog } from '../../components/MarkAsPaidDialog';
@@ -64,12 +64,12 @@ export default function RentalDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPaidDialogOpen, setIsPaidDialogOpen] = useState(false);
 
-  const fetchData = useCallback(async () => {
+  const fetchFullPageData = useCallback(async () => {
     if (isNaN(rentalId)) {
         setIsLoading(false);
         return;
     }
-    setIsLoading(true); // Set loading to true at the beginning of fetch
+    setIsLoading(true);
     try {
         const fetchedRental = await getRentalById(rentalId);
         if (!fetchedRental) {
@@ -102,12 +102,26 @@ export default function RentalDetailsPage() {
     }
   }, [rentalId]);
 
+  const refreshRentalOnly = useCallback(async () => {
+    if (isNaN(rentalId)) {
+        return;
+    }
+    try {
+        const fetchedRental = await getRentalById(rentalId);
+        if (fetchedRental) {
+            setRental(fetchedRental);
+        }
+    } catch (error) {
+        console.error("Failed to refresh rental photos:", error);
+    }
+  }, [rentalId]);
+
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchFullPageData();
+  }, [fetchFullPageData]);
 
   const handleActionSuccess = async () => {
-    await fetchData();
+    await fetchFullPageData();
   };
 
   if (isLoading) {
@@ -225,6 +239,11 @@ export default function RentalDetailsPage() {
         description="Visualize todas as informações sobre este contrato de aluguel."
         actions={
           <div className="flex items-center gap-2">
+            <Button asChild variant="outline" disabled={!!rental.actualReturnDate} title={rental.actualReturnDate ? "Não é possível editar um aluguel finalizado" : "Editar Aluguel"}>
+              <Link href={`/dashboard/rentals/${rental.id}/edit`}>
+                <Edit className="mr-2 h-4 w-4" /> Editar
+              </Link>
+            </Button>
             <FinalizeRentalButton
               rental={rental}
               isFinalized={!!rental.actualReturnDate}
@@ -428,12 +447,14 @@ export default function RentalDetailsPage() {
                 photos={deliveryPhotos}
                 photoType="delivery"
                 title="Fotos da Entrega"
+                onPhotosChange={refreshRentalOnly}
             />
              <RentalPhotoGallery 
                 rentalId={rental.id}
                 photos={returnPhotos}
                 photoType="return"
                 title="Fotos da Devolução"
+                onPhotosChange={refreshRentalOnly}
             />
         </div>
       </div>

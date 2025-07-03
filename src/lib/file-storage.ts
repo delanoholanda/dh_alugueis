@@ -3,6 +3,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import sharp from 'sharp';
 
 // All user-generated content will be stored here. This folder is mapped to a
 // persistent volume in docker-compose.yml to survive container restarts.
@@ -41,14 +42,22 @@ export async function saveFile(base64Data: string, subdirectory: string): Promis
     throw new Error('Invalid base64 image string provided.');
   }
 
-  const fileExtension = matches[1];
   const base64EncodedImage = matches[2];
-  const buffer = Buffer.from(base64EncodedImage, 'base64');
+  const originalBuffer = Buffer.from(base64EncodedImage, 'base64');
   
-  const filename = `${uuidv4()}.${fileExtension}`;
+  // Process the image with Sharp
+  const processedBuffer = await sharp(originalBuffer)
+    .resize(1024, 1024, { 
+      fit: 'inside', // Resize to fit within 1024x1024, maintaining aspect ratio
+      withoutEnlargement: true // Don't enlarge images that are already smaller
+    })
+    .webp({ quality: 80 }) // Convert to WebP format with 80% quality
+    .toBuffer();
+
+  const filename = `${uuidv4()}.webp`; // Always save as .webp now
   const filePath = path.join(dirPath, filename);
 
-  await fs.writeFile(filePath, buffer);
+  await fs.writeFile(filePath, processedBuffer);
 
   // Return the URL that the /app/uploads/[...slug]/route.ts handler will serve
   return `${PUBLIC_URL_PREFIX}/${subdirectory}/${filename}`;
