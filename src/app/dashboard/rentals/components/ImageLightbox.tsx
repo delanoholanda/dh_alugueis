@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -17,12 +16,12 @@ interface ImageLightboxProps {
   startIndex: number;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  onPhotoDeleted: () => Promise<void>;
 }
 
-export function ImageLightbox({ images, startIndex, isOpen, onOpenChange }: ImageLightboxProps) {
+export function ImageLightbox({ images, startIndex, isOpen, onOpenChange, onPhotoDeleted }: ImageLightboxProps) {
   const [currentIndex, setCurrentIndex] = React.useState(startIndex);
   const [isLoading, setIsLoading] = React.useState(true);
-  const router = useRouter();
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -82,7 +81,7 @@ export function ImageLightbox({ images, startIndex, isOpen, onOpenChange }: Imag
         if (images.length === 1) {
             onOpenChange(false);
         }
-        router.refresh();
+        await onPhotoDeleted();
     } catch (error) {
         toast({
             title: 'Erro ao Remover Foto',

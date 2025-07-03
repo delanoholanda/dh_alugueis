@@ -1,8 +1,6 @@
-
 'use client';
 
 import { useState, type ChangeEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,11 +16,11 @@ interface RentalPhotoGalleryProps {
   photos: RentalPhoto[];
   photoType: 'delivery' | 'return';
   title: string;
+  onPhotosChange: () => Promise<void>;
 }
 
-export default function RentalPhotoGallery({ rentalId, photos, photoType, title }: RentalPhotoGalleryProps) {
+export default function RentalPhotoGallery({ rentalId, photos, photoType, title, onPhotosChange }: RentalPhotoGalleryProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
   const { toast } = useToast();
 
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -80,7 +78,7 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
           description: `${successfulUploads} imagem(ns) foram salvas com sucesso.`,
           variant: 'success',
         });
-        router.refresh();
+        await onPhotosChange();
       }
     } catch (error) {
       toast({
@@ -157,6 +155,7 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title 
         startIndex={selectedImageIndex}
         isOpen={isLightboxOpen}
         onOpenChange={setIsLightboxOpen}
+        onPhotoDeleted={onPhotosChange}
       />
     )}
     </>
