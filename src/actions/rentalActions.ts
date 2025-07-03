@@ -35,8 +35,8 @@ export async function getRentals(): Promise<Rental[]> {
       notes: row.notes || null,
       deliveryAddress: row.deliveryAddress || 'A definir', 
       isOpenEnded: row.isOpenEnded === 1,
-      chargeSaturdays: row.chargeSaturdays === 1,
-      chargeSundays: row.chargeSundays === 1,
+      chargeSaturdays: row.chargeSaturdays !== 0,
+      chargeSundays: row.chargeSundays !== 0,
       returnNotificationSent: row.returnNotificationSent || null,
     }));
   } catch (error) {
@@ -68,8 +68,8 @@ export async function getRentalById(id: number): Promise<Rental | undefined> {
       notes: row.notes || null,
       deliveryAddress: row.deliveryAddress || 'A definir', 
       isOpenEnded: row.isOpenEnded === 1,
-      chargeSaturdays: row.chargeSaturdays === 1,
-      chargeSundays: row.chargeSundays === 1,
+      chargeSaturdays: row.chargeSaturdays !== 0,
+      chargeSundays: row.chargeSundays !== 0,
       returnNotificationSent: row.returnNotificationSent || null,
     };
   } catch (error) {
@@ -240,10 +240,10 @@ export async function updateRental(
     }
   }
 
-  const isOpenEnded = rentalData.isOpenEnded ?? existingRental.isOpenEnded;
-  const currentRentalDays = rentalData.rentalDays ?? existingRental.rentalDays;
-  const chargeSaturdays = rentalData.chargeSaturdays ?? existingRental.chargeSaturdays ?? true;
-  const chargeSundays = rentalData.chargeSundays ?? existingRental.chargeSundays ?? true;
+  const isOpenEnded = typeof rentalData.isOpenEnded === 'boolean' ? rentalData.isOpenEnded : existingRental.isOpenEnded;
+  const currentRentalDays = typeof rentalData.rentalDays === 'number' ? rentalData.rentalDays : existingRental.rentalDays;
+  const chargeSaturdays = typeof rentalData.chargeSaturdays === 'boolean' ? rentalData.chargeSaturdays : (existingRental.chargeSaturdays ?? true);
+  const chargeSundays = typeof rentalData.chargeSundays === 'boolean' ? rentalData.chargeSundays : (existingRental.chargeSundays ?? true);
 
   if (isOpenEnded) {
     updatedRentalData.expectedReturnDate = currentStartDateString;
