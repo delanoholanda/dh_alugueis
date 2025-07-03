@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { Rental, Customer, Equipment as InventoryEquipment, PaymentMethod, EquipmentType } from '@/types';
@@ -20,7 +19,7 @@ import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useMemo } from 'react';
-import { formatToBRL, parseFromBRL, cn, countBillableDays } from '@/lib/utils';
+import { formatToBRL, parseFromBRL, cn, findNthBillableDay } from '@/lib/utils';
 import { CustomerForm } from '@/app/dashboard/customers/components/CustomerForm';
 import { createCustomer, getCustomers } from '@/actions/customerActions';
 import { InventoryItemForm } from '@/app/dashboard/inventory/components/InventoryItemForm';
@@ -191,7 +190,7 @@ export function RentalForm({
       customerId: '',
       equipment: [{ equipmentId: '', quantity: 1, customDailyRentalRate: undefined }],
       rentalStartDate: new Date(),
-      expectedReturnDate: addDays(new Date(), 4), // Default to 5 days
+      expectedReturnDate: addDays(new Date(), 4), // This will be auto-calculated, but good to have a default
       isOpenEnded: false,
       chargeSaturdays: true,
       chargeSundays: true,
@@ -218,7 +217,6 @@ export function RentalForm({
   const watchedFreightValue = form.watch("freightValue");
   const watchedPaymentStatus = form.watch("paymentStatus");
   const watchedRentalStartDate = form.watch("rentalStartDate");
-  const watchedExpectedReturnDate = form.watch("expectedReturnDate");
   const watchedChargeSaturdays = form.watch("chargeSaturdays");
   const watchedChargeSundays = form.watch("chargeSundays");
 
@@ -227,37 +225,38 @@ export function RentalForm({
   useEffect(() => {
     if (watchedIsOpenEnded) {
         form.setValue('rentalDays', 0);
-        form.setValue('expectedReturnDate', form.getValues('rentalStartDate'));
+        form.setValue('expectedReturnDate', undefined); // Clear the date for open-ended
         form.clearErrors(['rentalDays', 'expectedReturnDate']);
     } else {
-        if (form.getValues('rentalDays') === 0) {
-            form.setValue('rentalDays', 1);
+        // When switching back from open-ended, re-calculate a default
+        const currentDays = form.getValues('rentalDays');
+        if (currentDays === 0) {
+            form.setValue('rentalDays', 5); // Default to 5 days
         }
     }
-  }, [watchedIsOpenEnded, form, watchedRentalStartDate]);
-  
-  // Effect for updating days when dates or weekend options change.
+  }, [watchedIsOpenEnded, form]);
+
+
+  // Calculate expectedReturnDate automatically based on other fields
   useEffect(() => {
-    if (watchedIsOpenEnded) return;
+    if (watchedIsOpenEnded) {
+      form.setValue('expectedReturnDate', undefined);
+      return;
+    }
 
     const startDate = form.getValues('rentalStartDate');
-    const endDate = form.getValues('expectedReturnDate');
+    const days = form.getValues('rentalDays');
 
-    if (startDate && endDate && endDate >= startDate) {
-        const newDays = countBillableDays(
-            format(startDate, 'yyyy-MM-dd'), 
-            format(endDate, 'yyyy-MM-dd'),
-            watchedChargeSaturdays,
-            watchedChargeSundays
-        );
-        
-        const currentDays = form.getValues('rentalDays');
-        if (newDays !== currentDays) {
-            form.setValue('rentalDays', newDays, { shouldValidate: true });
+    if (startDate && !isNaN(days) && days > 0) {
+        const newEndDate = findNthBillableDay(startDate, days, watchedChargeSaturdays, watchedChargeSundays);
+        // Only update if the date is different to avoid re-renders
+        const currentEndDate = form.getValues('expectedReturnDate');
+        if (!currentEndDate || !isSameDay(currentEndDate, newEndDate)) {
+          form.setValue('expectedReturnDate', newEndDate, { shouldValidate: true });
         }
     }
-  }, [watchedExpectedReturnDate, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, watchedIsOpenEnded, form]);
-
+  }, [watchedRentalDays, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, watchedIsOpenEnded, form]);
+  
   // Effect to calculate final value
   useEffect(() => {
     let subTotalBasedOnCustomRates = 0;
@@ -819,16 +818,15 @@ export function RentalForm({
                   name="rentalDays"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Dias de Aluguel (Calculado)</FormLabel>
+                      <FormLabel>Dias de Aluguel</FormLabel>
                       <FormControl>
                         <Input 
                           type="number" 
                           {...field} 
-                          disabled
-                          className="bg-muted/50 font-bold"
+                          disabled={watchedIsOpenEnded}
+                          min={watchedIsOpenEnded ? "0" : "1"}
                         />
                       </FormControl>
-                      <FormDescription>Este campo é calculado automaticamente.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -842,31 +840,22 @@ export function RentalForm({
                   name="expectedReturnDate"
                   render={({ field }) => (
                   <FormItem className="flex flex-col">
-                      <FormLabel>Data de Retorno Esperada</FormLabel>
+                      <FormLabel>Data de Retorno Esperada (Calculada)</FormLabel>
                       <Popover>
-                      <PopoverTrigger asChild>
+                      <PopoverTrigger asChild disabled>
                           <FormControl>
                           <Button
                               variant={"outline"}
-                              className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
-                              disabled={watchedIsOpenEnded}
+                              className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground", "bg-muted/50 disabled:opacity-100 disabled:cursor-default")}
+                              disabled
                           >
-                              {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
+                              {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>-</span>}
                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                           </Button>
                           </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              disabled={(date) => date < form.getValues('rentalStartDate')}
-                              initialFocus
-                              locale={ptBR}
-                          />
-                      </PopoverContent>
                       </Popover>
+                      <FormDescription>Este campo é calculado automaticamente.</FormDescription>
                       <FormMessage />
                   </FormItem>
                   )}
