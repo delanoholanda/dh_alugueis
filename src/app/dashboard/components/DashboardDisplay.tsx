@@ -1,8 +1,9 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins } from 'lucide-react';
@@ -18,6 +19,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { DynamicLucideIcon } from '@/lib/lucide-icons';
 import { Badge } from '@/components/ui/badge';
+import { MarkAsPaidDialog } from '@/app/dashboard/rentals/components/MarkAsPaidDialog';
 
 interface MonthlyFinancialData {
   month: string;
@@ -106,12 +108,21 @@ export default function DashboardDisplay({
   mostRentedTypesData
 }: DashboardDisplayProps) {
 
+  const router = useRouter();
+  const [selectedRentalForPayment, setSelectedRentalForPayment] = useState<Rental | null>(null);
+
   const pieChartConfig = useMemo(() => {
     return mostRentedTypesData.reduce((acc, entry) => {
         acc[entry.name] = { label: entry.name, color: entry.fill };
         return acc;
     }, {} as ChartConfig);
   }, [mostRentedTypesData]);
+
+  const handleMarkAsPaidSuccess = async () => {
+    setSelectedRentalForPayment(null); // Close dialog
+    router.refresh(); // Re-fetch server data and re-render the page
+  };
+
 
   return (
     <>
@@ -231,19 +242,26 @@ export default function DashboardDisplay({
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                            <div className="pl-16 pr-4 pb-3 pt-2 text-sm space-y-1">
-                                                <p className="text-muted-foreground">
-                                                    Devolvido em: <span className="font-medium text-foreground">{returnDate ? format(returnDate, 'PP', { locale: ptBR }) : 'N/A'}</span>
-                                                </p>
-                                                <div className="flex items-center gap-2">
-                                                    <p className="text-muted-foreground">Status do Pagamento:</p>
-                                                    <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="capitalize">
-                                                        {paymentStatusMap[rental.paymentStatus]}
-                                                    </Badge>
+                                            <div className="pl-16 pr-4 pb-3 pt-2 text-sm space-y-3">
+                                                <div className="space-y-1">
+                                                    <p className="text-muted-foreground">
+                                                        Devolvido em: <span className="font-medium text-foreground">{returnDate ? format(returnDate, 'PP', { locale: ptBR }) : 'N/A'}</span>
+                                                    </p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-muted-foreground">Status do Pagamento:</p>
+                                                        <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="capitalize">
+                                                            {paymentStatusMap[rental.paymentStatus]}
+                                                        </Badge>
+                                                    </div>
                                                 </div>
-                                                <Button asChild variant="link" size="sm" className="p-0 h-auto mt-2">
-                                                   <Link href={`/dashboard/rentals/${rental.id}/details`}>Ver detalhes e marcar como pago</Link>
-                                                </Button>
+                                                <div className="flex items-center gap-2">
+                                                    <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}>
+                                                        Marcar como Pago
+                                                    </Button>
+                                                    <Button asChild variant="link" size="sm" className="p-0 h-auto">
+                                                       <Link href={`/dashboard/rentals/${rental.id}/details`}>Ver detalhes</Link>
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </AccordionContent>
                                     </AccordionItem>
@@ -341,6 +359,16 @@ export default function DashboardDisplay({
           </CardContent>
         </Card>
       </div>
+      {selectedRentalForPayment && (
+        <MarkAsPaidDialog
+            rental={selectedRentalForPayment}
+            isOpen={!!selectedRentalForPayment}
+            onOpenChange={(open) => {
+                if (!open) setSelectedRentalForPayment(null);
+            }}
+            onSuccess={handleMarkAsPaidSuccess}
+        />
+      )}
     </>
   );
 }
