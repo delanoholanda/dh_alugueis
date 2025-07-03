@@ -10,7 +10,7 @@ import crypto from 'crypto';
 import { saveFile, deleteFile } from '@/lib/file-storage';
 import { addDays, format, parseISO, getDay, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { countBillableDays } from '@/lib/utils';
+import { countBillableDays, findNthBillableDay } from '@/lib/utils';
 
 
 export async function getRentals(): Promise<Rental[]> {
@@ -37,6 +37,7 @@ export async function getRentals(): Promise<Rental[]> {
       isOpenEnded: row.isOpenEnded === 1,
       chargeSaturdays: row.chargeSaturdays === 1,
       chargeSundays: row.chargeSundays === 1,
+      returnNotificationSent: row.returnNotificationSent || null,
     }));
   } catch (error) {
     console.error("Failed to fetch rentals:", error);
@@ -69,6 +70,7 @@ export async function getRentalById(id: number): Promise<Rental | undefined> {
       isOpenEnded: row.isOpenEnded === 1,
       chargeSaturdays: row.chargeSaturdays === 1,
       chargeSundays: row.chargeSundays === 1,
+      returnNotificationSent: row.returnNotificationSent || null,
     };
   } catch (error) {
     console.error(`Failed to fetch rental with id ${id}:`, error);
@@ -97,8 +99,12 @@ export async function createRental(
   
   let expectedReturnDateString = finalRentalStartDateString;
   if (!rentalData.isOpenEnded) {
-      const daysForCalculation = rentalData.rentalDays >= 1 ? rentalData.rentalDays - 1 : 0;
-      const calculatedExpectedReturnDate = addDays(startDateForCalc, daysForCalculation);
+      const calculatedExpectedReturnDate = findNthBillableDay(
+          startDateForCalc,
+          rentalData.rentalDays,
+          rentalData.chargeSaturdays ?? true,
+          rentalData.chargeSundays ?? true
+      );
       expectedReturnDateString = format(calculatedExpectedReturnDate, 'yyyy-MM-dd');
   }
 
@@ -131,14 +137,15 @@ export async function createRental(
     notes: rentalData.notes ?? null,
     actualReturnDate: rentalData.actualReturnDate ?? null,
     deliveryAddress: rentalData.deliveryAddress && rentalData.deliveryAddress.trim() !== '' ? rentalData.deliveryAddress : 'A definir',
+    returnNotificationSent: null,
   };
   
   const { equipment } = rentalData;
   const rentalFieldsToInsert = newRentalForDbBase;
 
   const insertRentalStmt = db.prepare(`
-    INSERT INTO rentals (customerId, customerName, rentalStartDate, rentalDays, expectedReturnDate, actualReturnDate, freightValue, discountValue, value, paymentStatus, paymentMethod, paymentDate, notes, deliveryAddress, isOpenEnded, chargeSaturdays, chargeSundays)
-    VALUES (@customerId, @customerName, @rentalStartDate, @rentalDays, @expectedReturnDate, @actualReturnDate, @freightValue, @discountValue, @value, @paymentStatus, @paymentMethod, @paymentDate, @notes, @deliveryAddress, @isOpenEnded, @chargeSaturdays, @chargeSundays)
+    INSERT INTO rentals (customerId, customerName, rentalStartDate, rentalDays, expectedReturnDate, actualReturnDate, freightValue, discountValue, value, paymentStatus, paymentMethod, paymentDate, notes, deliveryAddress, isOpenEnded, chargeSaturdays, chargeSundays, returnNotificationSent)
+    VALUES (@customerId, @customerName, @rentalStartDate, @rentalDays, @expectedReturnDate, @actualReturnDate, @freightValue, @discountValue, @value, @paymentStatus, @paymentMethod, @paymentDate, @notes, @deliveryAddress, @isOpenEnded, @chargeSaturdays, @chargeSundays, @returnNotificationSent)
   `);
 
   const insertRentalEquipmentStmt = db.prepare(`
@@ -234,18 +241,22 @@ export async function updateRental(
   }
 
   const isOpenEnded = rentalData.isOpenEnded ?? existingRental.isOpenEnded;
-  let currentRentalDays = existingRental.rentalDays;
-  if (rentalData.rentalDays !== undefined) {
-    currentRentalDays = rentalData.rentalDays;
-  }
-  
+  const currentRentalDays = rentalData.rentalDays ?? existingRental.rentalDays;
+  const chargeSaturdays = rentalData.chargeSaturdays ?? existingRental.chargeSaturdays ?? true;
+  const chargeSundays = rentalData.chargeSundays ?? existingRental.chargeSundays ?? true;
+
   if (isOpenEnded) {
     updatedRentalData.expectedReturnDate = currentStartDateString;
-  } else if (rentalData.rentalStartDate || rentalData.rentalDays !== undefined) {
-      const startDateObjForCalc = parseISO(currentStartDateString);
-      const daysForCalculation = currentRentalDays >= 1 ? currentRentalDays - 1 : 0;
-      const calculatedExpectedReturnDate = addDays(startDateObjForCalc, daysForCalculation);
-      updatedRentalData.expectedReturnDate = format(calculatedExpectedReturnDate, 'yyyy-MM-dd');
+  } else {
+    // Always recalculate for fixed-term rentals to ensure consistency
+    const startDateObjForCalc = parseISO(currentStartDateString);
+    const calculatedExpectedReturnDate = findNthBillableDay(
+        startDateObjForCalc, 
+        currentRentalDays, 
+        chargeSaturdays, 
+        chargeSundays
+    );
+    updatedRentalData.expectedReturnDate = format(calculatedExpectedReturnDate, 'yyyy-MM-dd');
   }
 
   if (rentalData.hasOwnProperty('paymentDate')) {
@@ -284,14 +295,16 @@ export async function updateRental(
 
   const { equipment, ...rentalFieldsToUpdateBase } = {
     ...updatedRentalData,
+    rentalDays: currentRentalDays,
     freightValue: updatedRentalData.freightValue ?? existingRental.freightValue ?? 0,
     discountValue: updatedRentalData.discountValue ?? existingRental.discountValue ?? 0,
     paymentMethod: updatedRentalData.paymentMethod ?? existingRental.paymentMethod ?? 'nao_definido',
     notes: updatedRentalData.notes ?? existingRental.notes ?? null,
     actualReturnDate: updatedRentalData.actualReturnDate ?? existingRental.actualReturnDate ?? null,
     isOpenEnded: isOpenEnded ? 1 : 0,
-    chargeSaturdays: (rentalData.chargeSaturdays ?? existingRental.chargeSaturdays) ? 1 : 0,
-    chargeSundays: (rentalData.chargeSundays ?? existingRental.chargeSundays) ? 1 : 0,
+    chargeSaturdays: chargeSaturdays ? 1 : 0,
+    chargeSundays: chargeSundays ? 1 : 0,
+    returnNotificationSent: updatedRentalData.returnNotificationSent ?? existingRental.returnNotificationSent ?? null,
   };
   
   const rentalFieldsToUpdate = { ...rentalFieldsToUpdateBase, id: id };
@@ -302,7 +315,8 @@ export async function updateRental(
       customerId = @customerId, customerName = @customerName, rentalStartDate = @rentalStartDate, rentalDays = @rentalDays, 
       expectedReturnDate = @expectedReturnDate, actualReturnDate = @actualReturnDate, freightValue = @freightValue, discountValue = @discountValue,
       value = @value, paymentStatus = @paymentStatus, paymentMethod = @paymentMethod, paymentDate = @paymentDate, notes = @notes,
-      deliveryAddress = @deliveryAddress, isOpenEnded = @isOpenEnded, chargeSaturdays = @chargeSaturdays, chargeSundays = @chargeSundays
+      deliveryAddress = @deliveryAddress, isOpenEnded = @isOpenEnded, chargeSaturdays = @chargeSaturdays, chargeSundays = @chargeSundays,
+      returnNotificationSent = @returnNotificationSent
     WHERE id = @id
   `);
 
@@ -590,10 +604,6 @@ export async function finalizeRental(id: number): Promise<Rental | null> {
 
   if (existingRental.isOpenEnded) {
       throw new Error('Não é possível finalizar um aluguel em aberto. Primeiro, calcule e feche o contrato para faturamento.');
-  }
-
-  if (existingRental.paymentStatus !== 'paid') {
-      throw new Error('Não é possível finalizar um aluguel com pagamento pendente ou em atraso.');
   }
 
   const today = new Date();
