@@ -5,18 +5,19 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import type { Rental, Customer, EquipmentType } from '@/types';
 import { format, parseISO, isToday, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatToBRL, cn } from '@/lib/utils';
+import { formatToBRL, cn, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
 import type { ChartConfig } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { DynamicLucideIcon } from '@/lib/lucide-icons';
+import { Badge } from '@/components/ui/badge';
 
 interface MonthlyFinancialData {
   month: string;
@@ -49,6 +50,7 @@ interface OverviewCardData {
 interface DashboardDisplayProps {
   overviewCards: OverviewCardData[];
   upcomingReturns: Rental[];
+  pendingPaymentRentals: Rental[];
   customers: Customer[];
   monthlyLineChartData: MonthlyFinancialData[];
   equipmentActivityChartData: EquipmentItemActivityData[];
@@ -97,6 +99,7 @@ const CustomTooltipContentFormatter = (value: any, name: any, props: any) => {
 export default function DashboardDisplay({
   overviewCards,
   upcomingReturns,
+  pendingPaymentRentals,
   customers,
   monthlyLineChartData,
   equipmentActivityChartData,
@@ -127,14 +130,14 @@ export default function DashboardDisplay({
         ))}
       </div>
 
-       <div className="grid grid-cols-1 gap-6 mb-8">
+       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card className="shadow-lg">
                 <CardHeader>
                     <CardTitle className="font-headline flex items-center">
                         <CalendarClock className="h-6 w-6 mr-2 text-primary" />
-                        Próximas Devoluções (Incluindo Atrasadas)
+                        Próximas Devoluções (Atrasadas e Futuras)
                     </CardTitle>
-                    <CardDescription>Aluguéis com devolução esperada para os próximos 7 dias ou que já estão atrasados.</CardDescription>
+                    <CardDescription>Aluguéis que ainda não foram devolvidos e estão atrasados ou com devolução nos próximos 7 dias.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {upcomingReturns.length > 0 ? (
@@ -190,6 +193,65 @@ export default function DashboardDisplay({
                         </Accordion>
                     ) : (
                         <p className="text-sm text-muted-foreground text-center py-4">Nenhuma devolução prevista para os próximos 7 dias.</p>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle className="font-headline flex items-center">
+                        <HandCoins className="h-6 w-6 mr-2 text-primary" />
+                        Pagamentos Pendentes (Itens Devolvidos)
+                    </CardTitle>
+                    <CardDescription>Aluguéis que já foram finalizados mas aguardam o pagamento.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {pendingPaymentRentals.length > 0 ? (
+                        <Accordion type="single" collapsible className="w-full space-y-2">
+                            {pendingPaymentRentals.map(rental => {
+                                const customer = customers.find(c => c.id === rental.customerId);
+                                const returnDate = rental.actualReturnDate ? parseISO(rental.actualReturnDate) : null;
+                                return (
+                                    <AccordionItem value={`item-pending-${rental.id}`} key={`pending-${rental.id}`} className="border rounded-md hover:bg-muted/50 transition-colors">
+                                        <AccordionTrigger className="p-3 w-full hover:no-underline [&[data-state=open]]:border-b">
+                                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 w-full text-left">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-10 w-10">
+                                                        <AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name || 'Avatar'} />
+                                                        <AvatarFallback>{customer ? customer.name.charAt(0).toUpperCase() : 'C'}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <p className="font-semibold">{rental.customerName}</p>
+                                                        <p className="text-xs text-muted-foreground">Contrato ID: {String(rental.id).padStart(4, '0')}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-sm font-bold text-destructive whitespace-nowrap self-start sm:self-center mt-1 sm:mt-0">
+                                                    Valor: {formatToBRL(rental.value)}
+                                                </div>
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <div className="pl-16 pr-4 pb-3 pt-2 text-sm space-y-1">
+                                                <p className="text-muted-foreground">
+                                                    Devolvido em: <span className="font-medium text-foreground">{returnDate ? format(returnDate, 'PP', { locale: ptBR }) : 'N/A'}</span>
+                                                </p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-muted-foreground">Status do Pagamento:</p>
+                                                    <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="capitalize">
+                                                        {paymentStatusMap[rental.paymentStatus]}
+                                                    </Badge>
+                                                </div>
+                                                <Button asChild variant="link" size="sm" className="p-0 h-auto mt-2">
+                                                   <Link href={`/dashboard/rentals/${rental.id}/details`}>Ver detalhes e marcar como pago</Link>
+                                                </Button>
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                );
+                            })}
+                        </Accordion>
+                    ) : (
+                        <p className="text-sm text-muted-foreground text-center py-4">Nenhum pagamento pendente para itens já devolvidos.</p>
                     )}
                 </CardContent>
             </Card>

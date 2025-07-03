@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { eachDayOfInterval, getDay, parseISO, addDays } from 'date-fns';
+import type { PaymentStatus } from '@/types';
+import type { BadgeProps } from '@/components/ui/badge';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -40,8 +42,8 @@ export function findNthBillableDay(startDate: Date, totalBillableDays: number, c
     return startDate; 
   }
 
-  let endDate = addDays(startDate, -1); // Start checking from the day before the start date
-  let daysCounted = 0;
+  let endDate = startDate;
+  let daysCounted = 1;
 
   while (daysCounted < totalBillableDays) {
     endDate = addDays(endDate, 1);
@@ -84,4 +86,19 @@ export function countBillableDays(startDateStr: string, endDateStr: string, char
         console.error("Error calculating billable days:", error);
         return 0;
     }
+}
+
+export const paymentStatusMap: Record<PaymentStatus, string> = {
+  paid: 'Pago',
+  pending: 'Pendente',
+  overdue: 'Atrasado'
+};
+
+export function getPaymentStatusVariant(status: PaymentStatus): BadgeProps['variant'] {
+  switch (status) {
+    case 'paid': return 'default';
+    case 'pending': return 'secondary';
+    case 'overdue': return 'destructive';
+    default: return 'outline';
+  }
 }

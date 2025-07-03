@@ -11,6 +11,7 @@ import DashboardDisplay from './components/DashboardDisplay';
 import { format, parseISO, startOfMonth, eachMonthOfInterval, parse, isToday, isPast, addDays, isBefore, startOfDay, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, countBillableDays } from '@/lib/utils';
+import DashboardActionTrigger from './components/DashboardActionTrigger';
 
 
 // Helper functions for data aggregation
@@ -149,6 +150,10 @@ export default async function DashboardPage() {
   const upcomingReturns = rentals.filter(rental => !rental.actualReturnDate && !rental.isOpenEnded && isBefore(parseISO(rental.expectedReturnDate), upcomingCutoff))
                                 .sort((a, b) => parseISO(a.expectedReturnDate).getTime() - parseISO(b.expectedReturnDate).getTime());
 
+  const pendingPaymentRentals = rentals
+    .filter(rental => !!rental.actualReturnDate && (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue'))
+    .sort((a, b) => parseISO(a.actualReturnDate!).getTime() - parseISO(b.actualReturnDate!).getTime());
+
   let totalContractValue = 0;
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   rentals.forEach(rental => {
@@ -214,10 +219,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="container mx-auto py-2">
+      <DashboardActionTrigger />
       <PageHeader title="Visão Geral do Painel" icon={LayoutDashboard} description="Bem-vindo à DH Alugueis. Aqui está um resumo do seu negócio." />
       <DashboardDisplay
         overviewCards={overviewCardsData}
         upcomingReturns={upcomingReturns}
+        pendingPaymentRentals={pendingPaymentRentals}
         customers={customersData}
         monthlyLineChartData={aggregatedMonthly}
         equipmentActivityChartData={equipmentActivityChartData}

@@ -1,32 +1,17 @@
 
 'use client';
 
-import type { Rental, Equipment as InventoryEquipment, PaymentStatus, Customer } from '@/types';
+import type { Rental, Equipment as InventoryEquipment, Customer } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RentalActionsCell } from './RentalActionsCell';
 import { format, parseISO, isToday, isPast, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatToBRL, cn, countBillableDays } from '@/lib/utils';
+import { formatToBRL, cn, countBillableDays, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
 import { CalendarDays, DollarSign, Package, CircleAlert, CircleCheck, TrendingUp, Infinity } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useState } from 'react';
 import { MarkAsPaidDialog } from './MarkAsPaidDialog';
-
-const paymentStatusMap: Record<PaymentStatus, string> = {
-  paid: 'Pago',
-  pending: 'Pendente',
-  overdue: 'Atrasado'
-};
-
-function getPaymentStatusVariant(status: PaymentStatus) {
-  switch (status) {
-    case 'paid': return 'default';
-    case 'pending': return 'secondary';
-    case 'overdue': return 'destructive';
-    default: return 'outline';
-  }
-}
 
 interface RentalCardProps {
   rental: Rental;
