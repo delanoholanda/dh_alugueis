@@ -2,7 +2,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Printer, ArrowLeft, FileDown, Loader2 } from 'lucide-react';
+import { Printer, ArrowLeft, FileDown, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import html2pdf from 'html2pdf.js';
 import { useState } from 'react';
@@ -14,7 +14,7 @@ interface ConsolidatedPrintActionsProps {
 
 export default function ConsolidatedPrintActions({ customerId, customerName }: ConsolidatedPrintActionsProps) {
   const router = useRouter();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingType, setProcessingType] = useState<'pdf' | 'image' | null>(null);
 
   const sanitizeFilenamePart = (name: string | undefined): string => {
     if (!name) return '';
@@ -25,21 +25,17 @@ export default function ConsolidatedPrintActions({ customerId, customerName }: C
       .replace(/[^a-zA-Z0-9]/g, "") 
       .substring(0, 15); 
   };
-  
-  const generatePdf = async (outputType: 'save' | 'open') => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-    
+
+  const getWorkerAndOptions = () => {
     const element = document.querySelector('.contract-container');
     if (!element) {
       console.error("Elemento .contract-container não encontrado.");
-      setIsProcessing(false);
-      return;
+      return { worker: null, actionsElement: null, customerFirstNamePart: null };
     }
 
     const actionsElement = element.querySelector('.no-print');
     if (actionsElement) (actionsElement as HTMLElement).style.display = 'none';
-
+    
     const customerFirstNamePart = sanitizeFilenamePart(customerName);
     const pdfFilename = `Contrato_Consolidado_DH_Alugueis_${customerFirstNamePart || customerId}.pdf`;
 
@@ -53,7 +49,20 @@ export default function ConsolidatedPrintActions({ customerId, customerName }: C
     };
     
     const worker = html2pdf().from(element).set(opt);
+    return { worker, actionsElement, customerFirstNamePart };
+  }
+  
+  const generatePdf = async (outputType: 'save' | 'open') => {
+    if (processingType) return;
+    setProcessingType('pdf');
 
+    const { worker, actionsElement } = getWorkerAndOptions();
+
+    if (!worker) {
+        setProcessingType(null);
+        return;
+    }
+    
     try {
         if (outputType === 'save') {
             await worker.save();
@@ -64,22 +73,55 @@ export default function ConsolidatedPrintActions({ customerId, customerName }: C
         console.error("Erro ao gerar PDF:", error);
     } finally {
         if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
-        setIsProcessing(false);
+        setProcessingType(null);
     }
   };
+
+  const generateImage = async () => {
+    if (processingType) return;
+    setProcessingType('image');
+
+    const { worker, actionsElement, customerFirstNamePart } = getWorkerAndOptions();
+    
+    if (!worker) {
+        setProcessingType(null);
+        return;
+    }
+
+    try {
+        const imgData = await worker.outputImg('datauristring');
+        const link = document.createElement('a');
+        link.download = `Contrato_Consolidado_DH_Alugueis_${customerFirstNamePart || customerId}.png`;
+        link.href = imgData;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (error) {
+        console.error("Erro ao gerar imagem:", error);
+    } finally {
+        if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
+        setProcessingType(null);
+    }
+  };
+
+  const isProcessing = !!processingType;
 
   return (
     <div className="mb-6 flex flex-wrap justify-end gap-2 no-print">
       <Button variant="outline" onClick={() => router.back()} disabled={isProcessing}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
       </Button>
+      <Button onClick={generateImage} disabled={isProcessing}>
+        {processingType === 'image' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />} 
+        Gerar Imagem
+      </Button>
       <Button onClick={() => generatePdf('save')} disabled={isProcessing}>
-        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />} 
-        Exportar para PDF
+        {processingType === 'pdf' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />} 
+        Exportar PDF
       </Button>
       <Button onClick={() => generatePdf('open')} disabled={isProcessing}>
-        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />} 
-        Imprimir Contrato
+        {processingType === 'pdf' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />} 
+        Imprimir
       </Button>
     </div>
   );

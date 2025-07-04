@@ -1,3 +1,4 @@
+
 'use server';
 
 import fs from 'fs/promises';
@@ -47,6 +48,7 @@ export async function saveFile(base64Data: string, subdirectory: string): Promis
   
   // Process the image with Sharp
   const processedBuffer = await sharp(originalBuffer)
+    .rotate() // Auto-rotates the image based on EXIF data.
     .resize(1024, 1024, { 
       fit: 'inside', // Resize to fit within 1024x1024, maintaining aspect ratio
       withoutEnlargement: true // Don't enlarge images that are already smaller
