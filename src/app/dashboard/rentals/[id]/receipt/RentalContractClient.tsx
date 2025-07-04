@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -239,28 +238,23 @@ export default function RentalContractClient({ rental, customer, companySettings
         .pix-section canvas { margin: 0.5rem auto; border: 1px solid #eee; padding: 5px; background: white; }
         .pix-key-text { font-size: 9px; word-break: break-all; }
         .terms-conditions { white-space: pre-wrap; font-size: 9px; line-height: 1.2; margin-bottom: 0.25rem; }
-        .contract-section p.valor-extenso-class { margin-top: 0.25rem; margin-bottom: 0.5rem; }
-        .contract-section.signature-container {
-          margin-top: 1rem !important;     
-          margin-bottom: 0.5rem !important;  
+        .valor-extenso-class { margin-top: 0.25rem; margin-bottom: 0.5rem; }
+        .signature-container {
+          margin-top: 1rem !important;
+          margin-bottom: 0.5rem !important;
           display: flex !important;
           flex-direction: column !important;
           align-items: center !important;
+          gap: 0.5rem;
         }
         .signature-area {
           text-align: center;
-          margin-top: 1rem !important;     
-          margin-bottom: 0.25rem !important;
-        }
-        .signature-area:first-child {
-           margin-bottom: 1rem !important; 
         }
         .signature-line {
           display: block;
-          margin: 0 auto 0.25rem auto;
+          margin: 0 auto;
           width: 250px;
           border-bottom: 1px solid #333;
-          padding-bottom: 20px !important; 
         }
         footer.text-center.text-xs {
             font-size: 10px !important;
@@ -353,17 +347,6 @@ export default function RentalContractClient({ rental, customer, companySettings
             <h3 className="font-semibold text-sm mb-1">Observações:</h3>
             <p className="text-xs whitespace-pre-wrap">{rental.notes || 'Nenhuma observação.'}</p>
             
-            <div className="mt-2">
-                <h3 className="font-semibold text-sm mb-1">Regras de Cobrança:</h3>
-                <ul className="text-xs list-disc list-inside">
-                    {rental.isOpenEnded && (
-                        <li>Será cobrado {formatToBRL(rental.value)} por dia de aluguel.</li>
-                    )}
-                    <li>Cobrança para Sábados: <span className="font-semibold">{rental.chargeSaturdays ? 'SIM' : 'NÃO'}</span></li>
-                    <li>Cobrança para Domingos: <span className="font-semibold">{rental.chargeSundays ? 'SIM' : 'NÃO'}</span></li>
-                </ul>
-            </div>
-
             <h3 className="font-semibold text-sm mb-1 mt-2">Termos e Condições:</h3>
             <p className="terms-conditions">
               {companySettings.contractTermsAndConditions || ''}
@@ -373,13 +356,21 @@ export default function RentalContractClient({ rental, customer, companySettings
             </p>
             <section className="contract-section signature-container">
                 <div className="signature-area">
+                    {companySettings.signatureImageUrl ? (
+                        <div className="relative w-[250px] h-[40px] mx-auto">
+                            <Image src={companySettings.signatureImageUrl} alt="Assinatura do Locador" fill style={{ objectFit: 'contain' }} />
+                        </div>
+                    ) : (
+                        <div className="h-[40px]"></div>
+                    )}
                     <p className="signature-line"></p>
-                    <p className="font-semibold text-xs">{companySettings.responsibleName}</p>
+                    <p className="font-semibold text-xs mt-1">{companySettings.responsibleName}</p>
                     <p className="text-xs">{companySettings.companyName} (Locador)</p>
                 </div>
                 <div className="signature-area">
+                    <div className="h-[40px]"></div>
                     <p className="signature-line"></p>
-                    <p className="font-semibold text-xs">{customer?.name || rental.customerName || 'Cliente'}</p>
+                    <p className="font-semibold text-xs mt-1">{customer?.name || rental.customerName || 'Cliente'}</p>
                     <p className="text-xs">(Locatário)</p>
                 </div>
             </section>
@@ -391,12 +382,12 @@ export default function RentalContractClient({ rental, customer, companySettings
                     <td>{rental.isOpenEnded ? 'Soma das Diárias:' : 'Soma dos itens/serviços:'}</td>
                     <td className="text-right">{formatToBRL(rental.isOpenEnded ? rental.value : itemsSubtotal)}</td>
                   </tr>
-                  {rental.freightValue !== undefined && rental.freightValue > 0 ? (
+                  {typeof rental.freightValue === 'number' && rental.freightValue > 0 && (
                     <tr>
                       <td>Frete:</td>
                       <td className="text-right">{formatToBRL(rental.freightValue)}</td>
                     </tr>
-                  ) : null}
+                  )}
                   <tr className="total-line">
                     <td>{rental.isOpenEnded ? 'Valor Diária (Total):' : 'Total Geral:'}</td>
                     <td className="text-right">{formatToBRL(rental.value)}</td>

@@ -100,6 +100,7 @@ export interface CompanyDetails {
   contractFooterText?: string;
   companyLogoUrl?: string;
   contractLogoUrl?: string;
+  signatureImageUrl?: string;
 }
 
 export interface User {

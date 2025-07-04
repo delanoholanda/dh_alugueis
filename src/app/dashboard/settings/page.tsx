@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2 } from 'lucide-react';
+import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2, Signature } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
@@ -46,6 +46,7 @@ export default function SettingsPage() {
     contractFooterText: '',
     companyLogoUrl: '',
     contractLogoUrl: '',
+    signatureImageUrl: '',
   });
   const [isSavingCompanyDetails, setIsSavingCompanyDetails] = useState(false);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
@@ -147,7 +148,7 @@ export default function SettingsPage() {
     });
   };
 
-  const handleLogoChange = (event: ChangeEvent<HTMLInputElement>, type: 'company' | 'contract') => {
+  const handleImageChange = (event: ChangeEvent<HTMLInputElement>, type: 'company' | 'contract' | 'signature') => {
     const file = event.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) { 
@@ -162,9 +163,18 @@ export default function SettingsPage() {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
+        let keyToUpdate: keyof CompanyDetails;
+        if (type === 'company') {
+          keyToUpdate = 'companyLogoUrl';
+        } else if (type === 'contract') {
+          keyToUpdate = 'contractLogoUrl';
+        } else {
+          keyToUpdate = 'signatureImageUrl';
+        }
+
         setCompanyDetails(prev => ({
           ...prev,
-          [type === 'company' ? 'companyLogoUrl' : 'contractLogoUrl']: result,
+          [keyToUpdate]: result,
         }));
       };
       reader.readAsDataURL(file);
@@ -312,7 +322,7 @@ export default function SettingsPage() {
                                       {companyDetails.companyLogoUrl ? (<Image src={companyDetails.companyLogoUrl} alt="Pré-visualização Logo Empresa" layout="fill" objectFit="contain" key={companyDetails.companyLogoUrl} data-ai-hint="company logo"/>) : (<ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>)}
                                   </div>
                                   <Input name="companyLogoUrl" placeholder="Cole a URL da imagem aqui" value={companyDetails.companyLogoUrl || ''} onChange={handleCompanyDetailsInputChange} />
-                                  <Input id="companyLogoUpload" type="file" accept="image/*" onChange={(e) => handleLogoChange(e, 'company')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                                  <Input id="companyLogoUpload" type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'company')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
                               </div>
                           </div>
                           <div className="space-y-2">
@@ -322,7 +332,7 @@ export default function SettingsPage() {
                                       {companyDetails.contractLogoUrl ? (<Image src={companyDetails.contractLogoUrl} alt="Pré-visualização Logo Contrato" layout="fill" objectFit="contain" key={companyDetails.contractLogoUrl} data-ai-hint="contract logo"/>) : (<ImageIconLucide className="w-10 h-10 text-muted-foreground" data-ai-hint="logo placeholder"/>)}
                                   </div>
                                   <Input name="contractLogoUrl" placeholder="Cole a URL da imagem aqui" value={companyDetails.contractLogoUrl || ''} onChange={handleCompanyDetailsInputChange} />
-                                  <Input id="contractLogoUpload" type="file" accept="image/*" onChange={(e) => handleLogoChange(e, 'contract')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                                  <Input id="contractLogoUpload" type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'contract')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
                               </div>
                               <p className="text-xs text-muted-foreground text-center mt-1">Se vazio, a logo geral será usada.</p>
                           </div>
@@ -339,6 +349,17 @@ export default function SettingsPage() {
                      <div className="space-y-1.5 mt-4">
                        <Label htmlFor="contractFooterText">Texto do Rodapé do Contrato</Label>
                        <Input id="contractFooterText" name="contractFooterText" placeholder="Ex: Obrigado pela preferência!" value={companyDetails.contractFooterText || ''} onChange={handleCompanyDetailsInputChange} />
+                    </div>
+                     <div className="space-y-1.5 mt-4">
+                        <Label htmlFor="signatureImageUpload">Assinatura Digital (Imagem)</Label>
+                        <div className="flex flex-col items-start space-y-2 mt-1">
+                            <div className="w-64 h-24 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-1">
+                                {companyDetails.signatureImageUrl ? (<Image src={companyDetails.signatureImageUrl} alt="Pré-visualização da Assinatura" layout="fill" objectFit="contain" key={companyDetails.signatureImageUrl} data-ai-hint="signature"/>) : (<Signature className="w-10 h-10 text-muted-foreground" data-ai-hint="signature placeholder"/>)}
+                            </div>
+                            <Input name="signatureImageUrl" placeholder="Cole a URL da imagem aqui" value={companyDetails.signatureImageUrl || ''} onChange={handleCompanyDetailsInputChange} />
+                            <Input id="signatureImageUpload" type="file" accept="image/png, image/webp" onChange={(e) => handleImageChange(e, 'signature')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                            <p className="text-xs text-muted-foreground">Envie uma imagem com fundo transparente (PNG) para melhores resultados.</p>
+                        </div>
                     </div>
                   </div>
               </CardContent>

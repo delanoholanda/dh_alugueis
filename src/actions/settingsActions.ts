@@ -21,6 +21,7 @@ const defaultSettings: CompanyDetails = {
     contractFooterText: 'Obrigado por escolher a DH Aluguéis!',
     companyLogoUrl: '',
     contractLogoUrl: '',
+    signatureImageUrl: '',
 };
 
 
@@ -75,6 +76,19 @@ export async function updateCompanySettings(settings: Partial<CompanyDetails>): 
             settingsToUpdate.contractLogoUrl = '';
         }
         
+        // Handle signatureImageUrl
+        if (settings.signatureImageUrl && settings.signatureImageUrl.startsWith('data:image/')) {
+            if (currentSettings.signatureImageUrl && currentSettings.signatureImageUrl.startsWith('/uploads/')) {
+                await deleteFile(currentSettings.signatureImageUrl);
+            }
+            settingsToUpdate.signatureImageUrl = await saveFile(settings.signatureImageUrl, 'logos');
+        } else if (settings.signatureImageUrl === '') {
+             if (currentSettings.signatureImageUrl && currentSettings.signatureImageUrl.startsWith('/uploads/')) {
+                await deleteFile(currentSettings.signatureImageUrl);
+            }
+            settingsToUpdate.signatureImageUrl = '';
+        }
+
         const stmt = db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (@key, @value)');
         
         const updateMany = db.transaction((s) => {

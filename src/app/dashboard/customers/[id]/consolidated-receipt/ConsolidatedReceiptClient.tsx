@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -199,10 +198,23 @@ export default function ConsolidatedReceiptClient({
         .pix-key-text { font-size: 9px; word-break: break-all; }
         .terms-conditions { white-space: pre-wrap; font-size: 9px; line-height: 1.2; margin-bottom: 0.25rem; }
         .valor-extenso-class { margin-top: 0.25rem; margin-bottom: 0.5rem; }
-        .signature-container { margin-top: 1rem !important; margin-bottom: 0.5rem !important; display: flex !important; flex-direction: column !important; align-items: center !important; }
-        .signature-area { text-align: center; margin-top: 1rem !important; margin-bottom: 0.25rem !important; }
-        .signature-area:first-child { margin-bottom: 1rem !important; }
-        .signature-line { display: block; margin: 0 auto 0.25rem auto; width: 250px; border-bottom: 1px solid #333; padding-bottom: 20px !important; }
+        .signature-container {
+          margin-top: 1rem !important;
+          margin-bottom: 0.5rem !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          gap: 0.5rem;
+        }
+        .signature-area {
+          text-align: center;
+        }
+        .signature-line {
+          display: block;
+          margin: 0 auto;
+          width: 250px;
+          border-bottom: 1px solid #333;
+        }
         footer.text-center.text-xs { font-size: 10px !important; margin-top: 1rem !important; padding-top: 0.5rem !important; }
       `}</style>
 
@@ -257,12 +269,12 @@ export default function ConsolidatedReceiptClient({
                     </tr>
                 </thead>
                 <tbody>
-                    {rental.equipment.map((eq, index) => {
+                    {rental.equipment.map((eq, itemIndex) => {
                          const inventoryItem = inventory.find(item => item.id === eq.equipmentId);
                          const dailyRateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
                          const itemSubtotal = dailyRateToUse * (rental.rentalDays || 0) * eq.quantity;
                         return (
-                            <tr key={`${rental.id}-${index}`}>
+                            <tr key={`${rental.id}-${itemIndex}`}>
                                 <td>{eq.name || 'Equipamento Desconhecido'}</td>
                                 <td className="text-right">{eq.quantity}</td>
                                 <td className="text-right">{formatToBRL(dailyRateToUse)}</td>
@@ -271,10 +283,10 @@ export default function ConsolidatedReceiptClient({
                             </tr>
                         );
                     })}
-                    {(rental.freightValue ?? 0) > 0 && (
+                    {typeof rental.freightValue === 'number' && rental.freightValue > 0 && (
                         <tr>
                             <td colSpan={4}>Frete</td>
-                            <td className="text-right">{formatToBRL(rental.freightValue!)}</td>
+                            <td className="text-right">{formatToBRL(rental.freightValue)}</td>
                         </tr>
                     )}
                     <tr className="font-bold bg-gray-50">
@@ -293,13 +305,21 @@ export default function ConsolidatedReceiptClient({
             <p className="text-xs mt-2 valor-extenso-class">Valor total por extenso: {valorPorExtenso || 'Não especificado'}.</p>
             <section className="contract-section signature-container">
               <div className="signature-area">
-                <p className="signature-line"></p>
-                <p className="font-semibold text-xs">{companySettings.responsibleName}</p>
-                <p className="text-xs">{companySettings.companyName} (Locador)</p>
+                  {companySettings.signatureImageUrl ? (
+                      <div className="relative w-[250px] h-[40px] mx-auto">
+                          <Image src={companySettings.signatureImageUrl} alt="Assinatura do Locador" fill style={{ objectFit: 'contain' }} />
+                      </div>
+                  ) : (
+                      <div className="h-[40px]"></div>
+                  )}
+                  <p className="signature-line"></p>
+                  <p className="font-semibold text-xs mt-1">{companySettings.responsibleName}</p>
+                  <p className="text-xs">{companySettings.companyName} (Locador)</p>
               </div>
               <div className="signature-area">
+                <div className="h-[40px]"></div>
                 <p className="signature-line"></p>
-                <p className="font-semibold text-xs">{customer.name}</p>
+                <p className="font-semibold text-xs mt-1">{customer.name}</p>
                 <p className="text-xs">(Locatário)</p>
               </div>
             </section>
