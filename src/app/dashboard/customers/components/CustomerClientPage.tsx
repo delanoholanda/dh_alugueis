@@ -1,15 +1,15 @@
-
 'use client';
 
 import type { Customer, Rental } from '@/types';
 import { useState, useMemo } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { CustomerForm } from './CustomerForm';
 import { createCustomer, updateCustomer, deleteCustomer, getCustomers } from '@/actions/customerActions';
-import { PlusCircle, Edit, Trash2, User, Phone, Fingerprint, Home, ClipboardList, ClipboardCheck, UsersRound, History, PackageX } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, User, Phone, Fingerprint, Home, UsersRound, History, PackageX, FileText, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -23,7 +23,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn, formatToBRL, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const responsivenessMap: Record<Customer['responsiveness'], string> = {
   'very responsive': 'Muito Responsivo',
@@ -46,11 +50,6 @@ const formatCpf = (cpf: string | null | undefined): string => {
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
 };
 
-interface CustomerWithRentalCounts extends Customer {
-  activeRentalsCount: number;
-  finalizedRentalsCount: number;
-}
-
 interface CustomerClientPageProps {
   initialCustomers: Customer[];
   initialRentals: Rental[];
@@ -61,15 +60,27 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>(undefined);
   const { toast } = useToast();
+  const [selectedRentals, setSelectedRentals] = useState<Record<string, number[]>>({});
 
-  const customersWithRentalCounts = useMemo((): CustomerWithRentalCounts[] => {
-    return customers.map(customer => {
-      const customerRentals = initialRentals.filter(rental => rental.customerId === customer.id);
-      const activeRentalsCount = customerRentals.filter(r => !r.actualReturnDate).length;
-      const finalizedRentalsCount = customerRentals.filter(r => !!r.actualReturnDate).length;
-      return { ...customer, activeRentalsCount, finalizedRentalsCount };
-    }).sort((a, b) => a.name.localeCompare(b.name));
+  const payableRentalsByCustomer = useMemo(() => {
+    const map: Record<string, Rental[]> = {};
+    for (const customer of customers) {
+      map[customer.id] = initialRentals.filter(
+        rental => rental.customerId === customer.id && rental.paymentStatus !== 'paid'
+      ).sort((a,b) => parseISO(a.rentalStartDate).getTime() - parseISO(b.rentalStartDate).getTime());
+    }
+    return map;
   }, [customers, initialRentals]);
+  
+  const handleRentalSelection = (customerId: string, rentalId: number) => {
+    setSelectedRentals(prev => {
+      const currentSelection = prev[customerId] || [];
+      const newSelection = currentSelection.includes(rentalId)
+        ? currentSelection.filter(id => id !== rentalId)
+        : [...currentSelection, rentalId];
+      return { ...prev, [customerId]: newSelection };
+    });
+  };
 
   const refreshCustomerList = async () => {
     const refreshedCustomers = await getCustomers();
@@ -139,9 +150,16 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
         </Dialog>
       </div>
       
-      {customersWithRentalCounts.length > 0 ? (
+      {customers.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {customersWithRentalCounts.map((customer) => (
+          {customers.map((customer) => {
+            const customerPayableRentals = payableRentalsByCustomer[customer.id] || [];
+            const customerSelectedRentals = selectedRentals[customer.id] || [];
+            const hasOpenEndedSelected = customerSelectedRentals.some(id => 
+                customerPayableRentals.find(r => r.id === id)?.isOpenEnded
+            );
+
+            return (
             <Card key={customer.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start gap-4">
@@ -195,20 +213,50 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                        <History className="h-3 w-3 mr-1"/> {rentalHistoryMap[customer.rentalHistory]}
                     </Badge>
                 </div>
-                <div className="pt-2 space-y-1">
-                    <div className="flex items-center text-xs">
-                        <ClipboardList className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
-                        <span className="text-muted-foreground">Aluguéis Ativos:</span>
-                        <span className="ml-1 font-medium">{customer.activeRentalsCount}</span>
+                
+                {customerPayableRentals.length > 0 && (
+                    <div className="pt-2">
+                        <Accordion type="single" collapsible className="w-full">
+                            <AccordionItem value="rentals" className="border-t">
+                                <AccordionTrigger className="text-sm font-semibold hover:no-underline py-2">
+                                    {customerPayableRentals.length} Aluguéis com Pagamento Pendente
+                                </AccordionTrigger>
+                                <AccordionContent className="pt-2 space-y-2">
+                                    {customerPayableRentals.map(rental => (
+                                        <div key={rental.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50">
+                                            <Checkbox
+                                                id={`rental-${customer.id}-${rental.id}`}
+                                                checked={customerSelectedRentals.includes(rental.id)}
+                                                onCheckedChange={() => handleRentalSelection(customer.id, rental.id)}
+                                            />
+                                            <label htmlFor={`rental-${customer.id}-${rental.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-grow cursor-pointer">
+                                                <div className='flex justify-between items-center'>
+                                                    <div>
+                                                        <p>ID: {rental.id.toString().padStart(4,'0')} - {format(parseISO(rental.rentalStartDate), 'dd/MM/yy')}</p>
+                                                        <p className='text-xs font-normal text-muted-foreground'>
+                                                            {rental.isOpenEnded ? 'Em Aberto (diária)' : 'Valor do Contrato'}: {formatToBRL(rental.value)}
+                                                        </p>
+                                                    </div>
+                                                    <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="capitalize text-xs">
+                                                        {paymentStatusMap[rental.paymentStatus]}
+                                                    </Badge>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    ))}
+                                    {hasOpenEndedSelected && (
+                                        <div className="flex items-start text-xs p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+                                            <AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                                            <span>Contratos "Em Aberto" devem ser fechados individualmente antes de gerar um contrato consolidado.</span>
+                                        </div>
+                                    )}
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
                     </div>
-                    <div className="flex items-center text-xs">
-                        <ClipboardCheck className="h-3.5 w-3.5 mr-1.5 text-green-500" />
-                        <span className="text-muted-foreground">Aluguéis Finalizados:</span>
-                        <span className="ml-1 font-medium">{customer.finalizedRentalsCount}</span>
-                    </div>
-                </div>
+                )}
               </CardContent>
-              <CardFooter className="border-t pt-3 pb-3 px-4">
+              <CardFooter className="border-t pt-3 pb-3 px-4 flex-col items-stretch space-y-2">
                 <div className="flex flex-wrap items-center justify-end gap-1 w-full">
                     <Button variant="outline" size="sm" onClick={() => openEditForm(customer)} title="Editar Cliente" className="flex-1 sm:flex-none">
                         <Edit className="h-3.5 w-3.5 mr-1.5 md:mr-0 lg:mr-1.5" /> <span className="md:hidden lg:inline">Editar</span>
@@ -235,9 +283,19 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                         </AlertDialogContent>
                     </AlertDialog>
                 </div>
+                 {customerSelectedRentals.length > 0 && (
+                    <div className="pt-2 border-t">
+                        <Button asChild className="w-full" disabled={hasOpenEndedSelected}>
+                            <Link href={`/dashboard/customers/${customer.id}/consolidated-receipt?rental_ids=${customerSelectedRentals.join(',')}`}>
+                                <FileText className="h-4 w-4 mr-2" />
+                                Gerar Contrato Consolidado ({customerSelectedRentals.length})
+                            </Link>
+                        </Button>
+                    </div>
+                )}
               </CardFooter>
             </Card>
-          ))}
+          )})}
         </div>
       ) : (
         <Card className="shadow-lg col-span-full">
