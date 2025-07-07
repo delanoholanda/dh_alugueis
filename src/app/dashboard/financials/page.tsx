@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { getExpenses, getFinancialSummary } from '@/actions/financialActions';
@@ -9,13 +10,14 @@ import { getExpenseCategories }
 from '@/actions/expenseCategoryActions';
 import { getRentals } from '@/actions/rentalActions';
 import type { Expense, Rental, ExpenseCategory } from '@/types'; 
-import { CircleDollarSign, TrendingUp, TrendingDown, Scale } from 'lucide-react';
+import { CircleDollarSign, TrendingUp, TrendingDown, Scale, FileText } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Line, LineChart as RechartsLineChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import FinancialsClientPart from './components/FinancialsClientPart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO, startOfMonth, eachMonthOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
 
 
 const chartConfig = {
@@ -288,6 +290,13 @@ export default function FinancialsPage() {
         title="Controle Financeiro" 
         icon={CircleDollarSign}
         description="Acompanhe suas receitas, despesas e lucratividade geral."
+        actions={
+          <Button asChild>
+            <Link href="/dashboard/financials/statement">
+              <FileText className="mr-2 h-4 w-4" /> Ver Extrato Detalhado
+            </Link>
+          </Button>
+        }
       />
 
       <div className="grid gap-6 md:grid-cols-3 mb-8">

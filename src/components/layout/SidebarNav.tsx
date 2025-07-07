@@ -14,7 +14,9 @@ import {
   Users,
   MessageCircleQuestion,
   Tags as TagsIcon, 
-  Users2 
+  Users2,
+  BarChart,
+  FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -57,7 +59,15 @@ const mainNavItems: NavItem[] = [
     iconName: 'Warehouse', 
   },
   { href: '/dashboard/customers', label: 'Clientes', iconName: 'Users' },
-  { href: '/dashboard/financials', label: 'Financeiro', iconName: 'CircleDollarSign' },
+  { 
+    href: '/dashboard/financials', 
+    label: 'Financeiro', 
+    iconName: 'CircleDollarSign',
+    subItems: [
+        { href: '/dashboard/financials', label: 'Visão Geral', iconName: 'BarChart' },
+        { href: '/dashboard/financials/statement', label: 'Extrato', iconName: 'FileText' },
+    ]
+  },
   { href: '/dashboard/notifications', label: 'IA Notificações', iconName: 'MessageCircleQuestion' },
 ];
 
@@ -135,6 +145,18 @@ export function SidebarNav() {
     }
   };
 
+  const isNavItemActive = (item: NavItem) => {
+    if (item.href === '/dashboard') {
+        return pathname === item.href;
+    }
+    // Specific logic for parent items with children
+    if (item.href === '/dashboard/inventory' && pathname.startsWith('/dashboard/inventory')) return true;
+    if (item.href === '/dashboard/financials' && pathname.startsWith('/dashboard/financials')) return true;
+
+    // Default logic for other items
+    return pathname.startsWith(item.href) && item.href !== '/dashboard';
+  };
+
   return (
     <>
     <SidebarHeader className="p-4">
@@ -156,11 +178,12 @@ export function SidebarNav() {
         <SidebarMenu>
           {dynamicNavItems.map((item) => {
             const IconComp = getIcon(item.iconName);
+            const isActive = isNavItemActive(item);
             return (
               <SidebarMenuItem key={item.href} className="relative">
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname === item.href || (item.subItems && pathname.startsWith(item.href) && item.href !== '/dashboard/inventory') || (item.href === '/dashboard/inventory' && pathname.startsWith('/dashboard/inventory'))}
+                  isActive={isActive}
                   tooltip={{children: item.label, className: "bg-primary text-primary-foreground"}}
                 >
                   <Link href={item.href} onClick={handleLinkClick}>
@@ -169,12 +192,14 @@ export function SidebarNav() {
                   </Link>
                 </SidebarMenuButton>
                 {item.subItems && (
-                  <SidebarMenuSub className={cn("group-data-[collapsible=icon]:hidden", (pathname.startsWith(item.href)) ? "flex" : "hidden")}>
+                  <SidebarMenuSub className={cn("group-data-[collapsible=icon]:hidden", isActive ? "flex" : "hidden")}>
                     {item.subItems.map((subItem) => {
                       const SubIconComp = getIcon(subItem.iconName);
+                      // Exact match for sub-items
+                      const isSubActive = pathname === subItem.href;
                       return (
                         <SidebarMenuSubItem key={subItem.href}>
-                          <SidebarMenuSubButton asChild isActive={pathname === subItem.href}>
+                          <SidebarMenuSubButton asChild isActive={isSubActive}>
                             <Link href={subItem.href} onClick={handleLinkClick}>
                               <SubIconComp className="h-4 w-4 mr-1" />
                               <span>{subItem.label}</span>
