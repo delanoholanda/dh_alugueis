@@ -1,46 +1,98 @@
 
 'use server';
 
+import crypto from 'crypto';
 import { getDb } from '@/lib/database';
 import { sendEmail } from '@/lib/email';
 import { getCompanySettings } from './settingsActions';
-import type { Rental, Customer } from '@/types';
+import type { Rental, NotificationLog } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getCustomerById } from './customerActions';
+import { revalidatePath } from 'next/cache';
 
-export async function sendTodaysReturnReminders(): Promise<{ success: boolean; message: string; sentCount: number }> {
+// This is the function the automatic trigger will call
+export async function sendTodaysReturnReminders(): Promise<void> {
+  const db = getDb();
+  const today = format(new Date(), 'yyyy-MM-dd');
+  
+  // Only run automatic check once per day to avoid spamming.
+  // We look for a successful run (either 'success' or 'no_reminders_needed')
+  const existingLog = db.prepare("SELECT id FROM notification_logs WHERE date(sentAt) = ? AND triggerType = 'automatic' AND (status = 'success' OR status = 'no_reminders_needed')").get(today);
+
+  if (existingLog) {
+    console.log(`[Notifications] Automatic reminder check for ${today} has already run successfully. Skipping.`);
+    return;
+  }
+  
+  await runReminderCheck({ triggerType: 'automatic' });
+}
+
+// This is the function the manual button will call
+export async function resendTodaysReturnReminders(): Promise<NotificationLog> {
+  return runReminderCheck({ triggerType: 'manual', forceResend: true });
+}
+
+async function runReminderCheck({ triggerType, forceResend = false }: {
+  triggerType: 'automatic' | 'manual',
+  forceResend?: boolean
+}): Promise<NotificationLog> {
+  const db = getDb();
+  const logId = `log_${crypto.randomBytes(8).toString('hex')}`;
+  const sentAt = new Date().toISOString();
+
+  const createLog = (logData: Omit<NotificationLog, 'id' | 'sentAt'>): NotificationLog => {
+    const finalLog: NotificationLog = { id: logId, sentAt, ...logData };
+    try {
+      db.prepare(
+        'INSERT INTO notification_logs (id, sentAt, status, recipient, subject, errorDetails, triggerType) VALUES (@id, @sentAt, @status, @recipient, @subject, @errorDetails, @triggerType)'
+      ).run(finalLog);
+    } catch(e) {
+        console.error("CRITICAL: FAILED TO WRITE NOTIFICATION LOG", e);
+    }
+    revalidatePath('/dashboard/notifications/history');
+    return finalLog;
+  };
+  
   try {
-    const db = getDb();
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const companySettings = await getCompanySettings();
+    if (!companySettings.email) {
+      throw new Error('O email da empresa não está configurado nas Configurações Gerais.');
+    }
 
-    // Find rentals due today that haven't been notified today and are not yet returned.
-    const stmt = db.prepare(`
+    const today = format(new Date(), 'yyyy-MM-dd');
+    
+    let query = `
       SELECT * FROM rentals 
       WHERE expectedReturnDate = ? 
       AND actualReturnDate IS NULL 
-      AND (returnNotificationSent IS NULL OR returnNotificationSent != ?)
-    `);
-    
-    const dueRentals = stmt.all(today, today) as Rental[];
+    `;
+
+    // For automatic check, ensure we haven't notified today. Manual resend ignores this.
+    if (!forceResend) {
+      query += ` AND (returnNotificationSent IS NULL OR returnNotificationSent != ?)`;
+    }
+
+    const stmt = db.prepare(query);
+    const dueRentals = forceResend 
+        ? (stmt.all(today) as Rental[]) 
+        : (stmt.all(today, today) as Rental[]);
 
     if (dueRentals.length === 0) {
-      return { success: true, message: 'No reminders to send today.', sentCount: 0 };
+      return createLog({
+        status: 'no_reminders_needed',
+        recipient: companySettings.email,
+        subject: 'Nenhum Lembrete de Devolução Hoje',
+        errorDetails: null,
+        triggerType: triggerType
+      });
     }
 
-    const companySettings = await getCompanySettings();
-    if (!companySettings.email) {
-      console.warn('Cannot send return reminders: Company email is not configured.');
-      return { success: false, message: 'Company email not configured.', sentCount: 0 };
-    }
-
-    // Fetch customer details for all rentals in parallel
     const rentalsWithCustomers = await Promise.all(dueRentals.map(async (rental) => {
         const customer = await getCustomerById(rental.customerId);
         return { ...rental, customer };
     }));
 
-    // Compose a single summary email
     const subject = `Lembrete de Devolução: ${dueRentals.length} aluguel(eis) vence(m) hoje - ${format(new Date(), 'dd/MM/yyyy')}`;
     const html = `
       <h1>Olá, ${companySettings.responsibleName || companySettings.companyName}!</h1>
@@ -81,7 +133,6 @@ export async function sendTodaysReturnReminders(): Promise<{ success: boolean; m
         throw new Error(`Falha no envio do email de lembrete: ${emailResult.message}`);
     }
 
-    // If email sending was successful, update the notification status for all relevant rentals
     const updateStmt = db.prepare('UPDATE rentals SET returnNotificationSent = ? WHERE id = ?');
     const updateTransaction = db.transaction((rentalsToUpdate) => {
         for (const rental of rentalsToUpdate) {
@@ -89,12 +140,33 @@ export async function sendTodaysReturnReminders(): Promise<{ success: boolean; m
         }
     });
     updateTransaction(dueRentals);
-    
-    console.log(`Successfully sent return reminders for ${dueRentals.length} rentals.`);
-    return { success: true, message: `Reminder email sent for ${dueRentals.length} rentals.`, sentCount: dueRentals.length };
+
+    return createLog({
+        status: 'success',
+        recipient: companySettings.email,
+        subject: subject,
+        errorDetails: null,
+        triggerType: triggerType
+    });
 
   } catch (error) {
-    console.error("Failed to send return reminders:", error);
-    return { success: false, message: (error as Error).message, sentCount: 0 };
+    return createLog({
+        status: 'failed',
+        recipient: (await getCompanySettings()).email || 'N/A',
+        subject: 'Falha ao Enviar Lembretes de Devolução',
+        errorDetails: (error as Error).message,
+        triggerType: triggerType
+    });
   }
+}
+
+export async function getNotificationLogs(): Promise<NotificationLog[]> {
+    const db = getDb();
+    try {
+        const stmt = db.prepare('SELECT * FROM notification_logs ORDER BY sentAt DESC LIMIT 50');
+        return stmt.all() as NotificationLog[];
+    } catch (error) {
+        console.error("Failed to fetch notification logs:", error);
+        return [];
+    }
 }

@@ -16,7 +16,9 @@ import {
   Tags as TagsIcon, 
   Users2,
   BarChart,
-  FileText
+  FileText,
+  Bell,
+  MailCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -68,7 +70,15 @@ const mainNavItems: NavItem[] = [
         { href: '/dashboard/financials/statement', label: 'Extrato', iconName: 'FileText' },
     ]
   },
-  { href: '/dashboard/notifications', label: 'IA Notificações', iconName: 'MessageCircleQuestion' },
+  { 
+    href: '/dashboard/notifications/history',
+    label: 'Notificações',
+    iconName: 'Bell',
+    subItems: [
+        { href: '/dashboard/notifications/history', label: 'Histórico de Envios', iconName: 'MailCheck' },
+        { href: '/dashboard/notifications', label: 'Testar IA', iconName: 'MessageCircleQuestion' },
+    ]
+  },
 ];
 
 const settingsNavItems: NavItem[] = [
@@ -147,11 +157,12 @@ export function SidebarNav() {
 
   const isNavItemActive = (item: NavItem) => {
     if (item.href === '/dashboard') {
-        return pathname === item.href;
+      return pathname === item.href;
     }
     // Specific logic for parent items with children
-    if (item.href === '/dashboard/inventory' && pathname.startsWith('/dashboard/inventory')) return true;
-    if (item.href === '/dashboard/financials' && pathname.startsWith('/dashboard/financials')) return true;
+    if (item.href.startsWith('/dashboard/inventory') && pathname.startsWith('/dashboard/inventory')) return true;
+    if (item.href.startsWith('/dashboard/financials') && pathname.startsWith('/dashboard/financials')) return true;
+    if (item.href.startsWith('/dashboard/notifications') && pathname.startsWith('/dashboard/notifications')) return true;
 
     // Default logic for other items
     return pathname.startsWith(item.href) && item.href !== '/dashboard';

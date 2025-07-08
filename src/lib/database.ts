@@ -34,7 +34,24 @@ function runMigrations(db: Database.Database) {
         console.error("[DB Migration] Error during 'returnNotificationSent' column check/add:", error);
     }
     
-    // Future migrations can be added here...
+    // Migration for notification_logs table
+    try {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS notification_logs (
+                id TEXT PRIMARY KEY,
+                sentAt TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('success', 'failed', 'no_reminders_needed')),
+                recipient TEXT,
+                subject TEXT,
+                errorDetails TEXT,
+                triggerType TEXT NOT NULL CHECK(triggerType IN ('automatic', 'manual'))
+            );
+        `);
+        console.log("[DB Migration] Ensured 'notification_logs' table exists.");
+    } catch (error) {
+        console.error("[DB Migration] Error ensuring 'notification_logs' table exists:", error);
+    }
+    
     console.log("[DB Migration] Schema check complete.");
 }
 
@@ -187,6 +204,16 @@ function initializeSchemaAndSeed(db: Database.Database) {
       photoType TEXT NOT NULL CHECK(photoType IN ('delivery', 'return')),
       uploadedAt TEXT NOT NULL,
       FOREIGN KEY (rentalId) REFERENCES rentals(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_logs (
+        id TEXT PRIMARY KEY,
+        sentAt TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('success', 'failed', 'no_reminders_needed')),
+        recipient TEXT,
+        subject TEXT,
+        errorDetails TEXT,
+        triggerType TEXT NOT NULL CHECK(triggerType IN ('automatic', 'manual'))
     );
   `);
   

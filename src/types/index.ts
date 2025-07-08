@@ -121,3 +121,13 @@ export interface UserProfile {
   name: string;
   email: string;
 }
+
+export interface NotificationLog {
+  id: string;
+  sentAt: string; // ISO Date string
+  status: 'success' | 'failed' | 'no_reminders_needed';
+  recipient: string | null;
+  subject: string | null;
+  errorDetails: string | null;
+  triggerType: 'automatic' | 'manual';
+}
