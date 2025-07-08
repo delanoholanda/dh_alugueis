@@ -63,20 +63,39 @@ async function runReminderCheck({ triggerType, forceResend = false }: {
     const today = format(new Date(), 'yyyy-MM-dd');
     
     let query = `
-      SELECT * FROM rentals 
-      WHERE expectedReturnDate = ? 
-      AND actualReturnDate IS NULL 
+      SELECT r.*,
+             json_group_array(json_object('equipmentId', re.equipmentId, 'quantity', re.quantity, 'name', re.name, 'customDailyRentalRate', re.customDailyRentalRate)) as equipmentJson
+      FROM rentals r
+      LEFT JOIN rental_equipment re ON r.id = re.rentalId
+      WHERE r.expectedReturnDate = ? 
+      AND r.actualReturnDate IS NULL
     `;
 
     // For automatic check, ensure we haven't notified today. Manual resend ignores this.
     if (!forceResend) {
-      query += ` AND (returnNotificationSent IS NULL OR returnNotificationSent != ?)`;
+      query += ` AND (r.returnNotificationSent IS NULL OR r.returnNotificationSent != ?)`;
     }
+    
+    query += ` GROUP BY r.id`;
 
     const stmt = db.prepare(query);
-    const dueRentals = forceResend 
-        ? (stmt.all(today) as Rental[]) 
-        : (stmt.all(today, today) as Rental[]);
+    const params = forceResend ? [today] : [today, today];
+    const dueRentalRows = stmt.all(...params) as any[];
+    
+    const dueRentals: Rental[] = dueRentalRows.map(row => ({
+      ...row,
+      equipment: row.equipmentJson ? JSON.parse(row.equipmentJson).filter((eq: any) => eq.equipmentId !== null) : [],
+      photos: [], // Photos not needed for this email
+      actualReturnDate: row.actualReturnDate || null, 
+      paymentDate: row.paymentDate || null, 
+      notes: row.notes || null,
+      deliveryAddress: row.deliveryAddress || 'A definir', 
+      isOpenEnded: row.isOpenEnded === 1,
+      chargeSaturdays: row.chargeSaturdays !== 0,
+      chargeSundays: row.chargeSundays !== 0,
+      returnNotificationSent: row.returnNotificationSent || null,
+    }));
+
 
     if (dueRentals.length === 0) {
       return createLog({
