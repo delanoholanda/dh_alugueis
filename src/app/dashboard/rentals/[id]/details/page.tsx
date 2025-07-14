@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -45,11 +46,16 @@ function getPaymentStatusVariant(status: Rental['paymentStatus']) {
   }
 }
 
-const formatCpfForDisplay = (cpf: string | null | undefined): string => {
-  if (!cpf) return 'Não informado';
-  const digits = cpf.replace(/\D/g, "");
-  if (digits.length !== 11) return cpf;
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+const formatDocumentForDisplay = (docType?: 'cpf' | 'cnpj', docNumber?: string | null): string => {
+  if (!docNumber) return 'Não informado';
+  const digits = docNumber.replace(/\D/g, "");
+  if (docType === 'cpf' && digits.length === 11) {
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+  }
+  if (docType === 'cnpj' && digits.length === 14) {
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+  }
+  return docNumber; // return as is if format doesn't match
 };
 
 export default function RentalDetailsPage() {
@@ -278,12 +284,12 @@ export default function RentalDetailsPage() {
                   </p>
                 </div>
               )}
-              {customer?.cpf && (
+              {customer?.documentNumber && (
                 <div>
-                  <p className="text-sm text-muted-foreground">CPF do Cliente</p>
+                  <p className="text-sm text-muted-foreground uppercase">{customer.documentType || 'Documento'}</p>
                   <p className="font-medium flex items-center">
                     <Fingerprint className="mr-2 h-4 w-4 text-muted-foreground" />
-                    {formatCpfForDisplay(customer.cpf)}
+                    {formatDocumentForDisplay(customer.documentType, customer.documentNumber)}
                   </p>
                 </div>
               )}
@@ -415,13 +421,13 @@ export default function RentalDetailsPage() {
                   <p className="font-medium">{paymentMethodDetails.label}</p>
                 </div>
               </div>
-               {rental.freightValue !== undefined && rental.freightValue > 0 && (
+               {typeof rental.freightValue === 'number' && rental.freightValue > 0 && (
                   <div>
                       <p className="text-sm text-muted-foreground">Valor do Frete (Incluso no Total)</p>
                       <p className="font-medium">{formatToBRL(rental.freightValue)}</p>
                   </div>
               )}
-              {rental.discountValue !== undefined && rental.discountValue > 0 && (
+              {typeof rental.discountValue === 'number' && rental.discountValue > 0 && (
                   <div>
                       <p className="text-sm text-muted-foreground">Desconto Aplicado (Incluso no Total)</p>
                       <p className="font-medium">{formatToBRL(rental.discountValue)}</p>

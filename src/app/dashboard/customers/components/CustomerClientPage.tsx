@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Customer, Rental } from '@/types';
@@ -43,11 +44,21 @@ const rentalHistoryMap: Record<Customer['rentalHistory'], string> = {
   'always late': 'Sempre Atrasado'
 };
 
-const formatCpf = (cpf: string | null | undefined): string => {
-  if (!cpf) return 'Não Informado';
-  const digits = cpf.replace(/\D/g, "");
-  if (digits.length !== 11) return cpf; 
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+const formatDocument = (docType?: 'cpf' | 'cnpj', docNumber?: string | null): string => {
+  if (!docNumber) return 'Não Informado';
+  const digits = docNumber.replace(/\D/g, "");
+  
+  if (docType === 'cpf') {
+    if (digits.length !== 11) return docNumber;
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+  }
+  
+  if (docType === 'cnpj') {
+    if (digits.length !== 14) return docNumber;
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+  }
+
+  return docNumber; // Fallback
 };
 
 interface CustomerClientPageProps {
@@ -173,9 +184,9 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                             </div>
                             <div className="flex items-center">
                                 <Fingerprint className="h-3 w-3 mr-1.5 text-muted-foreground" />
-                                <span>CPF:&nbsp;</span>
-                                <span className={cn(!customer.cpf && "text-destructive font-semibold")}>
-                                    {formatCpf(customer.cpf)}
+                                <span className="font-semibold uppercase">{customer.documentType || 'CPF'}:&nbsp;</span>
+                                <span className={cn(!customer.documentNumber && "text-destructive font-semibold")}>
+                                    {formatDocument(customer.documentType, customer.documentNumber)}
                                 </span>
                             </div>
                         </CardDescription>

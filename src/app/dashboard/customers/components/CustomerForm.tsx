@@ -8,6 +8,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
@@ -15,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, type ChangeEvent, useEffect } from 'react';
 import Image from 'next/image';
 import { User, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const applyPhoneMask = (value: string): string => {
   if (!value) return "";
@@ -34,30 +36,38 @@ const applyPhoneMask = (value: string): string => {
   return maskedValue;
 };
 
-const applyCpfMask = (value: string): string => {
-  if (!value) return "";
-  const digits = value.replace(/\D/g, "");
-  const len = digits.length;
+const applyDocumentMask = (value: string, type: 'cpf' | 'cnpj'): string => {
+    if (!value) return "";
+    const digits = value.replace(/\D/g, "");
 
-  if (len === 0) return "";
-  if (len <= 3) return digits;
-  if (len <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-  if (len <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
-};
+    if (type === 'cpf') {
+        return digits
+            .slice(0, 11)
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    }
+    
+    if (type === 'cnpj') {
+        return digits
+            .slice(0, 14)
+            .replace(/^(\d{2})(\d)/, '$1.$2')
+            .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+            .replace(/\.(\d{3})(\d)/, '.$1/$2')
+            .replace(/(\d{4})(\d)/, '$1-$2');
+    }
+    return value;
+}
 
 const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
+const cnpjRegex = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
 
 const customerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   phone: z.string().regex(/^\(\d{2}\)\s\d{4,5}-\d{4}$/, "Formato do telefone deve ser (XX) XXXXX-XXXX ou (XX) XXXX-XXXX"),
   address: z.string().optional().or(z.literal('')),
-  cpf: z.string()
-    .refine(val => val === '' || cpfRegex.test(val), {
-      message: "CPF deve estar no formato XXX.XXX.XXX-XX ou vazio.",
-    })
-    .optional()
-    .or(z.literal('')),
+  documentType: z.enum(['cpf', 'cnpj']),
+  documentNumber: z.string().optional().or(z.literal('')),
   imageUrl: z.string().refine(val => {
     if (val === '') return true;
     if (val.startsWith('data:image/')) return true;
@@ -71,6 +81,14 @@ const customerSchema = z.object({
   }, { message: "Deve ser uma URL válida (http/https) ou uma imagem carregada" }).optional().or(z.literal('')),
   responsiveness: z.enum(['very responsive', 'responsive', 'not very responsive', 'never responds']),
   rentalHistory: z.enum(['always on time', 'sometimes late', 'often late', 'always late']),
+}).refine(data => {
+    if (!data.documentNumber) return true; // Optional, so valid if empty
+    if (data.documentType === 'cpf') return cpfRegex.test(data.documentNumber);
+    if (data.documentType === 'cnpj') return cnpjRegex.test(data.documentNumber);
+    return false;
+}, {
+    message: "Formato do documento inválido.",
+    path: ["documentNumber"],
 });
 
 type CustomerFormValues = z.infer<typeof customerSchema>;
@@ -92,13 +110,15 @@ export function CustomerForm({ initialData, onSubmitAction, onClose, isSubForm =
       ...initialData,
       phone: initialData.phone ? applyPhoneMask(initialData.phone) : '',
       address: initialData.address || '',
-      cpf: initialData.cpf ? applyCpfMask(initialData.cpf) : '',
+      documentType: initialData.documentType || 'cpf',
+      documentNumber: initialData.documentNumber ? applyDocumentMask(initialData.documentNumber, initialData.documentType || 'cpf') : '',
       imageUrl: initialData.imageUrl || '',
     } : {
       name: '',
       phone: '',
       address: '',
-      cpf: '',
+      documentType: 'cpf',
+      documentNumber: '',
       imageUrl: '',
       responsiveness: 'responsive',
       rentalHistory: 'always on time',
@@ -106,6 +126,11 @@ export function CustomerForm({ initialData, onSubmitAction, onClose, isSubForm =
   });
 
   const watchedImageUrl = form.watch("imageUrl");
+  const watchedDocumentType = form.watch("documentType");
+
+  useEffect(() => {
+    form.setValue('documentNumber', '', { shouldValidate: true });
+  }, [watchedDocumentType, form]);
 
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -175,7 +200,7 @@ export function CustomerForm({ initialData, onSubmitAction, onClose, isSubForm =
     setIsLoading(true);
     const submitData = {
       ...data,
-      cpf: data.cpf?.replace(/\D/g, '') || undefined, 
+      documentNumber: data.documentNumber?.replace(/\D/g, '') || undefined, 
     };
     try {
       await onSubmitAction(submitData);
@@ -211,8 +236,8 @@ export function CustomerForm({ initialData, onSubmitAction, onClose, isSubForm =
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Nome Completo</FormLabel>
-                <FormControl><Input placeholder="ex: João da Silva" {...field} /></FormControl>
+                <FormLabel>Nome / Razão Social</FormLabel>
+                <FormControl><Input placeholder="ex: João da Silva / Construtora Exemplo" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -298,27 +323,58 @@ export function CustomerForm({ initialData, onSubmitAction, onClose, isSubForm =
               )}
             />
             <FormField
-              control={form.control}
-              name="cpf"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>CPF (Opcional)</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="XXX.XXX.XXX-XX" 
-                      {...field}
-                      onChange={(e) => {
-                        const maskedValue = applyCpfMask(e.target.value);
-                        field.onChange(maskedValue); 
-                      }}
-                      maxLength={14}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+                control={form.control}
+                name="documentType"
+                render={({ field }) => (
+                    <FormItem className="space-y-3">
+                    <FormLabel>Tipo de Documento</FormLabel>
+                    <FormControl>
+                        <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex space-x-4"
+                        >
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl>
+                            <RadioGroupItem value="cpf" />
+                            </FormControl>
+                            <FormLabel className="font-normal">Pessoa Física (CPF)</FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl>
+                            <RadioGroupItem value="cnpj" />
+                            </FormControl>
+                            <FormLabel className="font-normal">Pessoa Jurídica (CNPJ)</FormLabel>
+                        </FormItem>
+                        </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
             />
           </div>
+          <FormField
+            control={form.control}
+            name="documentNumber"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>{watchedDocumentType === 'cpf' ? 'CPF' : 'CNPJ'} (Opcional)</FormLabel>
+                <FormControl>
+                <Input
+                    placeholder={watchedDocumentType === 'cpf' ? 'XXX.XXX.XXX-XX' : 'XX.XXX.XXX/XXXX-XX'}
+                    {...field}
+                    onChange={(e) => {
+                    const maskedValue = applyDocumentMask(e.target.value, watchedDocumentType);
+                    field.onChange(maskedValue);
+                    }}
+                    maxLength={watchedDocumentType === 'cpf' ? 14 : 18}
+                />
+                </FormControl>
+                <FormMessage />
+            </FormItem>
+            )}
+          />
+
            <FormField
             control={form.control}
             name="address"

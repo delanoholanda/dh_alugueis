@@ -5,7 +5,8 @@ export interface Customer {
   name: string;
   phone: string;
   address?: string;
-  cpf?: string | null; 
+  documentType?: 'cpf' | 'cnpj';
+  documentNumber?: string | null;
   imageUrl?: string;
   responsiveness: 'very responsive' | 'responsive' | 'not very responsive' | 'never responds';
   rentalHistory: 'always on time' | 'sometimes late' | 'often late' | 'always late';

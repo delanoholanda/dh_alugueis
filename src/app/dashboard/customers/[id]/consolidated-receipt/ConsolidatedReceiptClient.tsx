@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo } from 'react';
@@ -130,11 +131,16 @@ function numberToWords(num: number): string {
 }
 
 
-const formatCpfForDisplay = (cpf: string | null | undefined): string => {
-  if (!cpf) return '';
-  const digits = cpf.replace(/\D/g, "");
-  if (digits.length !== 11) return cpf;
-  return `CPF: ${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+const formatDocumentForDisplay = (docType?: 'cpf' | 'cnpj', docNumber?: string | null): string => {
+  if (!docNumber) return '';
+  const digits = docNumber.replace(/\D/g, "");
+  if (docType === 'cpf' && digits.length === 11) {
+    return `CPF: ${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+  }
+  if (docType === 'cnpj' && digits.length === 14) {
+    return `CNPJ: ${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+  }
+  return docNumber; // return as is if format doesn't match
 };
 
 interface ConsolidatedReceiptClientProps {
@@ -199,11 +205,11 @@ export default function ConsolidatedReceiptClient({
         .terms-conditions { white-space: pre-wrap; font-size: 9px; line-height: 1.2; margin-bottom: 0.25rem; }
         .valor-extenso-class { margin-top: 0.25rem; margin-bottom: 0.5rem; }
         .signature-container {
-          margin-top: 1rem !important;
-          margin-bottom: 0.5rem !important;
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
+          margin-top: 1rem;
+          margin-bottom: 0rem;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
           gap: 0.5rem;
         }
         .signature-area {
@@ -243,7 +249,7 @@ export default function ConsolidatedReceiptClient({
             <h2 className="font-semibold text-sm mb-1">Cliente:</h2>
             <p>{customer.name}</p>
             {customer.phone && <p>Telefone: {customer.phone}</p>}
-            {customer.cpf && <p>{formatCpfForDisplay(customer.cpf)}</p>}
+            {customer.documentNumber && <p>{formatDocumentForDisplay(customer.documentType, customer.documentNumber)}</p>}
           </div>
           <div className="text-xs text-right">
             <p>Data de Emissão: {contractGeneratedAt}</p>
@@ -305,13 +311,13 @@ export default function ConsolidatedReceiptClient({
             <p className="text-xs mt-2 valor-extenso-class">Valor total por extenso: {valorPorExtenso || 'Não especificado'}.</p>
             <section className="contract-section signature-container">
               <div className="signature-area">
-                  {companySettings.signatureImageUrl ? (
-                      <div className="relative w-[250px] h-[40px] mx-auto">
-                          <Image src={companySettings.signatureImageUrl} alt="Assinatura do Locador" fill style={{ objectFit: 'contain' }} />
-                      </div>
-                  ) : (
-                      <div className="h-[40px]"></div>
-                  )}
+                  <div className="relative w-[250px] h-[40px] mx-auto">
+                    {companySettings.signatureImageUrl ? (
+                        <Image src={companySettings.signatureImageUrl} alt="Assinatura do Locador" fill style={{ objectFit: 'contain' }} />
+                    ) : (
+                        <div className="h-[40px]"></div>
+                    )}
+                  </div>
                   <p className="signature-line"></p>
                   <p className="font-semibold text-xs mt-1">{companySettings.responsibleName}</p>
                   <p className="text-xs">{companySettings.companyName} (Locador)</p>

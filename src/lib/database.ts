@@ -51,6 +51,29 @@ function runMigrations(db: Database.Database) {
     } catch (error) {
         console.error("[DB Migration] Error ensuring 'notification_logs' table exists:", error);
     }
+
+    // Migration for CNPJ/CPF columns in customers table
+    try {
+        const columns = db.pragma('table_info(customers)') as { name: string }[];
+        const hasDocumentTypeColumn = columns.some(col => col.name === 'documentType');
+        const hasDocumentNumberColumn = columns.some(col => col.name === 'documentNumber');
+
+        if (!hasDocumentTypeColumn && !hasDocumentNumberColumn) {
+            console.log("[DB Migration] Applying migration: Adding 'documentType' and 'documentNumber' columns to 'customers' table.");
+            db.exec(`
+                ALTER TABLE customers ADD COLUMN documentType TEXT CHECK(documentType IN ('cpf', 'cnpj')) DEFAULT 'cpf';
+                ALTER TABLE customers ADD COLUMN documentNumber TEXT;
+            `);
+            // Attempt to migrate existing CPF data
+            db.exec(`UPDATE customers SET documentNumber = cpf WHERE cpf IS NOT NULL AND cpf != '';`);
+            console.log("[DB Migration] New document columns added and CPF data migrated.");
+        } else {
+            console.log("[DB Migration] Document columns already exist, skipping that migration.");
+        }
+
+    } catch (error) {
+        console.error("[DB Migration] Error during document columns check/add:", error);
+    }
     
     console.log("[DB Migration] Schema check complete.");
 }
@@ -120,7 +143,8 @@ function initializeSchemaAndSeed(db: Database.Database) {
       name TEXT NOT NULL,
       phone TEXT NOT NULL,
       address TEXT, 
-      cpf TEXT, 
+      documentType TEXT CHECK(documentType IN ('cpf', 'cnpj')) DEFAULT 'cpf',
+      documentNumber TEXT,
       imageUrl TEXT,
       responsiveness TEXT CHECK(responsiveness IN ('very responsive', 'responsive', 'not very responsive', 'never responds')) NOT NULL,
       rentalHistory TEXT CHECK(rentalHistory IN ('always on time', 'sometimes late', 'often late', 'always late')) NOT NULL

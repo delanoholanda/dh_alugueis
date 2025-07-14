@@ -10,7 +10,7 @@ import { saveFile, deleteFile } from '@/lib/file-storage';
 export async function getCustomers(): Promise<Customer[]> {
   const db = getDb();
   try {
-    const stmt = db.prepare('SELECT id, name, phone, address, cpf, imageUrl, responsiveness, rentalHistory FROM customers ORDER BY name ASC');
+    const stmt = db.prepare('SELECT id, name, phone, address, documentType, documentNumber, imageUrl, responsiveness, rentalHistory FROM customers ORDER BY name ASC');
     const customers = stmt.all() as Customer[];
     return customers;
   } catch (error) {
@@ -22,7 +22,7 @@ export async function getCustomers(): Promise<Customer[]> {
 export async function getCustomerById(id: string): Promise<Customer | undefined> {
   const db = getDb();
   try {
-    const stmt = db.prepare('SELECT id, name, phone, address, cpf, imageUrl, responsiveness, rentalHistory FROM customers WHERE id = ?');
+    const stmt = db.prepare('SELECT id, name, phone, address, documentType, documentNumber, imageUrl, responsiveness, rentalHistory FROM customers WHERE id = ?');
     const customer = stmt.get(id) as Customer | undefined;
     return customer;
   } catch (error) {
@@ -43,12 +43,13 @@ export async function createCustomer(customerData: Omit<Customer, 'id'>): Promis
   const newCustomer: Customer = { 
     ...customerData, 
     id: newId,
-    cpf: customerData.cpf || null,
+    documentNumber: customerData.documentNumber || null,
+    documentType: customerData.documentType || 'cpf',
     imageUrl: savedImageUrl || ''
   };
 
   try {
-    const stmt = db.prepare('INSERT INTO customers (id, name, phone, address, cpf, imageUrl, responsiveness, rentalHistory) VALUES (@id, @name, @phone, @address, @cpf, @imageUrl, @responsiveness, @rentalHistory)');
+    const stmt = db.prepare('INSERT INTO customers (id, name, phone, address, documentType, documentNumber, imageUrl, responsiveness, rentalHistory) VALUES (@id, @name, @phone, @address, @documentType, @documentNumber, @imageUrl, @responsiveness, @rentalHistory)');
     stmt.run(newCustomer);
     revalidatePath('/dashboard/customers');
     revalidatePath('/dashboard', 'layout'); 
@@ -81,10 +82,15 @@ export async function updateCustomer(id: string, customerData: Partial<Omit<Cust
         }
         finalUpdateData.imageUrl = '';
     }
+    
+    // Explicitly handle setting documentNumber to null if it's empty
+    if ('documentNumber' in finalUpdateData && finalUpdateData.documentNumber === '') {
+        finalUpdateData.documentNumber = null;
+    }
 
     const updatedCustomerForDb = { ...existingCustomer, ...finalUpdateData };
 
-    const stmt = db.prepare('UPDATE customers SET name = @name, phone = @phone, address = @address, cpf = @cpf, imageUrl = @imageUrl, responsiveness = @responsiveness, rentalHistory = @rentalHistory WHERE id = @id');
+    const stmt = db.prepare('UPDATE customers SET name = @name, phone = @phone, address = @address, documentType = @documentType, documentNumber = @documentNumber, imageUrl = @imageUrl, responsiveness = @responsiveness, rentalHistory = @rentalHistory WHERE id = @id');
     stmt.run(updatedCustomerForDb);
     revalidatePath('/dashboard/customers');
     revalidatePath('/dashboard', 'layout'); 
