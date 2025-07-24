@@ -127,10 +127,17 @@ export function CustomerForm({ initialData, onSubmitAction, onClose, isSubForm =
 
   const watchedImageUrl = form.watch("imageUrl");
   const watchedDocumentType = form.watch("documentType");
+  const isEditing = !!initialData;
 
   useEffect(() => {
-    form.setValue('documentNumber', '', { shouldValidate: true });
-  }, [watchedDocumentType, form]);
+    // This effect runs when the user changes the document type (CPF/CNPJ).
+    // It should NOT run on the initial render when editing.
+    // By checking form.formState.isDirty, we ensure it only runs on user interaction.
+    if (form.formState.isDirty) {
+      form.setValue('documentNumber', '', { shouldValidate: true });
+    }
+  }, [watchedDocumentType, form, form.formState.isDirty]);
+
 
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
