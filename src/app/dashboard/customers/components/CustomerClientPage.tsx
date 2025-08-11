@@ -166,10 +166,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
           {customers.map((customer) => {
             const customerPayableRentals = payableRentalsByCustomer[customer.id] || [];
             const customerSelectedRentals = selectedRentals[customer.id] || [];
-            const hasOpenEndedSelected = customerSelectedRentals.some(id => 
-                customerPayableRentals.find(r => r.id === id)?.isOpenEnded
-            );
-
+            
             return (
             <Card key={customer.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
               <CardHeader className="pb-3">
@@ -255,12 +252,6 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                                             </label>
                                         </div>
                                     ))}
-                                    {hasOpenEndedSelected && (
-                                        <div className="flex items-start text-xs p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
-                                            <AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
-                                            <span>Contratos "Em Aberto" devem ser fechados individualmente antes de gerar um contrato consolidado.</span>
-                                        </div>
-                                    )}
                                 </AccordionContent>
                             </AccordionItem>
                         </Accordion>
@@ -296,7 +287,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                 </div>
                  {customerSelectedRentals.length > 0 && (
                     <div className="pt-2 border-t">
-                        <Button asChild className="w-full" disabled={hasOpenEndedSelected}>
+                        <Button asChild className="w-full">
                             <Link href={`/dashboard/customers/${customer.id}/consolidated-receipt?rental_ids=${customerSelectedRentals.join(',')}`}>
                                 <FileText className="h-4 w-4 mr-2" />
                                 Gerar Contrato Consolidado ({customerSelectedRentals.length})

@@ -7,6 +7,9 @@ import { getInventoryItems } from '@/actions/inventoryActions';
 import { generatePixPayload } from '@/lib/pix';
 import ConsolidatedReceiptClient from './ConsolidatedReceiptClient';
 import type { Rental } from '@/types';
+import { countBillableDays } from '@/lib/utils';
+import { format } from 'date-fns';
+
 
 function extractCityFromAddress(address?: string): string {
   if (!address) return 'CIDADE';
@@ -46,11 +49,39 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
     ...rentalIds.map(id => getRentalById(id)),
   ]);
 
-  const validRentals = rentals.filter((r): r is Rental => r !== undefined && r !== null && !r.isOpenEnded);
-
-  if (!customer || validRentals.length === 0) {
+  if (!customer || rentals.every(r => r === undefined)) {
     notFound();
   }
+  
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+  const validRentals = rentals
+    .filter((r): r is Rental => r !== undefined && r !== null)
+    .map(rental => {
+        if (rental.isOpenEnded) {
+            const billableDays = countBillableDays(
+                rental.rentalStartDate,
+                todayStr,
+                rental.chargeSaturdays ?? true,
+                rental.chargeSundays ?? true
+            );
+            // 'rental.value' for open-ended is the daily rate
+            const calculatedValue = billableDays * rental.value; 
+            return {
+                ...rental,
+                value: calculatedValue,
+                rentalDays: billableDays,
+                // Set expectedReturnDate to today for display purposes in the consolidated receipt
+                expectedReturnDate: todayStr
+            };
+        }
+        return rental;
+    });
+
+  if (validRentals.length === 0) {
+      notFound();
+  }
+
 
   const totalValue = validRentals.reduce((sum, rental) => sum + rental.value, 0);
 
