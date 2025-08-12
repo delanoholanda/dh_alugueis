@@ -1,7 +1,7 @@
 
 'use server';
 
-import type { Rental, PaymentMethod, Equipment as InventoryEquipment, RentalPhoto } from '@/types';
+import type { Rental, PaymentMethod, Equipment as InventoryEquipment, RentalPhoto, Payment } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { getCustomerById } from './customerActions';
 import { getInventoryItemById } from './inventoryActions';
@@ -19,7 +19,8 @@ export async function getRentals(): Promise<Rental[]> {
     const rentalRows = db.prepare(`
       SELECT r.*, 
              json_group_array(json_object('equipmentId', re.equipmentId, 'quantity', re.quantity, 'name', re.name, 'customDailyRentalRate', re.customDailyRentalRate)) as equipmentJson,
-             (SELECT json_group_array(json_object('id', rp.id, 'imageUrl', rp.imageUrl, 'photoType', rp.photoType, 'uploadedAt', rp.uploadedAt)) FROM rental_photos rp WHERE rp.rentalId = r.id) as photosJson
+             (SELECT json_group_array(json_object('id', rp.id, 'imageUrl', rp.imageUrl, 'photoType', rp.photoType, 'uploadedAt', rp.uploadedAt)) FROM rental_photos rp WHERE rp.rentalId = r.id) as photosJson,
+             (SELECT json_group_array(json_object('id', p.id, 'amount', p.amount, 'paymentDate', p.paymentDate, 'paymentMethod', p.paymentMethod, 'isPartial', p.isPartial)) FROM payments p WHERE p.rentalId = r.id) as paymentsJson
       FROM rentals r
       LEFT JOIN rental_equipment re ON r.id = re.rentalId
       GROUP BY r.id
@@ -30,6 +31,7 @@ export async function getRentals(): Promise<Rental[]> {
       ...row,
       equipment: row.equipmentJson ? JSON.parse(row.equipmentJson).filter((eq: any) => eq.equipmentId !== null) : [],
       photos: row.photosJson ? JSON.parse(row.photosJson).filter((ph: any) => ph && ph.id !== null) : [],
+      payments: row.paymentsJson ? JSON.parse(row.paymentsJson).filter((p: any) => p && p.id !== null) : [],
       actualReturnDate: row.actualReturnDate || null, 
       paymentDate: row.paymentDate || null, 
       notes: row.notes || null,
@@ -51,7 +53,8 @@ export async function getRentalById(id: number): Promise<Rental | undefined> {
     const row = db.prepare(`
       SELECT r.*, 
              json_group_array(json_object('equipmentId', re.equipmentId, 'quantity', re.quantity, 'name', re.name, 'customDailyRentalRate', re.customDailyRentalRate)) as equipmentJson,
-             (SELECT json_group_array(json_object('id', rp.id, 'imageUrl', rp.imageUrl, 'photoType', rp.photoType, 'uploadedAt', rp.uploadedAt)) FROM rental_photos rp WHERE rp.rentalId = r.id) as photosJson
+             (SELECT json_group_array(json_object('id', rp.id, 'imageUrl', rp.imageUrl, 'photoType', rp.photoType, 'uploadedAt', rp.uploadedAt)) FROM rental_photos rp WHERE rp.rentalId = r.id) as photosJson,
+             (SELECT json_group_array(json_object('id', p.id, 'amount', p.amount, 'paymentDate', p.paymentDate, 'paymentMethod', p.paymentMethod, 'isPartial', p.isPartial)) FROM payments p WHERE p.rentalId = r.id) as paymentsJson
       FROM rentals r
       LEFT JOIN rental_equipment re ON r.id = re.rentalId
       WHERE r.id = ?
@@ -63,6 +66,7 @@ export async function getRentalById(id: number): Promise<Rental | undefined> {
       ...row,
       equipment: row.equipmentJson ? JSON.parse(row.equipmentJson).filter((eq: any) => eq.equipmentId !== null) : [],
       photos: row.photosJson ? JSON.parse(row.photosJson).filter((ph: any) => ph && ph.id !== null) : [],
+      payments: row.paymentsJson ? JSON.parse(row.paymentsJson).filter((p: any) => p && p.id !== null) : [],
       actualReturnDate: row.actualReturnDate || null,
       paymentDate: row.paymentDate || null,
       notes: row.notes || null,
@@ -79,7 +83,7 @@ export async function getRentalById(id: number): Promise<Rental | undefined> {
 }
 
 export async function createRental(
-  rentalData: Omit<Rental, 'id' | 'expectedReturnDate' | 'customerName'> & {
+  rentalData: Omit<Rental, 'id' | 'expectedReturnDate' | 'customerName' | 'payments'> & {
     equipment: Array<{ equipmentId: string; quantity: number; name?:string; customDailyRentalRate?: number | null }>;
   }
 ): Promise<Rental> {
@@ -213,7 +217,7 @@ export async function createRental(
 
 export async function updateRental(
   id: number, 
-  rentalData: Partial<Omit<Rental, 'id' | 'expectedReturnDate' | 'customerName' >> & {
+  rentalData: Partial<Omit<Rental, 'id' | 'expectedReturnDate' | 'customerName' | 'payments' >> & {
     equipment?: Array<{ equipmentId: string; quantity: number; name?:string; customDailyRentalRate?: number | null }>;
   }
 ): Promise<Rental | null> {
@@ -377,7 +381,6 @@ export async function updateRental(
 export async function deleteRental(id: number): Promise<{ success: boolean }> { 
   const db = getDb();
   
-  // First, get all photo URLs for this rental to delete the files
   const getPhotosStmt = db.prepare('SELECT imageUrl FROM rental_photos WHERE rentalId = ?');
   const photos = getPhotosStmt.all(id) as { imageUrl: string }[];
   for (const photo of photos) {
@@ -389,9 +392,11 @@ export async function deleteRental(id: number): Promise<{ success: boolean }> {
   const deletePhotosStmt = db.prepare('DELETE FROM rental_photos WHERE rentalId = ?');
   const deleteEquipmentStmt = db.prepare('DELETE FROM rental_equipment WHERE rentalId = ?');
   const deleteRentalStmt = db.prepare('DELETE FROM rentals WHERE id = ?');
+  const deletePaymentsStmt = db.prepare('DELETE FROM payments WHERE rentalId = ?');
   
   try {
     db.transaction(() => {
+        deletePaymentsStmt.run(id);
         deletePhotosStmt.run(id);
         deleteEquipmentStmt.run(id);
         deleteRentalStmt.run(id);
@@ -474,7 +479,7 @@ export async function extendRental(
   }
 
   // --- Type-Specific Logic ---
-  let newRentalData: Omit<Rental, 'id' | 'expectedReturnDate' | 'customerName'> & { equipment: any[] };
+  let newRentalData: Omit<Rental, 'id' | 'expectedReturnDate' | 'customerName' | 'payments'> & { equipment: any[] };
 
   const baseRentalData = {
     customerId: existingRental.customerId,
@@ -676,5 +681,72 @@ export async function deleteRentalPhoto(photoId: string): Promise<{ success: boo
   } catch (error) {
     console.error(`Failed to delete rental photo with id ${photoId}:`, error);
     throw new Error('Failed to delete photo from database.');
+  }
+}
+
+export async function addPayment(
+  rentalId: number,
+  paymentData: Omit<Payment, 'id' | 'rentalId'>
+): Promise<Rental | null> {
+  const db = getDb();
+  
+  const existingRental = await getRentalById(rentalId);
+  if (!existingRental) {
+    throw new Error(`Aluguel com ID ${rentalId} não encontrado.`);
+  }
+
+  const paymentId = `pay_${crypto.randomBytes(8).toString('hex')}`;
+  const newPayment: Payment = {
+    id: paymentId,
+    rentalId,
+    ...paymentData,
+  };
+
+  const insertPaymentStmt = db.prepare(
+    'INSERT INTO payments (id, rentalId, amount, paymentDate, paymentMethod, isPartial) VALUES (@id, @rentalId, @amount, @paymentDate, @paymentMethod, @isPartial)'
+  );
+  
+  const updateRentalStmt = db.prepare(
+    'UPDATE rentals SET paymentStatus = @paymentStatus, paymentDate = @paymentDate, paymentMethod = @paymentMethod WHERE id = @id'
+  );
+
+  try {
+    db.transaction(() => {
+      // Correctly convert boolean to integer for SQLite
+      const paymentToInsert = {
+        ...newPayment,
+        isPartial: newPayment.isPartial ? 1 : 0
+      };
+      insertPaymentStmt.run(paymentToInsert);
+
+      const totalPaid = (existingRental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0) + newPayment.amount;
+      const remainingValue = existingRental.value - totalPaid;
+      const isNowFullyPaid = remainingValue < 0.01;
+
+      let newPaymentStatus: Rental['paymentStatus'] = 'pending';
+      let newPaymentDateForRental: string | null | undefined = existingRental.paymentDate;
+      
+      if (isNowFullyPaid) {
+          newPaymentStatus = 'paid';
+          newPaymentDateForRental = newPayment.paymentDate;
+      }
+
+      updateRentalStmt.run({
+        id: rentalId,
+        paymentStatus: newPaymentStatus,
+        paymentDate: newPaymentDateForRental,
+        paymentMethod: paymentData.paymentMethod, // Update main method to the latest one used
+      });
+    })();
+
+    revalidatePath(`/dashboard/rentals/${rentalId}/details`);
+    revalidatePath('/dashboard/rentals');
+    revalidatePath('/dashboard');
+    const updatedRental = await getRentalById(rentalId);
+    return updatedRental || null;
+
+  } catch (error) {
+    console.error(`Falha ao adicionar pagamento para o aluguel ${rentalId}:`, error);
+    throw new Error(`Falha ao registrar pagamento no banco de dados. Detalhes: ${(error as Error).message}`);
   }
 }

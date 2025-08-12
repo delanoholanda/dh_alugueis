@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -8,23 +9,27 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { updateRental } from '@/actions/rentalActions';
+import { addPayment } from '@/actions/rentalActions';
 import type { Rental } from '@/types';
 import { Loader2, CalendarIcon, DollarSign, CreditCard, Landmark } from 'lucide-react';
-import { formatToBRL } from '@/lib/utils';
+import { formatToBRL, parseFromBRL } from '@/lib/utils';
 
-const markAsPaidSchema = z.object({
+const paymentSchema = z.object({
   paymentDate: z.date({ required_error: "A data do pagamento é obrigatória." }),
   paymentMethod: z.enum(['pix', 'dinheiro', 'cartao_credito', 'cartao_debito', 'nao_definido']),
+  amount: z.coerce.number({invalid_type_error: "Valor deve ser um número."}).positive("Valor do pagamento deve ser maior que zero."),
+  isPartial: z.boolean().default(false),
 });
 
-type MarkAsPaidFormValues = z.infer<typeof markAsPaidSchema>;
+type PaymentFormValues = z.infer<typeof paymentSchema>;
 
 interface MarkAsPaidDialogProps {
   rental: Rental;
@@ -36,34 +41,65 @@ interface MarkAsPaidDialogProps {
 export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: MarkAsPaidDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  
+  const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+  const remainingValue = rental.value - totalPaid;
 
-  const form = useForm<MarkAsPaidFormValues>({
-    resolver: zodResolver(markAsPaidSchema),
+  const form = useForm<PaymentFormValues>({
+    resolver: zodResolver(paymentSchema),
     defaultValues: {
       paymentDate: new Date(),
       paymentMethod: rental.paymentMethod || 'pix',
+      amount: remainingValue > 0 ? remainingValue : 0,
+      isPartial: false,
     },
   });
 
-  const handleSubmit = async (data: MarkAsPaidFormValues) => {
+  const watchedAmount = form.watch("amount");
+
+  useEffect(() => {
+    // Automatically check/uncheck "isPartial" based on the amount
+    if (watchedAmount < remainingValue) {
+      form.setValue('isPartial', true);
+    } else {
+      form.setValue('isPartial', false);
+    }
+  }, [watchedAmount, remainingValue, form]);
+  
+  useEffect(() => {
+    // Reset form when dialog opens with new rental data
+    if (isOpen) {
+        const newRemainingValue = rental.value - (rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0);
+        form.reset({
+            paymentDate: new Date(),
+            paymentMethod: rental.paymentMethod || 'pix',
+            amount: newRemainingValue > 0 ? newRemainingValue : 0,
+            isPartial: false,
+        });
+    }
+  }, [isOpen, rental, form]);
+
+
+  const handleSubmit = async (data: PaymentFormValues) => {
     setIsLoading(true);
     try {
-      const result = await updateRental(rental.id, {
-        paymentStatus: 'paid',
+      const result = await addPayment(rental.id, {
+        amount: data.amount,
         paymentDate: format(data.paymentDate, 'yyyy-MM-dd'),
         paymentMethod: data.paymentMethod,
+        isPartial: data.isPartial,
       });
 
       if (result) {
         toast({
           title: 'Pagamento Registrado',
-          description: `O aluguel ID ${rental.id} foi marcado como pago.`,
+          description: `O pagamento para o aluguel ID ${rental.id} foi registrado.`,
           variant: 'success',
         });
         await onSuccess();
         onOpenChange(false);
       } else {
-        throw new Error("Falha ao atualizar o aluguel.");
+        throw new Error("Falha ao registrar o pagamento.");
       }
     } catch (error) {
       toast({ title: 'Erro', description: `Ocorreu um erro: ${(error as Error).message}`, variant: 'destructive' });
@@ -77,14 +113,59 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center">
-            <DollarSign className="mr-2 h-5 w-5 text-primary" /> Marcar como Pago (ID: {rental.id})
+            <DollarSign className="mr-2 h-5 w-5 text-primary" /> Registrar Pagamento (ID: {rental.id})
           </DialogTitle>
            <DialogDescription>
-            Confirme os detalhes do pagamento para o valor de {formatToBRL(rental.value)}.
+            Valor total do contrato: {formatToBRL(rental.value)}. 
+            Valor pendente: <span className="font-bold">{formatToBRL(remainingValue)}</span>.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6 py-4">
+                
+                 <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Valor do Pagamento</FormLabel>
+                        <FormControl>
+                        <Input
+                            type="text"
+                            value={formatToBRL(field.value)}
+                            onChange={(e) => {
+                                const parsedValue = parseFromBRL(e.target.value);
+                                field.onChange(isNaN(parsedValue) ? 0 : parsedValue);
+                            }}
+                        />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="isPartial"
+                    render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3">
+                        <FormControl>
+                            <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                disabled={watchedAmount < remainingValue} // Auto-check if amount is less
+                            />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                        <FormLabel>
+                            Registrar como pagamento parcial?
+                        </FormLabel>
+                        <FormMessage />
+                        </div>
+                    </FormItem>
+                    )}
+                />
+
                 <FormField
                     control={form.control}
                     name="paymentDate"
@@ -144,9 +225,9 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
                     <DialogClose asChild>
                         <Button type="button" variant="outline" disabled={isLoading}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit" disabled={isLoading}>
+                    <Button type="submit" disabled={isLoading || form.getValues('amount') <= 0}>
                         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Confirmar Pagamento
+                        Registrar Pagamento
                     </Button>
                 </DialogFooter>
             </form>

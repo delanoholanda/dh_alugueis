@@ -58,7 +58,11 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
   const validRentals = rentals
     .filter((r): r is Rental => r !== undefined && r !== null)
     .map(rental => {
-        if (rental.isOpenEnded) {
+        let currentTotalValue = rental.value;
+        let finalRentalDays = rental.rentalDays;
+        let finalExpectedReturnDate = rental.expectedReturnDate;
+
+        if (rental.isOpenEnded && !rental.actualReturnDate) { // Only calculate for open rentals that are not yet finalized
             const billableDays = countBillableDays(
                 rental.rentalStartDate,
                 todayStr,
@@ -66,16 +70,21 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
                 rental.chargeSundays ?? true
             );
             // 'rental.value' for open-ended is the daily rate
-            const calculatedValue = billableDays * rental.value; 
-            return {
-                ...rental,
-                value: calculatedValue,
-                rentalDays: billableDays,
-                // Set expectedReturnDate to today for display purposes in the consolidated receipt
-                expectedReturnDate: todayStr
-            };
+            currentTotalValue = billableDays * rental.value; 
+            finalRentalDays = billableDays;
+            finalExpectedReturnDate = todayStr; // For display purposes on the consolidated receipt
         }
-        return rental;
+        
+        const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+        
+        return {
+            ...rental,
+            value: currentTotalValue, // The contract's total value
+            totalPaid: totalPaid,
+            pendingValue: Math.max(0, currentTotalValue - totalPaid), // The amount still pending
+            rentalDays: finalRentalDays,
+            expectedReturnDate: finalExpectedReturnDate
+        };
     });
 
   if (validRentals.length === 0) {
@@ -83,7 +92,7 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
   }
 
 
-  const totalValue = validRentals.reduce((sum, rental) => sum + rental.value, 0);
+  const totalValue = validRentals.reduce((sum, rental) => sum + rental.pendingValue, 0);
 
   let pixPayload: string | null = null;
   if (companySettings.pixKey && totalValue > 0) {

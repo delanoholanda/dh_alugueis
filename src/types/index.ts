@@ -40,6 +40,15 @@ export interface RentalPhoto {
   uploadedAt: string;
 }
 
+export interface Payment {
+  id: string;
+  rentalId: number;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: PaymentMethod;
+  isPartial: boolean;
+}
+
 export interface Rental {
   id: number; 
   customerId: string;
@@ -67,6 +76,7 @@ export interface Rental {
   chargeSundays?: boolean;
   returnNotificationSent?: string | null;
   photos?: RentalPhoto[];
+  payments?: Payment[];
 }
 
 export interface ExpenseCategory {

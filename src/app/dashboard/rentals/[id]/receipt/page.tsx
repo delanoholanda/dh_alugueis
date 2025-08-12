@@ -42,17 +42,19 @@ export default async function RentalContractPage({ params }: { params: { id: str
   ]);
 
   let pixPayload: string | null = null;
-  const pixAmount = rental.isOpenEnded ? 0 : rental.value;
-  if (rental.paymentMethod === 'pix' && companySettings.pixKey && pixAmount > 0) {
+  const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+  const pendingValue = rental.value - totalPaid;
+
+  if (rental.paymentMethod === 'pix' && companySettings.pixKey && pendingValue > 0 && !rental.isOpenEnded) {
     const city = extractCityFromAddress(companySettings.address);
-    const txidForPix = `DHALUGUEIS${rental.id.toString().padStart(6, '0')}`;
-    const descriptionForPix = `Aluguel ${companySettings.companyName || 'Empresa'} - ID ${rental.id}`;
+    const txidForPix = `DHALUGUEIS${rental.id.toString().padStart(6, '0')}${rental.payments?.length ?? 0}`;
+    const descriptionForPix = `Pagamento Aluguel ID ${rental.id}`;
     
     pixPayload = generatePixPayload({
       pixKey: companySettings.pixKey,
       merchantName: companySettings.companyName || 'Nome Empresa',
       merchantCity: city,
-      amount: pixAmount,
+      amount: pendingValue,
       txid: txidForPix,
       description: descriptionForPix,
     });

@@ -8,13 +8,13 @@ import { getRentalById } from '@/actions/rentalActions';
 import { getCustomerById } from '@/actions/customerActions';
 import { getInventoryItems } from '@/actions/inventoryActions';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit } from 'lucide-react';
+import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit, History } from 'lucide-react';
 import type { Rental, PaymentMethod, Customer, RentalPhoto, Equipment as InventoryEquipment } from '@/types';
 import RentalPhotoGallery from '../../components/RentalPhotoGallery';
 import { MarkAsPaidDialog } from '../../components/MarkAsPaidDialog';
@@ -227,8 +227,8 @@ export default function RentalDetailsPage() {
     }
   };
 
-  const valorConsideradoPago = rental.paymentStatus === 'paid' ? rental.value : 0;
-  const valorPendente = rental.paymentStatus !== 'paid' && !rental.isOpenEnded ? rental.value : 0;
+  const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+  const pendingValue = rental.value - totalPaid;
   
   const paymentMethodDetails = paymentMethodMap[rental.paymentMethod || 'nao_definido'];
   const PaymentIcon = paymentMethodDetails?.icon;
@@ -409,7 +409,7 @@ export default function RentalDetailsPage() {
                     variant={getPaymentStatusVariant(rental.paymentStatus)} 
                     className={cn("text-sm", isPayable && "cursor-pointer hover:opacity-80 transition-opacity")}
                     onClick={handleBadgeClick}
-                    title={isPayable ? "Clique para marcar como pago" : ""}
+                    title={isPayable ? "Clique para registrar um pagamento" : ""}
                 >
                     {paymentStatusMap[rental.paymentStatus]}
                 </Badge>
@@ -435,17 +435,49 @@ export default function RentalDetailsPage() {
               )}
               <hr />
               <div>
-                <p className="text-sm text-muted-foreground">Valor Considerado Pago</p>
-                <p className="font-medium text-green-600">{formatToBRL(valorConsideradoPago)}</p>
+                <p className="text-sm text-muted-foreground">Valor Total Pago</p>
+                <p className="font-medium text-green-600">{formatToBRL(totalPaid)}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Saldo Pendente/Devido</p>
-                <p className="font-medium text-red-600">{formatToBRL(valorPendente)}</p>
+                <p className="text-sm text-muted-foreground">Saldo Pendente</p>
+                <p className="font-medium text-red-600">{formatToBRL(pendingValue)}</p>
               </div>
-             
             </CardContent>
           </Card>
         </div>
+
+        {rental.payments && rental.payments.length > 0 && (
+          <div className="lg:col-span-3 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-headline flex items-center"><History className="mr-2 h-5 w-5 text-primary" />Histórico de Pagamentos</CardTitle>
+                <CardDescription>Todos os pagamentos registrados para este aluguel.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b">
+                                <th className="p-2 text-left font-medium text-muted-foreground">Data</th>
+                                <th className="p-2 text-left font-medium text-muted-foreground">Método</th>
+                                <th className="p-2 text-right font-medium text-muted-foreground">Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rental.payments.map(p => (
+                                <tr key={p.id} className="border-b last:border-0">
+                                    <td className="p-2">{format(parseISO(p.paymentDate), 'P', { locale: ptBR })}</td>
+                                    <td className="p-2 capitalize">{paymentMethodMap[p.paymentMethod]?.label || p.paymentMethod}</td>
+                                    <td className="p-2 text-right font-mono">{formatToBRL(p.amount)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
             <RentalPhotoGallery 

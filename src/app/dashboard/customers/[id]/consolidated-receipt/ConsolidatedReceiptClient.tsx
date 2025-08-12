@@ -144,7 +144,7 @@ const formatDocumentForDisplay = (docType?: 'cpf' | 'cnpj', docNumber?: string |
 };
 
 interface ConsolidatedReceiptClientProps {
-  rentals: Rental[];
+  rentals: Array<Rental & { totalPaid: number; pendingValue: number }>;
   customer: Customer;
   companySettings: CompanyDetails;
   inventory: InventoryItem[];
@@ -259,7 +259,7 @@ export default function ConsolidatedReceiptClient({
         {rentals.map((rental, index) => (
             <section key={rental.id} className="contract-section mt-4 border-t pt-2">
                 <div className="flex justify-between items-baseline mb-1">
-                    <h3 className="font-semibold text-sm">Contrato de Aluguel {index + 1}</h3>
+                    <h3 className="font-semibold text-sm">Contrato de Aluguel {index + 1} (ID: {rental.id})</h3>
                     <p className="text-xs">
                         Período: <span className="font-bold">{format(parseISO(rental.rentalStartDate), "dd/MM/yyyy")} - {format(parseISO(rental.expectedReturnDate), "dd/MM/yyyy")}</span>
                     </p>
@@ -295,9 +295,15 @@ export default function ConsolidatedReceiptClient({
                             <td className="text-right">{formatToBRL(rental.freightValue)}</td>
                         </tr>
                     )}
+                    {(rental.totalPaid ?? 0) > 0 && (
+                        <tr className="font-bold text-green-700">
+                            <td colSpan={4}>Adiantamento / Pago Parcial</td>
+                            <td className="text-right">-{formatToBRL(rental.totalPaid ?? 0)}</td>
+                        </tr>
+                    )}
                     <tr className="font-bold bg-gray-50">
-                        <td colSpan={4}>Subtotal do Contrato #{index + 1}</td>
-                        <td className="text-right">{formatToBRL(rental.value)}</td>
+                        <td colSpan={4}>Subtotal Pendente do Contrato #{index + 1}</td>
+                        <td className="text-right">{formatToBRL(rental.pendingValue)}</td>
                     </tr>
                 </tbody>
                 </table>
@@ -334,7 +340,7 @@ export default function ConsolidatedReceiptClient({
             <table className="contract-table w-auto ml-auto">
               <tbody>
                 <tr className="total-line text-base">
-                  <td>Total Geral Consolidado:</td>
+                  <td>Total Geral Pendente:</td>
                   <td className="text-right">{formatToBRL(totalValue)}</td>
                 </tr>
               </tbody>

@@ -58,21 +58,35 @@ function runMigrations(db: Database.Database) {
         const hasDocumentTypeColumn = columns.some(col => col.name === 'documentType');
         const hasDocumentNumberColumn = columns.some(col => col.name === 'documentNumber');
 
-        if (!hasDocumentTypeColumn && !hasDocumentNumberColumn) {
-            console.log("[DB Migration] Applying migration: Adding 'documentType' and 'documentNumber' columns to 'customers' table.");
-            db.exec(`
-                ALTER TABLE customers ADD COLUMN documentType TEXT CHECK(documentType IN ('cpf', 'cnpj')) DEFAULT 'cpf';
-                ALTER TABLE customers ADD COLUMN documentNumber TEXT;
-            `);
-            // Attempt to migrate existing CPF data
-            db.exec(`UPDATE customers SET documentNumber = cpf WHERE cpf IS NOT NULL AND cpf != '';`);
-            console.log("[DB Migration] New document columns added and CPF data migrated.");
-        } else {
-            console.log("[DB Migration] Document columns already exist, skipping that migration.");
+        if (!hasDocumentTypeColumn || !hasDocumentNumberColumn) {
+            if (!hasDocumentTypeColumn) {
+              db.exec(`ALTER TABLE customers ADD COLUMN documentType TEXT CHECK(documentType IN ('cpf', 'cnpj')) DEFAULT 'cpf';`);
+            }
+            if (!hasDocumentNumberColumn) {
+               db.exec(`ALTER TABLE customers ADD COLUMN documentNumber TEXT;`);
+            }
+            console.log("[DB Migration] New document columns added.");
         }
-
     } catch (error) {
         console.error("[DB Migration] Error during document columns check/add:", error);
+    }
+
+    // Migration for payments table
+    try {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS payments (
+                id TEXT PRIMARY KEY,
+                rentalId INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                paymentDate TEXT NOT NULL,
+                paymentMethod TEXT NOT NULL,
+                isPartial INTEGER DEFAULT 0,
+                FOREIGN KEY (rentalId) REFERENCES rentals(id) ON DELETE CASCADE
+            );
+        `);
+        console.log("[DB Migration] Ensured 'payments' table exists.");
+    } catch (error) {
+        console.error("[DB Migration] Error ensuring 'payments' table exists:", error);
     }
     
     console.log("[DB Migration] Schema check complete.");
@@ -100,7 +114,7 @@ export function getDb() {
   console.log(`[DB] Path for database file: ${dbPath}`);
   
   try {
-    dbInstance = new Database(dbPath, { verbose: console.log }); 
+    dbInstance = new Database(dbPath, { verbose: process.env.NODE_ENV === 'development' ? console.log : undefined }); 
     console.log(`[DB] Database connection established at ${dbPath}.`);
   } catch (error) {
     console.error(`[DB] CRITICAL ERROR initializing database at ${dbPath}:`, error);
@@ -108,10 +122,11 @@ export function getDb() {
   }
   
   try {
+    dbInstance.pragma('journal_mode = WAL');
     dbInstance.pragma('foreign_keys = ON');
-    console.log("[DB] PRAGMA foreign_keys set to ON.");
-  } catch (fkError) {
-    console.warn(`[DB] WARNING: Failed to set PRAGMA foreign_keys = ON. Error: ${(fkError as Error).message}`);
+    console.log("[DB] PRAGMA journal_mode set to WAL and foreign_keys set to ON.");
+  } catch (pragmaError) {
+    console.warn(`[DB] WARNING: Failed to set PRAGMAs. Error: ${(pragmaError as Error).message}`);
   }
 
   // Handle schema creation or migration
@@ -238,6 +253,16 @@ function initializeSchemaAndSeed(db: Database.Database) {
         subject TEXT,
         errorDetails TEXT,
         triggerType TEXT NOT NULL CHECK(triggerType IN ('automatic', 'manual'))
+    );
+
+    CREATE TABLE IF NOT EXISTS payments (
+        id TEXT PRIMARY KEY,
+        rentalId INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        paymentDate TEXT NOT NULL,
+        paymentMethod TEXT NOT NULL,
+        isPartial INTEGER DEFAULT 0,
+        FOREIGN KEY (rentalId) REFERENCES rentals(id) ON DELETE CASCADE
     );
   `);
   

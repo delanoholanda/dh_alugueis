@@ -210,6 +210,9 @@ export default function RentalContractClient({ rental, customer, companySettings
   };
 
   const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
+  const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+  const pendingValue = rental.value - totalPaid;
+
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
   const valorPorExtenso = numberToWords(rental.value);
   const displayContractLogo = companySettings.contractLogoUrl || companySettings.companyLogoUrl || DEFAULT_COMPANY_LOGO;
@@ -394,10 +397,22 @@ export default function RentalContractClient({ rental, customer, companySettings
                       <td className="text-right">{formatToBRL(rental.freightValue)}</td>
                     </tr>
                   )}
+                   {totalPaid > 0 && (
+                    <tr className="text-green-700 font-semibold">
+                        <td>Adiantamento / Pago Parcial:</td>
+                        <td className="text-right">-{formatToBRL(totalPaid)}</td>
+                    </tr>
+                   )}
                   <tr className="total-line">
                     <td>{rental.isOpenEnded ? 'Valor Diária (Total):' : 'Total Geral:'}</td>
                     <td className="text-right">{formatToBRL(rental.value)}</td>
                   </tr>
+                  {pendingValue > 0 && (
+                    <tr className="total-line text-destructive">
+                        <td>Valor Pendente:</td>
+                        <td className="text-right">{formatToBRL(pendingValue)}</td>
+                    </tr>
+                  )}
                 </tbody></table>
 
             <div className="mt-1">
@@ -418,7 +433,7 @@ export default function RentalContractClient({ rental, customer, companySettings
                 </div>
             )}
 
-            {rental.paymentMethod === 'pix' && pixPayload && (
+            {rental.paymentMethod === 'pix' && pixPayload && pendingValue > 0 && (
               <div className="pix-section">
                 <h3 className="font-semibold text-sm mb-1">Pagar com PIX:</h3>
                 <QRCodeCanvas value={pixPayload} size={110} level="M" includeMargin={true} />
@@ -428,7 +443,7 @@ export default function RentalContractClient({ rental, customer, companySettings
                 </div>
               </div>
             )}
-             {rental.paymentMethod === 'pix' && !pixPayload && companySettings.pixKey && rental.value > 0 && !rental.isOpenEnded && (
+             {rental.paymentMethod === 'pix' && !pixPayload && companySettings.pixKey && pendingValue > 0 && !rental.isOpenEnded && (
                 <div className="pix-section">
                     <p className="text-xs text-muted-foreground">Gerando QR Code PIX...</p>
                     <div className="mt-1 text-center">
