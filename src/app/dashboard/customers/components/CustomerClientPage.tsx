@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { CustomerForm } from './CustomerForm';
 import { createCustomer, updateCustomer, deleteCustomer, getCustomers } from '@/actions/customerActions';
-import { PlusCircle, Edit, Trash2, User, Phone, Fingerprint, Home, UsersRound, History, PackageX, FileText, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, User, Phone, Fingerprint, Home, UsersRound, History, PackageX, FileText, AlertTriangle, Calendar as CalendarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -29,6 +29,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn, formatToBRL, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 
 const responsivenessMap: Record<Customer['responsiveness'], string> = {
   'very responsive': 'Muito Responsivo',
@@ -72,6 +75,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>(undefined);
   const { toast } = useToast();
   const [selectedRentals, setSelectedRentals] = useState<Record<string, number[]>>({});
+  const [closingDates, setClosingDates] = useState<Record<string, Date | undefined>>({});
 
   const payableRentalsByCustomer = useMemo(() => {
     const map: Record<string, Rental[]> = {};
@@ -89,9 +93,24 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
       const newSelection = currentSelection.includes(rentalId)
         ? currentSelection.filter(id => id !== rentalId)
         : [...currentSelection, rentalId];
+      
+      // If the selection for a customer becomes empty, also remove their closing date
+      if (newSelection.length === 0) {
+        setClosingDates(currentDates => {
+          const newDates = {...currentDates};
+          delete newDates[customerId];
+          return newDates;
+        });
+      }
+
       return { ...prev, [customerId]: newSelection };
     });
   };
+
+  const handleDateChange = (customerId: string, date: Date | undefined) => {
+    setClosingDates(prev => ({ ...prev, [customerId]: date }));
+  };
+
 
   const refreshCustomerList = async () => {
     const refreshedCustomers = await getCustomers();
@@ -166,6 +185,10 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
           {customers.map((customer) => {
             const customerPayableRentals = payableRentalsByCustomer[customer.id] || [];
             const customerSelectedRentals = selectedRentals[customer.id] || [];
+            const hasOpenEndedSelected = customerSelectedRentals.some(id => 
+                payableRentalsByCustomer[customer.id]?.find(r => r.id === id)?.isOpenEnded
+            );
+            const closeUntilDate = closingDates[customer.id];
             
             return (
             <Card key={customer.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -286,9 +309,33 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                     </AlertDialog>
                 </div>
                  {customerSelectedRentals.length > 0 && (
-                    <div className="pt-2 border-t">
+                    <div className="pt-2 border-t space-y-2">
+                        {hasOpenEndedSelected && (
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                      "w-full justify-start text-left font-normal",
+                                      !closeUntilDate && "text-muted-foreground"
+                                    )}
+                                  >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {closeUntilDate ? format(closeUntilDate, "PPP", { locale: ptBR }) : <span>Fechar em aberto até...</span>}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                  <Calendar
+                                    mode="single"
+                                    selected={closeUntilDate}
+                                    onSelect={(date) => handleDateChange(customer.id, date)}
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                            </Popover>
+                        )}
                         <Button asChild className="w-full">
-                            <Link href={`/dashboard/customers/${customer.id}/consolidated-receipt?rental_ids=${customerSelectedRentals.join(',')}`}>
+                            <Link href={`/dashboard/customers/${customer.id}/consolidated-receipt?rental_ids=${customerSelectedRentals.join(',')}${closeUntilDate ? `&close_until=${format(closeUntilDate, 'yyyy-MM-dd')}`: ''}`}>
                                 <FileText className="h-4 w-4 mr-2" />
                                 Gerar Contrato Consolidado ({customerSelectedRentals.length})
                             </Link>

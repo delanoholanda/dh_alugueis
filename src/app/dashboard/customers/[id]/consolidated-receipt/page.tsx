@@ -8,7 +8,7 @@ import { generatePixPayload } from '@/lib/pix';
 import ConsolidatedReceiptClient from './ConsolidatedReceiptClient';
 import type { Rental } from '@/types';
 import { countBillableDays } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 
 
 function extractCityFromAddress(address?: string): string {
@@ -25,7 +25,7 @@ function extractCityFromAddress(address?: string): string {
 
 interface ConsolidatedReceiptPageProps {
   params: { id: string };
-  searchParams: { rental_ids?: string };
+  searchParams: { rental_ids?: string; close_until?: string };
 }
 
 export default async function ConsolidatedReceiptPage({ params, searchParams }: ConsolidatedReceiptPageProps) {
@@ -40,6 +40,16 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
   if (rentalIds.length === 0) {
     notFound();
   }
+  
+  // Determine the date to calculate open-ended rentals until.
+  let closeUntilDate = new Date();
+  if (searchParams.close_until) {
+      const parsedDate = parseISO(searchParams.close_until);
+      if (isValid(parsedDate)) {
+          closeUntilDate = parsedDate;
+      }
+  }
+  const closeUntilDateStr = format(closeUntilDate, 'yyyy-MM-dd');
 
   // Fetch all necessary data in parallel
   const [customer, companySettings, inventory, ...rentals] = await Promise.all([
@@ -52,8 +62,6 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
   if (!customer || rentals.every(r => r === undefined)) {
     notFound();
   }
-  
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
 
   const validRentals = rentals
     .filter((r): r is Rental => r !== undefined && r !== null)
@@ -65,14 +73,14 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
         if (rental.isOpenEnded && !rental.actualReturnDate) { // Only calculate for open rentals that are not yet finalized
             const billableDays = countBillableDays(
                 rental.rentalStartDate,
-                todayStr,
+                closeUntilDateStr,
                 rental.chargeSaturdays ?? true,
                 rental.chargeSundays ?? true
             );
             // 'rental.value' for open-ended is the daily rate
             currentTotalValue = billableDays * rental.value; 
             finalRentalDays = billableDays;
-            finalExpectedReturnDate = todayStr; // For display purposes on the consolidated receipt
+            finalExpectedReturnDate = closeUntilDateStr; // For display purposes on the consolidated receipt
         }
         
         const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
