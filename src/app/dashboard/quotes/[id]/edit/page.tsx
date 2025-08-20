@@ -1,5 +1,5 @@
 
-import { QuoteForm } from '../../components/QuoteForm';
+import { QuoteForm } from '@/app/dashboard/quotes/components/QuoteForm';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { getQuoteById, updateQuote } from '@/actions/quoteActions';
 import type { Quote } from '@/types';
