@@ -2,6 +2,7 @@
 import { QuoteForm } from '@/app/dashboard/quotes/components/QuoteForm';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { getQuoteById, updateQuote } from '@/actions/quoteActions';
+import { getRentals } from '@/actions/rentalActions';
 import type { Quote } from '@/types';
 import { ClipboardList } from 'lucide-react';
 import { notFound } from 'next/navigation';
@@ -19,11 +20,12 @@ export default async function EditQuotePage({ params }: EditQuotePageProps) {
     notFound();
   }
 
-  const [quote, customers, inventory, equipmentTypes] = await Promise.all([
+  const [quote, customers, inventory, equipmentTypes, allRentals] = await Promise.all([
     getQuoteById(quoteId),
     getCustomers(),
     getInventoryItems(),
     getEquipmentTypes(),
+    getRentals(),
   ]);
 
   if (!quote) {
@@ -48,6 +50,7 @@ export default async function EditQuotePage({ params }: EditQuotePageProps) {
         customers={customers}
         inventory={inventory}
         equipmentTypes={equipmentTypes}
+        allRentals={allRentals}
         formTitle="Editar Orçamento"
         submitButtonText="Salvar Alterações"
       />

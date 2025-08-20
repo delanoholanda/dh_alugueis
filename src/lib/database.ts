@@ -128,6 +128,18 @@ function runMigrations(db: Database.Database) {
     } catch(error) {
         console.error("[DB Migration] Error ensuring 'quotes' or 'quote_equipment' tables exist:", error);
     }
+
+    // Migration for rental_equipment table to add customDailyRentalRate
+    try {
+        const rentalEquipmentCols = db.pragma('table_info(rental_equipment)') as { name: string }[];
+        if (!rentalEquipmentCols.some(col => col.name === 'customDailyRentalRate')) {
+            console.log("[DB Migration] Applying migration: Adding 'customDailyRentalRate' column to 'rental_equipment' table.");
+            db.exec('ALTER TABLE rental_equipment ADD COLUMN customDailyRentalRate REAL');
+            console.log("[DB Migration] 'customDailyRentalRate' column added successfully to rental_equipment.");
+        }
+    } catch (error) {
+         console.error("[DB Migration] Error during 'customDailyRentalRate' column check/add for rental_equipment:", error);
+    }
     
     console.log("[DB Migration] Schema check complete.");
 }

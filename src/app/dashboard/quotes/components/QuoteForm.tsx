@@ -1,19 +1,19 @@
+
 'use client';
 
-import type { Quote, Customer, Equipment as InventoryEquipment, EquipmentType } from '@/types';
+import type { Quote, Customer, Equipment as InventoryEquipment, EquipmentType, Rental } from '@/types';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
-import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, UserPlus, PackagePlus, MapPin, ChevronsUpDown, Check, Package } from 'lucide-react';
+import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, UserPlus, PackagePlus, MapPin, Info, ChevronsUpDown, Check, Package } from 'lucide-react';
 import { format, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
@@ -73,6 +73,7 @@ interface QuoteFormProps {
   customers: Customer[];
   inventory: InventoryEquipment[];
   equipmentTypes: EquipmentType[];
+  allRentals: Rental[];
   onSubmitAction: (data: QuoteFormValues) => Promise<Quote | null | void>;
   formTitle: string;
   submitButtonText: string;
@@ -82,7 +83,8 @@ export function QuoteForm({
   initialData, 
   customers: initialCustomers, 
   inventory: initialInventory, 
-  equipmentTypes: initialEquipmentTypes, 
+  equipmentTypes: initialEquipmentTypes,
+  allRentals, 
   onSubmitAction, 
   formTitle, 
   submitButtonText 
@@ -102,10 +104,34 @@ export function QuoteForm({
   const [inventoryList, setInventoryList] = useState<InventoryEquipment[]>(() =>
     initialInventory.sort((a, b) => a.name.localeCompare(b.name))
   );
+  const [inventoryWithAvailability, setInventoryWithAvailability] = useState<Array<InventoryEquipment & { availableQuantity: number }>>([]);
   const [equipmentTypesList, setEquipmentTypesList] = useState<EquipmentType[]>(() =>
     initialEquipmentTypes.sort((a, b) => a.name.localeCompare(b.name))
   );
   const [currentEquipmentIndexForAddItem, setCurrentEquipmentIndexForAddItem] = useState<number | null>(null);
+
+  useEffect(() => {
+    const calculateAvailability = () => {
+      const rentedMap = new Map<string, number>();
+      allRentals.forEach(r => {
+        if (!r.actualReturnDate && (!initialData || r.id !== initialData.id)) {
+          r.equipment.forEach(eq => {
+            rentedMap.set(eq.equipmentId, (rentedMap.get(eq.equipmentId) || 0) + eq.quantity);
+          });
+        }
+      });
+
+      const newInventoryWithAvailability = inventoryList.map(invItem => {
+        const totalRentedByOthers = rentedMap.get(invItem.id) || 0;
+        const available = invItem.quantity - totalRentedByOthers;
+        return { ...invItem, availableQuantity: Math.max(0, available) };
+      }).sort((a, b) => a.name.localeCompare(b.name));
+      
+      setInventoryWithAvailability(newInventoryWithAvailability);
+    };
+
+    calculateAvailability();
+  }, [inventoryList, allRentals, initialData]);
 
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
@@ -288,25 +314,120 @@ export function QuoteForm({
             
             <div>
               <FormLabel className="text-base font-semibold">Equipamento(s)</FormLabel>
-              {fields.map((item, index) => (
-                <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end mt-2 p-3 border rounded-md relative">
-                  <FormField control={form.control} name={`equipment.${index}.equipmentId`} render={({ field }) => (
-                    <FormItem className="flex-grow"><FormLabel className="text-xs text-muted-foreground">Item</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
-                        <SelectContent><SelectGroup>
-                          {inventoryList.map(inv => (<SelectItem key={inv.id} value={inv.id}>{inv.name}</SelectItem>))}
-                        </SelectGroup></SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name={`equipment.${index}.quantity`} render={({ field }) => (
-                    <FormItem className="min-w-[80px]"><FormLabel className="text-xs text-muted-foreground">Qtd.</FormLabel><Input type="number" placeholder="Qtd" {...field} min="1"/><FormMessage /></FormItem>
-                  )} />
-                  <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)} title="Remover" className="self-end h-9 w-9"><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              ))}
+              {fields.map((item, index) => {
+                 const selectedEquipmentId = watchedEquipment[index]?.equipmentId;
+                 const selectedEquipmentDetails = inventoryList.find(inv => inv.id === selectedEquipmentId);
+                return (
+                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-3 items-end mt-2 p-3 border rounded-md relative">
+                    <FormField
+                      control={form.control}
+                      name={`equipment.${index}.equipmentId`}
+                      render={({ field }) => (
+                        <FormItem className="flex-grow min-w-[200px]">
+                          {index === 0 && <FormLabel className="text-xs text-muted-foreground">Item</FormLabel>}
+                          <Popover open={openEquipmentCombobox[index] || false} onOpenChange={(open) => setOpenEquipmentCombobox(prev => ({...prev, [index]: open}))}>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className={cn("w-full justify-between", !field.value && "text-muted-foreground")}
+                                >
+                                  {field.value
+                                    ? inventoryList.find((eq) => eq.id === field.value)?.name
+                                    : "Selecione..."}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                               <Command>
+                                  <CommandInput placeholder="Buscar equipamento..." />
+                                  <CommandList>
+                                    <CommandEmpty>Nenhum equipamento encontrado.</CommandEmpty>
+                                    <CommandGroup>
+                                    {inventoryWithAvailability.map(invItem => (
+                                          <CommandItem
+                                            value={`${invItem.name} ${invItem.id}`}
+                                            key={invItem.id}
+                                            onSelect={() => {
+                                              form.setValue(`equipment.${index}.equipmentId`, invItem.id, { shouldValidate: true });
+                                              const rate = getEquipmentStandardRate(invItem.id);
+                                              const currentCustomRate = form.getValues(`equipment.${index}.customDailyRentalRate`);
+                                              if (rate !== undefined && (currentCustomRate === undefined || String(currentCustomRate).trim() === '' || currentCustomRate === getEquipmentStandardRate(field.value)) ) {
+                                                form.setValue(`equipment.${index}.customDailyRentalRate`, rate, {shouldValidate: true});
+                                              }
+                                              setOpenEquipmentCombobox(prev => ({...prev, [index]: false}));
+                                            }}
+                                          >
+                                            <Check
+                                              className={cn("mr-2 h-4 w-4", invItem.id === field.value ? "opacity-100" : "opacity-0")}
+                                            />
+                                             <div className="flex items-center gap-3">
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarImage src={invItem.imageUrl || undefined} alt={invItem.name} />
+                                                    <AvatarFallback><Package className="h-4 w-4" /></AvatarFallback>
+                                                </Avatar>
+                                                <span>{invItem.name} (Disp: {invItem.availableQuantity})</span>
+                                            </div>
+                                          </CommandItem>
+                                    ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                               </Command>
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`equipment.${index}.customDailyRentalRate`}
+                      render={({ field }) => (
+                        <FormItem className="min-w-[150px]">
+                           {index === 0 && <FormLabel className="text-xs text-muted-foreground">Taxa Diária (R$)</FormLabel>}
+                           <div className="flex items-center gap-1">
+                            <FormControl>
+                                <Input
+                                type="text"
+                                placeholder="Padrão se vazio"
+                                value={field.value === undefined ? '' : formatToBRL(field.value)}
+                                onChange={(e) => {
+                                  const parsedValue = parseFromBRL(e.target.value);
+                                  field.onChange(e.target.value.trim() === '' || isNaN(parsedValue) ? undefined : parsedValue);
+                                }}
+                                className="w-full"
+                                />
+                            </FormControl>
+                            {selectedEquipmentDetails && (
+                                <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="ghost" size="icon" type="button" className="h-8 w-8 p-0">
+                                        <Info className="h-4 w-4 text-muted-foreground"/>
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto text-xs p-2">
+                                    Taxa Padrão: {formatToBRL(selectedEquipmentDetails.dailyRentalRate)}
+                                </PopoverContent>
+                                </Popover>
+                            )}
+                           </div>
+                           <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField control={form.control} name={`equipment.${index}.quantity`} render={({ field }) => (
+                      <FormItem className="min-w-[80px]">
+                        {index === 0 && <FormLabel className="text-xs text-muted-foreground">Qtd.</FormLabel>}
+                        <Input type="number" placeholder="Qtd" {...field} min="1"/>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)} title="Remover" className="self-end h-9 w-9"><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                )
+              })}
               <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => append({ equipmentId: '', quantity: 1, customDailyRentalRate: undefined })}><PlusCircle className="mr-2 h-4 w-4" /> Adicionar</Button>
             </div>
 

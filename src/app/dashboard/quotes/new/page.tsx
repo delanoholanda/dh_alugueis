@@ -2,6 +2,7 @@
 import { QuoteForm } from '../components/QuoteForm';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { createQuote } from '@/actions/quoteActions';
+import { getRentals } from '@/actions/rentalActions';
 import type { Quote } from '@/types';
 import { ClipboardList } from 'lucide-react';
 import { getCustomers } from '@/actions/customerActions';
@@ -10,9 +11,12 @@ import { getEquipmentTypes } from '@/actions/equipmentTypeActions';
 
 export default async function NewQuotePage() {
   
-  const customers = await getCustomers();
-  const inventory = await getInventoryItems();
-  const equipmentTypes = await getEquipmentTypes();
+  const [customers, inventory, equipmentTypes, allRentals] = await Promise.all([
+    getCustomers(),
+    getInventoryItems(),
+    getEquipmentTypes(),
+    getRentals(),
+  ]);
   
   async function handleCreateQuote(data: Omit<Quote, 'id' | 'expectedReturnDate' | 'customerName' | 'status' | 'quoteDate'> & { 
     equipment: Array<{ equipmentId: string; quantity: number; customDailyRentalRate?: number | null }>;
@@ -33,6 +37,7 @@ export default async function NewQuotePage() {
         customers={customers}
         inventory={inventory}
         equipmentTypes={equipmentTypes}
+        allRentals={allRentals}
         formTitle="Novo Orçamento"
         submitButtonText="Criar Orçamento"
       />
