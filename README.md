@@ -3,8 +3,6 @@
 
 This is a NextJS starter in Firebase Studio.
 
-To get started, take a look at src/app/page.tsx.
-
 ## Rodando a Aplicação Localmente
 
 Siga os passos abaixo para configurar e rodar esta aplicação no seu ambiente local.
@@ -142,5 +140,33 @@ Para garantir a segurança de todos os seus dados, é fundamental entender como 
         2.  Apague o arquivo `package-lock.json`.
         3.  Rode `npm install` novamente no seu terminal Windows. Isso forçará o npm a baixar e compilar as dependências corretamente para o seu sistema.
         4.  Após a instalação, tente rodar `npm run dev` novamente.
+
+*   **Erro `database disk image is malformed`**:
+    *   Este erro indica que o arquivo do banco de dados (`data/dhalugueis.db`) foi corrompido. Isso pode acontecer por vários motivos, incluindo o desligamento incorreto do computador, falhas de disco ou restauração de um backup danificado.
+    *   **Solução (Reset do Banco de Dados):**
+        1.  **Atenção:** Este procedimento apagará todos os dados existentes. Certifique-se de ter um backup seguro, se necessário.
+        2.  Pare a aplicação, se estiver rodando (`Ctrl+C` no terminal).
+        3.  Vá para a pasta `data` na raiz do seu projeto.
+        4.  **Apague** o arquivo `dhalugueis.db`.
+        5.  Inicie a aplicação novamente com `npm run dev`. Um novo banco de dados limpo será criado automaticamente com os dados padrão (usuário admin, tipos de equipamento, etc.).
+
+*   **Migração de Dados do Container Docker (Para versões antigas)**
+    *   **Problema:** Se você estava usando uma versão antiga do `docker-compose.yml` que não mapeava a pasta `data`, seus dados (banco de dados, imagens) podem estar "presos" dentro do container Docker e não estarem refletidos na pasta `data` do seu projeto.
+    *   **Solução (Passo a Passo para Migrar os Dados sem Perda):**
+        1.  **Encontre o nome do seu container:** No terminal, na pasta do seu projeto, rode `docker ps`. Você verá uma lista. Na coluna `NAMES`, encontre o nome do seu container (ex: `dhalugueis_container`).
+        2.  **Copie os dados de dentro do container para fora:** Use o comando abaixo, substituindo `NOME_DO_CONTAINER` pelo nome que você encontrou. O `.` no final é importante, pois significa "para a pasta atual".
+            ```bash
+            docker cp NOME_DO_CONTAINER:/app/data ./
+            ```
+            Isso criará (ou substituirá) a pasta `data` no seu projeto com os dados mais recentes que estavam dentro do container.
+        3.  **Pare o container antigo:**
+            ```bash
+            docker-compose down
+            ```
+        4.  **Inicie o novo container com a configuração correta:** Após garantir que seu `docker-compose.yml` está atualizado (com `volumes: - ./data:/app/data`), recrie o container:
+            ```bash
+            docker-compose up -d --build
+            ```
+            Agora, o Docker usará a pasta `data` que você acabou de copiar, e todos os seus dados estarão seguros e persistentes.
 
 Seguindo esses passos, você deverá conseguir executar e testar a aplicação completamente no seu ambiente local!

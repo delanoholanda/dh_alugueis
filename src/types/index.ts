@@ -79,6 +79,31 @@ export interface Rental {
   payments?: Payment[];
 }
 
+export interface Quote {
+  id: number;
+  customerId: string;
+  customerName?: string;
+  quoteDate: string;
+  rentalStartDate: string;
+  rentalDays: number;
+  expectedReturnDate: string;
+  equipment: Array<{
+    equipmentId: string;
+    quantity: number;
+    name?: string;
+    customDailyRentalRate?: number | null;
+  }>;
+  value: number;
+  freightValue?: number;
+  discountValue?: number;
+  notes?: string | null;
+  deliveryAddress?: string;
+  chargeSaturdays?: boolean;
+  chargeSundays?: boolean;
+  status: 'pending' | 'converted';
+}
+
+
 export interface ExpenseCategory {
   id: string;
   name: string;

@@ -18,7 +18,8 @@ import {
   BarChart,
   FileText,
   Bell,
-  MailCheck
+  MailCheck,
+  ClipboardList
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -55,6 +56,7 @@ interface NavItem {
 const mainNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Painel', iconName: 'LayoutDashboard' },
   { href: '/dashboard/rentals', label: 'Aluguéis', iconName: 'ScrollText' },
+  { href: '/dashboard/quotes', label: 'Orçamentos', iconName: 'ClipboardList' },
   { 
     href: '/dashboard/inventory', 
     label: 'Inventário Geral', 
@@ -159,13 +161,9 @@ export function SidebarNav() {
     if (item.href === '/dashboard') {
       return pathname === item.href;
     }
-    // Specific logic for parent items with children
-    if (item.href.startsWith('/dashboard/inventory') && pathname.startsWith('/dashboard/inventory')) return true;
-    if (item.href.startsWith('/dashboard/financials') && pathname.startsWith('/dashboard/financials')) return true;
-    if (item.href.startsWith('/dashboard/notifications') && pathname.startsWith('/dashboard/notifications')) return true;
-
-    // Default logic for other items
-    return pathname.startsWith(item.href) && item.href !== '/dashboard';
+    // Check if the current path starts with the item's href.
+    // This correctly handles parent items like /dashboard/inventory and its subpages.
+    return pathname.startsWith(item.href);
   };
 
   return (

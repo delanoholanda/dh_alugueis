@@ -88,6 +88,46 @@ function runMigrations(db: Database.Database) {
     } catch (error) {
         console.error("[DB Migration] Error ensuring 'payments' table exists:", error);
     }
+
+    // Migration for quotes tables
+    try {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS quotes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customerId TEXT NOT NULL,
+                customerName TEXT,
+                quoteDate TEXT NOT NULL,
+                rentalStartDate TEXT,
+                rentalDays INTEGER,
+                expectedReturnDate TEXT,
+                freightValue REAL,
+                discountValue REAL,
+                value REAL,
+                notes TEXT,
+                deliveryAddress TEXT,
+                chargeSaturdays INTEGER DEFAULT 1,
+                chargeSundays INTEGER DEFAULT 1,
+                status TEXT DEFAULT 'pending',
+                FOREIGN KEY (customerId) REFERENCES customers(id) ON DELETE RESTRICT
+            );
+        `);
+        console.log("[DB Migration] Ensured 'quotes' table exists.");
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS quote_equipment (
+                quoteId INTEGER NOT NULL,
+                equipmentId TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                name TEXT,
+                customDailyRentalRate REAL,
+                PRIMARY KEY (quoteId, equipmentId),
+                FOREIGN KEY (quoteId) REFERENCES quotes(id) ON DELETE CASCADE,
+                FOREIGN KEY (equipmentId) REFERENCES inventory(id) ON DELETE RESTRICT
+            );
+        `);
+        console.log("[DB Migration] Ensured 'quote_equipment' table exists.");
+    } catch(error) {
+        console.error("[DB Migration] Error ensuring 'quotes' or 'quote_equipment' tables exist:", error);
+    }
     
     console.log("[DB Migration] Schema check complete.");
 }
@@ -263,6 +303,36 @@ function initializeSchemaAndSeed(db: Database.Database) {
         paymentMethod TEXT NOT NULL,
         isPartial INTEGER DEFAULT 0,
         FOREIGN KEY (rentalId) REFERENCES rentals(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS quotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customerId TEXT NOT NULL,
+        customerName TEXT,
+        quoteDate TEXT NOT NULL,
+        rentalStartDate TEXT,
+        rentalDays INTEGER,
+        expectedReturnDate TEXT,
+        freightValue REAL,
+        discountValue REAL,
+        value REAL,
+        notes TEXT,
+        deliveryAddress TEXT,
+        chargeSaturdays INTEGER DEFAULT 1,
+        chargeSundays INTEGER DEFAULT 1,
+        status TEXT DEFAULT 'pending',
+        FOREIGN KEY (customerId) REFERENCES customers(id) ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS quote_equipment (
+        quoteId INTEGER NOT NULL,
+        equipmentId TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        name TEXT,
+        customDailyRentalRate REAL,
+        PRIMARY KEY (quoteId, equipmentId),
+        FOREIGN KEY (quoteId) REFERENCES quotes(id) ON DELETE CASCADE,
+        FOREIGN KEY (equipmentId) REFERENCES inventory(id) ON DELETE RESTRICT
     );
   `);
   
