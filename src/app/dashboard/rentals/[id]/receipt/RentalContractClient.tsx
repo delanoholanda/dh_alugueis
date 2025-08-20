@@ -233,8 +233,10 @@ export default function RentalContractClient({ rental, customer, companySettings
         .contract-container { max-width: 750px; margin: 0 auto; background-color: white; padding: 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.1); font-family: Arial, sans-serif; font-size: 11px; color: #333; border: 1px solid #eee; overflow-x: auto; }
         .contract-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
         .contract-header .logo-container { position: relative; width: 150px; height: 75px; flex-shrink: 0; }
+        .contract-header .logo-container img { width: 100%; height: 100%; object-fit: contain !important; }
         .contract-header .company-info { text-align: right; font-size: 10px; line-height: 1.1; }
         .contract-header .company-info h1 { font-size: 14px; margin-bottom: 2px;}
+        .contract-header .company-info p, .contract-section p { margin-top: 0; margin-bottom: 0; }
         .contract-section { margin-bottom: 0.5rem; line-height: 1.1; } 
         .contract-table { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; }
         .contract-table th, .contract-table td { border: 1px solid #ddd; padding: 0.25rem 0.4rem 0.5rem 0.4rem; text-align: left; vertical-align: middle; }
