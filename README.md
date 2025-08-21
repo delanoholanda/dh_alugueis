@@ -95,23 +95,21 @@ A aplicação foi projetada para ser robusta e garantir que seus dados não seja
 
 Para garantir a segurança de todos os seus dados, é fundamental entender como fazer o backup corretamente.
 
-*   **O Que Fazer Backup?** Para um backup completo, você deve copiar a **pasta `data` inteira**, que está na raiz do projeto.
-
-*   **Por Que a Pasta Inteira?**
-    *   `data/dhalugueis.db`: Este arquivo contém todo o seu banco de dados (clientes, aluguéis, inventário, finanças, etc.).
-    *   `data/uploads/`: Esta pasta contém todas as imagens que você salvou na aplicação (logos da empresa, fotos de clientes, de equipamentos e de aluguéis).
-
-*   **Como Fazer Backup:**
-    1.  Pare a aplicação, se estiver rodando.
-    2.  Copie toda a pasta `data` para um local seguro (um HD externo, um serviço de nuvem, etc.).
+*   **Como Fazer um Backup Seguro:**
+    1.  Navegue até a página **Configurações** na sua aplicação.
+    2.  Encontre o card **"Backup do Banco de Dados"**.
+    3.  Clique no botão **"Criar Backup do Banco de Dados"**.
+    4.  A aplicação criará uma cópia segura e completa do seu banco de dados na pasta `data/backups/` dentro do diretório do seu projeto. O arquivo terá um nome com data e hora (ex: `backup-2024-08-16_10-30-00.db`).
+    5.  Copie este novo arquivo de backup para um local seguro (um HD externo, um serviço de nuvem, etc.). **Importante:** Não copie apenas o arquivo `dhalugueis.db` da pasta `data`, pois ele pode não conter as últimas alterações. Use sempre a função de backup.
+    6.  **Lembre-se de fazer backup da pasta de uploads também:** Para um backup completo, copie também a pasta `data/uploads`. Ela contém todas as imagens (logos, fotos de clientes, etc.).
 
 *   **Como Restaurar um Backup:**
-    1.  Pare a aplicação.
-    2.  Se existir uma pasta `data` no seu projeto, apague-a ou renomeie-a.
-    3.  Copie a sua pasta `data` de backup para a raiz do projeto.
-    4.  Inicie a aplicação novamente. Todos os seus dados estarão restaurados.
-
-**Importante:** Apenas salvar o arquivo `dhalugueis.db` **NÃO** é suficiente, pois você perderia todas as imagens.
+    1.  Pare a aplicação (`docker-compose down`).
+    2.  Apague os arquivos `dhalugueis.db`, `dhalugueis.db-shm` e `dhalugueis.db-wal` da sua pasta `data`, se existirem.
+    3.  Copie o seu arquivo de backup (ex: `backup-2024-08-16_10-30-00.db`) para dentro da pasta `data`.
+    4.  **Renomeie** o arquivo de backup para `dhalugueis.db`.
+    5.  Se você tiver um backup da pasta `uploads`, substitua a pasta `data/uploads` existente pela sua.
+    6.  Inicie a aplicação novamente (`docker-compose up -d`). Todos os seus dados estarão restaurados.
 
 ### Funcionalidades de Inteligência Artificial (Genkit)
 

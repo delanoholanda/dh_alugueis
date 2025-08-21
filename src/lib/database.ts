@@ -7,7 +7,6 @@ import crypto from 'crypto';
 const DB_FILE_NAME = 'dhalugueis.db';
 const dataDirectory = path.join(process.cwd(), 'data');
 const dbPath = path.join(dataDirectory, DB_FILE_NAME);
-const oldDbPath = path.join(process.cwd(), DB_FILE_NAME);
 
 // Let's manage the singleton instance here.
 let dbInstance: Database.Database | null = null;
@@ -152,13 +151,6 @@ function initializeDb() {
     console.log(`[DB] Created data directory at ${dataDirectory}.`);
   }
   
-  // Auto-migration for legacy database file in root
-  if (fs.existsSync(oldDbPath) && !fs.existsSync(dbPath)) {
-    console.log(`[DB Migration] Found legacy database at ${oldDbPath}.`);
-    fs.renameSync(oldDbPath, dbPath);
-    console.log(`[DB Migration] Successfully moved database to ${dbPath}.`);
-  }
-
   const dbExists = fs.existsSync(dbPath);
   console.log(`[DB] Path for database file: ${dbPath}`);
   
@@ -197,17 +189,11 @@ function initializeDb() {
 }
 
 export function getDb() {
-  if (process.env.NODE_ENV === 'production') {
-    // In production, always return a fresh connection to avoid stale states in serverless environments
-    // or to ensure robustness in long-running processes. The initialization logic handles seeding/migration.
-    return initializeDb();
-  } else {
     // In development, use a singleton instance for performance and to avoid re-initializing on every hot-reload.
     if (!dbInstance) {
       dbInstance = initializeDb();
     }
     return dbInstance;
-  }
 }
 
 function initializeSchemaAndSeed(db: Database.Database) {

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2, Signature, DatabaseZap } from 'lucide-react';
+import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2, Signature, DatabaseBackup } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
@@ -17,7 +17,7 @@ import type { CompanyDetails, UserProfile } from '@/types';
 import { updateUser } from '@/actions/userActions';
 import { getCompanySettings, updateCompanySettings } from '@/actions/settingsActions';
 import { sendTestEmail } from '@/actions/emailActions';
-import { forceDbCheckpoint } from '@/actions/databaseActions';
+import { backupDatabase } from '@/actions/databaseActions';
 
 
 export default function SettingsPage() {
@@ -51,7 +51,7 @@ export default function SettingsPage() {
   });
   const [isSavingCompanyDetails, setIsSavingCompanyDetails] = useState(false);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
-  const [isCheckpointing, setIsCheckpointing] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
 
 
   // Load all settings on component mount
@@ -231,14 +231,15 @@ export default function SettingsPage() {
       setIsSendingTestEmail(false);
     };
 
-    const handleForceCheckpoint = async () => {
-        setIsCheckpointing(true);
+    const handleBackupDatabase = async () => {
+        setIsBackingUp(true);
         try {
-            const result = await forceDbCheckpoint();
+            const result = await backupDatabase();
             if (result.success) {
                 toast({
-                    title: "Sincronização Concluída",
+                    title: "Backup Criado!",
                     description: result.message,
+                    duration: 9000,
                     variant: "success"
                 });
             } else {
@@ -246,12 +247,12 @@ export default function SettingsPage() {
             }
         } catch (error) {
             toast({
-                title: "Erro na Sincronização",
+                title: "Erro no Backup",
                 description: (error as Error).message,
                 variant: "destructive"
             });
         } finally {
-            setIsCheckpointing(false);
+            setIsBackingUp(false);
         }
     };
 
@@ -468,19 +469,19 @@ export default function SettingsPage() {
             <Card className="shadow-lg">
                 <CardHeader>
                     <CardTitle className="font-headline flex items-center">
-                        <DatabaseZap className="mr-2 h-5 w-5 text-primary"/> Manutenção do Banco de Dados
+                        <DatabaseBackup className="mr-2 h-5 w-5 text-primary"/> Backup do Banco de Dados
                     </CardTitle>
-                    <CardDescription>Execute tarefas de manutenção no banco de dados.</CardDescription>
+                    <CardDescription>Crie um snapshot seguro do banco de dados para backup.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground mb-4">
-                        Clique aqui para forçar a sincronização de todas as alterações pendentes (do arquivo .wal) para o arquivo principal do banco de dados (`dhalugueis.db`). Útil para garantir um backup consistente.
+                        Clique aqui para criar uma cópia de segurança completa e consistente do banco de dados. O arquivo será salvo na pasta `data/backups` do seu servidor.
                     </p>
                 </CardContent>
                 <CardFooter>
-                    <Button onClick={handleForceCheckpoint} className="w-full sm:w-auto" disabled={isCheckpointing}>
-                        {isCheckpointing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseZap className="mr-2 h-4 w-4" />}
-                        {isCheckpointing ? 'Sincronizando...' : 'Forçar Sincronização (Checkpoint)'}
+                    <Button onClick={handleBackupDatabase} className="w-full sm:w-auto" disabled={isBackingUp}>
+                        {isBackingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseBackup className="mr-2 h-4 w-4" />}
+                        {isBackingUp ? 'Criando Backup...' : 'Criar Backup do Banco de Dados'}
                     </Button>
                 </CardFooter>
             </Card>
