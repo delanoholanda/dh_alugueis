@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2, Signature } from 'lucide-react';
+import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2, Signature, DatabaseZap } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
@@ -17,6 +17,7 @@ import type { CompanyDetails, UserProfile } from '@/types';
 import { updateUser } from '@/actions/userActions';
 import { getCompanySettings, updateCompanySettings } from '@/actions/settingsActions';
 import { sendTestEmail } from '@/actions/emailActions';
+import { forceDbCheckpoint } from '@/actions/databaseActions';
 
 
 export default function SettingsPage() {
@@ -50,6 +51,7 @@ export default function SettingsPage() {
   });
   const [isSavingCompanyDetails, setIsSavingCompanyDetails] = useState(false);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [isCheckpointing, setIsCheckpointing] = useState(false);
 
 
   // Load all settings on component mount
@@ -227,6 +229,30 @@ export default function SettingsPage() {
         });
       }
       setIsSendingTestEmail(false);
+    };
+
+    const handleForceCheckpoint = async () => {
+        setIsCheckpointing(true);
+        try {
+            const result = await forceDbCheckpoint();
+            if (result.success) {
+                toast({
+                    title: "Sincronização Concluída",
+                    description: result.message,
+                    variant: "success"
+                });
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            toast({
+                title: "Erro na Sincronização",
+                description: (error as Error).message,
+                variant: "destructive"
+            });
+        } finally {
+            setIsCheckpointing(false);
+        }
     };
 
   return (
@@ -437,6 +463,26 @@ export default function SettingsPage() {
                   {isSendingTestEmail ? 'Enviando...' : 'Enviar Email de Teste'}
                 </Button>
               </CardFooter>
+            </Card>
+
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle className="font-headline flex items-center">
+                        <DatabaseZap className="mr-2 h-5 w-5 text-primary"/> Manutenção do Banco de Dados
+                    </CardTitle>
+                    <CardDescription>Execute tarefas de manutenção no banco de dados.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4">
+                        Clique aqui para forçar a sincronização de todas as alterações pendentes (do arquivo .wal) para o arquivo principal do banco de dados (`dhalugueis.db`). Útil para garantir um backup consistente.
+                    </p>
+                </CardContent>
+                <CardFooter>
+                    <Button onClick={handleForceCheckpoint} className="w-full sm:w-auto" disabled={isCheckpointing}>
+                        {isCheckpointing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseZap className="mr-2 h-4 w-4" />}
+                        {isCheckpointing ? 'Sincronizando...' : 'Forçar Sincronização (Checkpoint)'}
+                    </Button>
+                </CardFooter>
             </Card>
 
         </div>
