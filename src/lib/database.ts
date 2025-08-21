@@ -8,7 +8,7 @@ const DB_FILE_NAME = 'dhalugueis.db';
 const dataDirectory = path.join(process.cwd(), 'data');
 const dbPath = path.join(dataDirectory, DB_FILE_NAME);
 
-// Let's manage the singleton instance here.
+// This will hold the single, persistent database instance.
 let dbInstance: Database.Database | null = null;
 
 function hashPassword(password: string): { salt: string; hash: string } {
@@ -145,7 +145,10 @@ function runMigrations(db: Database.Database) {
 }
 
 function initializeDb() {
-  // Ensure data directory exists for new setups
+  if (dbInstance) {
+    return dbInstance;
+  }
+  
   if (!fs.existsSync(dataDirectory)) {
     fs.mkdirSync(dataDirectory, { recursive: true });
     console.log(`[DB] Created data directory at ${dataDirectory}.`);
@@ -162,7 +165,6 @@ function initializeDb() {
     db.pragma('foreign_keys = ON');
     console.log("[DB] PRAGMA journal_mode set to WAL and foreign_keys set to ON.");
 
-    // Handle schema creation or migration
     if (!dbExists) {
       console.log("[DB] New database file detected. Initializing schema and seeding default data...");
       initializeSchemaAndSeed(db);
@@ -172,7 +174,6 @@ function initializeDb() {
       runMigrations(db);
     }
 
-    // Ensure the database is properly closed on exit
     process.on('exit', () => {
         if(db && db.open) {
             console.log('[DB] Closing database connection on process exit.');
@@ -180,6 +181,7 @@ function initializeDb() {
         }
     });
 
+    dbInstance = db;
     return db;
 
   } catch (error) {
@@ -189,7 +191,6 @@ function initializeDb() {
 }
 
 export function getDb() {
-    // In development, use a singleton instance for performance and to avoid re-initializing on every hot-reload.
     if (!dbInstance) {
       dbInstance = initializeDb();
     }
