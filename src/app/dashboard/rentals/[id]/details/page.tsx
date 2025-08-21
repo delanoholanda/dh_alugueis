@@ -14,7 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit, History } from 'lucide-react';
+import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit, History, FileText } from 'lucide-react';
 import type { Rental, PaymentMethod, Customer, RentalPhoto, Equipment as InventoryEquipment } from '@/types';
 import RentalPhotoGallery from '../../components/RentalPhotoGallery';
 import { MarkAsPaidDialog } from '../../components/MarkAsPaidDialog';
@@ -245,6 +245,11 @@ export default function RentalDetailsPage() {
         description="Visualize todas as informações sobre este contrato de aluguel."
         actions={
           <div className="flex items-center gap-2">
+            <Button asChild variant="outline" title="Ver Contrato do Aluguel">
+                <Link href={`/dashboard/rentals/${rental.id}/receipt`}>
+                    <FileText className="mr-2 h-4 w-4 text-blue-500"/>Ver Contrato
+                </Link>
+            </Button>
             <Button asChild variant="outline" disabled={!!rental.actualReturnDate} title={rental.actualReturnDate ? "Não é possível editar um aluguel finalizado" : "Editar Aluguel"}>
               <Link href={`/dashboard/rentals/${rental.id}/edit`}>
                 <Edit className="mr-2 h-4 w-4" /> Editar

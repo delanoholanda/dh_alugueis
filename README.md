@@ -14,14 +14,14 @@ Siga os passos abaixo para configurar e rodar esta aplicação no seu ambiente l
 
 ### Passos para Execução
 
-1.  **Navegue até a Pasta do Projeto**:
-    Abra seu terminal ou prompt de comando e navegue até o diretório raiz onde você salvou os arquivos da aplicação.
+1.  **Navegue até a Pasta do Projeto (Raiz)**:
+    **Este é o passo mais importante.** Abra seu terminal ou prompt de comando e navegue até o diretório **raiz** do projeto (a pasta que contém o arquivo `package.json`, e não as subpastas `src` ou `app`).
     ```bash
     cd caminho/para/seu-projeto
     ```
 
 2.  **Instale as Dependências**:
-    Execute o comando abaixo para instalar todas as dependências listadas no arquivo `package.json`.
+    Na pasta raiz, execute o comando abaixo para instalar todas as dependências.
     ```bash
     npm install
     ```
@@ -31,7 +31,7 @@ Siga os passos abaixo para configurar e rodar esta aplicação no seu ambiente l
     ```
 
 3.  **Inicie o Servidor de Desenvolvimento Next.js**:
-    Este comando iniciará o servidor de desenvolvimento da aplicação.
+    Ainda na pasta raiz, execute o comando para iniciar a aplicação.
     ```bash
     npm run dev
     ```
@@ -104,12 +104,12 @@ Para garantir a segurança de todos os seus dados, é fundamental entender como 
     6.  **Lembre-se de fazer backup da pasta de uploads também:** Para um backup completo, copie também a pasta `data/uploads`. Ela contém todas as imagens (logos, fotos de clientes, etc.).
 
 *   **Como Restaurar um Backup:**
-    1.  Pare a aplicação (`docker-compose down`).
+    1.  Pare a aplicação (`docker-compose down` se estiver usando Docker, ou `Ctrl+C` no terminal).
     2.  Apague os arquivos `dhalugueis.db`, `dhalugueis.db-shm` e `dhalugueis.db-wal` da sua pasta `data`, se existirem.
     3.  Copie o seu arquivo de backup (ex: `backup-2024-08-16_10-30-00.db`) para dentro da pasta `data`.
     4.  **Renomeie** o arquivo de backup para `dhalugueis.db`.
     5.  Se você tiver um backup da pasta `uploads`, substitua a pasta `data/uploads` existente pela sua.
-    6.  Inicie a aplicação novamente (`docker-compose up -d`). Todos os seus dados estarão restaurados.
+    6.  Inicie a aplicação novamente. Todos os seus dados estarão restaurados.
 
 ### Funcionalidades de Inteligência Artificial (Genkit)
 
@@ -130,6 +130,10 @@ Para garantir a segurança de todos os seus dados, é fundamental entender como 
 *   **Primeiro Carregamento**: No primeiro acesso ou após limpar o cache do navegador, pode ser necessária conexão com a internet para baixar assets como fontes do Google Fonts ou imagens de placeholder.
 
 ### Solução de Problemas (Troubleshooting)
+
+*   **Erro `'next' não é reconhecido como um comando interno`**:
+    *   Este erro acontece se você tentar rodar o comando `npm run dev` de uma subpasta (como `src` ou `app`).
+    *   **Solução**: Certifique-se de que você está no **diretório raiz** do projeto antes de rodar qualquer comando `npm`.
 
 *   **Erro `is not a valid Win32 application` ao rodar em Windows**:
     *   Este erro geralmente acontece se você copiou a pasta `node_modules` de um ambiente diferente (como Linux ou macOS). Pacotes como o `better-sqlite3` (usado para o banco de dados) são compilados especificamente para o sistema operacional onde são instalados.
