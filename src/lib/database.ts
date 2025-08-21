@@ -9,6 +9,7 @@ const dataDirectory = path.join(process.cwd(), 'data');
 const dbPath = path.join(dataDirectory, DB_FILE_NAME);
 const oldDbPath = path.join(process.cwd(), DB_FILE_NAME);
 
+// Let's manage the singleton instance here.
 let dbInstance: Database.Database | null = null;
 
 function hashPassword(password: string): { salt: string; hash: string } {
@@ -144,11 +145,7 @@ function runMigrations(db: Database.Database) {
     console.log("[DB Migration] Schema check complete.");
 }
 
-export function getDb() {
-  if (dbInstance) {
-    return dbInstance;
-  }
-
+function initializeDb() {
   // Ensure data directory exists for new setups
   if (!fs.existsSync(dataDirectory)) {
     fs.mkdirSync(dataDirectory, { recursive: true });
@@ -166,32 +163,51 @@ export function getDb() {
   console.log(`[DB] Path for database file: ${dbPath}`);
   
   try {
-    dbInstance = new Database(dbPath, { verbose: process.env.NODE_ENV === 'development' ? console.log : undefined }); 
+    const db = new Database(dbPath, { verbose: process.env.NODE_ENV === 'development' ? console.log : undefined }); 
     console.log(`[DB] Database connection established at ${dbPath}.`);
+    
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    console.log("[DB] PRAGMA journal_mode set to WAL and foreign_keys set to ON.");
+
+    // Handle schema creation or migration
+    if (!dbExists) {
+      console.log("[DB] New database file detected. Initializing schema and seeding default data...");
+      initializeSchemaAndSeed(db);
+      console.log("[DB] Database schema and default data initialized.");
+    } else {
+      console.log("[DB] Existing database file found. Running migrations if needed.");
+      runMigrations(db);
+    }
+
+    // Ensure the database is properly closed on exit
+    process.on('exit', () => {
+        if(db && db.open) {
+            console.log('[DB] Closing database connection on process exit.');
+            db.close();
+        }
+    });
+
+    return db;
+
   } catch (error) {
     console.error(`[DB] CRITICAL ERROR initializing database at ${dbPath}:`, error);
     throw error; 
   }
-  
-  try {
-    dbInstance.pragma('journal_mode = WAL');
-    dbInstance.pragma('foreign_keys = ON');
-    console.log("[DB] PRAGMA journal_mode set to WAL and foreign_keys set to ON.");
-  } catch (pragmaError) {
-    console.warn(`[DB] WARNING: Failed to set PRAGMAs. Error: ${(pragmaError as Error).message}`);
-  }
+}
 
-  // Handle schema creation or migration
-  if (!dbExists) {
-    console.log("[DB] New database file detected. Initializing schema and seeding default data...");
-    initializeSchemaAndSeed(dbInstance);
-    console.log("[DB] Database schema and default data initialized.");
+export function getDb() {
+  if (process.env.NODE_ENV === 'production') {
+    // In production, always return a fresh connection to avoid stale states in serverless environments
+    // or to ensure robustness in long-running processes. The initialization logic handles seeding/migration.
+    return initializeDb();
   } else {
-    console.log("[DB] Existing database file found. Running migrations if needed.");
-    runMigrations(dbInstance);
+    // In development, use a singleton instance for performance and to avoid re-initializing on every hot-reload.
+    if (!dbInstance) {
+      dbInstance = initializeDb();
+    }
+    return dbInstance;
   }
-
-  return dbInstance;
 }
 
 function initializeSchemaAndSeed(db: Database.Database) {
