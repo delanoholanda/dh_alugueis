@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { CustomerForm } from './CustomerForm';
 import { createCustomer, updateCustomer, deleteCustomer, getCustomers } from '@/actions/customerActions';
-import { PlusCircle, Edit, Trash2, User, Phone, Fingerprint, Home, UsersRound, History, PackageX, FileText, AlertTriangle, Calendar as CalendarIcon } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, User, Phone, Fingerprint, Home, UsersRound, History, PackageX, FileText, AlertTriangle, Calendar as CalendarIcon, ListChecks, Eraser } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -106,6 +106,21 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
       return { ...prev, [customerId]: newSelection };
     });
   };
+
+  const handleSelectAll = (customerId: string) => {
+    const payableIds = (payableRentalsByCustomer[customerId] || []).map(r => r.id);
+    setSelectedRentals(prev => ({ ...prev, [customerId]: payableIds }));
+  };
+
+  const handleClearSelection = (customerId: string) => {
+    setSelectedRentals(prev => ({ ...prev, [customerId]: [] }));
+    setClosingDates(currentDates => {
+        const newDates = {...currentDates};
+        delete newDates[customerId];
+        return newDates;
+    });
+  };
+
 
   const handleDateChange = (customerId: string, date: Date | undefined) => {
     setClosingDates(prev => ({ ...prev, [customerId]: date }));
@@ -253,6 +268,16 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                                     {customerPayableRentals.length} Aluguéis com Pagamento Pendente
                                 </AccordionTrigger>
                                 <AccordionContent className="pt-2 space-y-2">
+                                    <div className="flex gap-2 mb-2">
+                                        <Button variant="outline" size="sm" onClick={() => handleSelectAll(customer.id)} disabled={customerPayableRentals.length === 0}>
+                                            <ListChecks className="mr-2 h-4 w-4"/>
+                                            Selecionar Todos
+                                        </Button>
+                                        <Button variant="outline" size="sm" onClick={() => handleClearSelection(customer.id)} disabled={customerSelectedRentals.length === 0}>
+                                             <Eraser className="mr-2 h-4 w-4"/>
+                                            Limpar
+                                        </Button>
+                                    </div>
                                     {customerPayableRentals.map(rental => (
                                         <div key={rental.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50">
                                             <Checkbox
