@@ -211,7 +211,10 @@ export default function RentalContractClient({ rental, customer, companySettings
 
   const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
-  const pendingValue = rental.value - totalPaid;
+  
+  // For open-ended, the `value` is the total daily rate (items + freight).
+  const grandTotal = rental.isOpenEnded ? rental.value : itemsSubtotal + (rental.freightValue || 0);
+  const pendingValue = grandTotal - totalPaid;
 
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
   const valorPorExtenso = numberToWords(rental.value);
@@ -390,8 +393,8 @@ export default function RentalContractClient({ rental, customer, companySettings
           <div> {/* Coluna da direita */}
             <table className="contract-table w-auto ml-auto"><tbody>
                   <tr>
-                    <td>{rental.isOpenEnded ? 'Soma das Diárias:' : 'Soma dos itens/serviços:'}</td>
-                    <td className="text-right">{formatToBRL(rental.isOpenEnded ? rental.value : itemsSubtotal)}</td>
+                    <td>Soma das Diárias:</td>
+                    <td className="text-right">{formatToBRL(itemsSubtotal)}</td>
                   </tr>
                   {typeof rental.freightValue === 'number' && rental.freightValue > 0 && (
                     <tr>
@@ -407,9 +410,9 @@ export default function RentalContractClient({ rental, customer, companySettings
                    )}
                   <tr className="total-line">
                     <td>{rental.isOpenEnded ? 'Valor Diária (Total):' : 'Total Geral:'}</td>
-                    <td className="text-right">{formatToBRL(rental.value)}</td>
+                    <td className="text-right">{formatToBRL(grandTotal)}</td>
                   </tr>
-                  {pendingValue > 0 && (
+                  {pendingValue > 0 && !rental.isOpenEnded && (
                     <tr className="total-line text-destructive">
                         <td>Valor Pendente:</td>
                         <td className="text-right">{formatToBRL(pendingValue)}</td>

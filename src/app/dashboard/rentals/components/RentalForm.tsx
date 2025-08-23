@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Rental, Customer, Equipment as InventoryEquipment, PaymentMethod, EquipmentType } from '@/types';
@@ -265,7 +266,7 @@ export function RentalForm({
     const daysInput = watchedRentalDays;
     const days = (!watchedIsOpenEnded && daysInput && !isNaN(Number(daysInput)) && Number(daysInput) > 0) ? Number(daysInput) : (watchedIsOpenEnded ? 1 : 0);
 
-    if (watchedEquipment && days > 0) {
+    if (watchedEquipment && (days > 0 || watchedIsOpenEnded)) {
       watchedEquipment.forEach(item => {
         const qtyInput = item.quantity;
         const qty = (qtyInput && !isNaN(Number(qtyInput))) ? Number(qtyInput) : 0;
@@ -286,8 +287,8 @@ export function RentalForm({
                 customRate = standardRate; 
             }
             
-            subTotalBasedOnCustomRates += (qty * customRate * days);
-            subTotalBasedOnStandardRates += (qty * standardRate * days);
+            subTotalBasedOnCustomRates += (qty * customRate * (watchedIsOpenEnded ? 1 : days));
+            subTotalBasedOnStandardRates += (qty * standardRate * (watchedIsOpenEnded ? 1 : days));
           }
         }
       });
@@ -296,10 +297,7 @@ export function RentalForm({
     const freightInput = watchedFreightValue;
     const freight = (typeof freightInput === 'number' && !isNaN(freightInput)) ? freightInput : 0;
     
-    let finalContractValue = subTotalBasedOnCustomRates;
-    if (!watchedIsOpenEnded) {
-        finalContractValue += freight;
-    }
+    let finalContractValue = subTotalBasedOnCustomRates + freight;
     
     let calculatedDiscount = 0;
     if (subTotalBasedOnCustomRates < subTotalBasedOnStandardRates) {
@@ -987,7 +985,7 @@ export function RentalForm({
                     </FormControl>
                     <FormDescription>
                         {watchedIsOpenEnded 
-                            ? "Calculado (Soma das diárias dos equipamentos)."
+                            ? "Calculado (Soma das diárias + Frete)."
                             : "Calculado (Equip. Custom. + Frete)."
                         }
                     </FormDescription>

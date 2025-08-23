@@ -85,11 +85,15 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
         
         const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
         
+        // Correctly calculate pending value including freight
+        const totalValueIncludingFreight = currentTotalValue + (rental.freightValue || 0);
+
         return {
             ...rental,
-            value: currentTotalValue, // The contract's total value
+            value: currentTotalValue, // This remains the base value of items/days
             totalPaid: totalPaid,
-            pendingValue: Math.max(0, currentTotalValue - totalPaid), // The amount still pending
+            // The pending value for each contract MUST include the freight.
+            pendingValue: Math.max(0, totalValueIncludingFreight - totalPaid), 
             rentalDays: finalRentalDays,
             expectedReturnDate: finalExpectedReturnDate
         };
@@ -130,3 +134,4 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
     />
   );
 }
+

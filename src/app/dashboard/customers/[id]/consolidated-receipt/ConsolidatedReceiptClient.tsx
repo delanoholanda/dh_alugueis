@@ -191,6 +191,7 @@ export default function ConsolidatedReceiptClient({
         .contract-header .logo-container { position: relative; width: 150px; height: 75px; flex-shrink: 0; }
         .contract-header .company-info { text-align: right; font-size: 10px; line-height: 1.1; }
         .contract-header .company-info h1 { font-size: 14px; margin-bottom: 2px;}
+        .contract-header .company-info p, .contract-section p { margin-top: 0; margin-bottom: 0; }
         .contract-section { margin-bottom: 0.5rem; line-height: 1.1; } 
         .contract-table { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; }
         .contract-table th, .contract-table td { border: 1px solid #ddd; padding: 0.25rem 0.4rem 0.5rem 0.4rem; text-align: left; vertical-align: middle; }
