@@ -23,15 +23,15 @@ export default async function FinancialStatementPage() {
     getExpenses()
   ]);
 
-  const incomeTransactions: Transaction[] = rentals
-    .filter((r): r is Rental & { paymentDate: string } => r.paymentStatus === 'paid' && !!r.paymentDate)
-    .map(r => ({
-      date: parseISO(r.paymentDate),
-      description: `Recebimento Aluguel #${r.id.toString().padStart(4, '0')} - ${r.customerName}`,
+  const incomeTransactions: Transaction[] = rentals.flatMap(r => 
+    (r.payments || []).map(p => ({
+      date: parseISO(p.paymentDate),
+      description: `Pagamento Aluguel #${r.id.toString().padStart(4, '0')} - ${r.customerName}`,
       type: 'income',
-      amount: r.value,
-      referenceId: r.id
-    }));
+      amount: p.amount,
+      referenceId: p.id
+    }))
+  );
 
   const expenseTransactions: Transaction[] = expenses.map(e => ({
     date: parseISO(e.date),
@@ -46,9 +46,9 @@ export default async function FinancialStatementPage() {
   return (
     <div className="container mx-auto py-2">
       <PageHeader
-        title="Extrato Financeiro Detalhado"
+        title="Extrato Financeiro"
         icon={FileText}
-        description="Visualize todas as entradas e saídas em ordem cronológica com filtros avançados."
+        description="Visualize todas as entradas e saídas em ordem cronológica com filtros de data."
       />
       <StatementClientPage initialTransactions={allTransactions} />
     </div>

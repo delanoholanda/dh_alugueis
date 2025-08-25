@@ -19,7 +19,8 @@ import {
   FileText,
   Bell,
   MailCheck,
-  ClipboardList
+  ClipboardList,
+  Handshake
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -70,6 +71,7 @@ const mainNavItems: NavItem[] = [
     subItems: [
         { href: '/dashboard/financials', label: 'Visão Geral', iconName: 'BarChart' },
         { href: '/dashboard/financials/statement', label: 'Extrato', iconName: 'FileText' },
+        { href: '/dashboard/financials/contracts', label: 'Contratos', iconName: 'Handshake' },
     ]
   },
   { 
