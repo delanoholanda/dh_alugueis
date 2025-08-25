@@ -41,7 +41,6 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
     notFound();
   }
   
-  // Determine the date to calculate open-ended rentals until.
   let closeUntilDate = new Date();
   if (searchParams.close_until) {
       const parsedDate = parseISO(searchParams.close_until);
@@ -51,7 +50,6 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
   }
   const closeUntilDateStr = format(closeUntilDate, 'yyyy-MM-dd');
 
-  // Fetch all necessary data in parallel
   const [customer, companySettings, inventory, ...rentals] = await Promise.all([
     getCustomerById(customerId),
     getCompanySettings(),
@@ -66,30 +64,33 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
   const validRentals = rentals
     .filter((r): r is Rental => r !== undefined && r !== null)
     .map(rental => {
-        let currentTotalValue = rental.value;
+        let itemsSubtotal = 0;
         let finalRentalDays = rental.rentalDays;
         let finalExpectedReturnDate = rental.expectedReturnDate;
 
-        if (rental.isOpenEnded && !rental.actualReturnDate) { // Only calculate for open rentals that are not yet finalized
+        if (rental.isOpenEnded && !rental.actualReturnDate) {
             const billableDays = countBillableDays(
                 rental.rentalStartDate,
                 closeUntilDateStr,
                 rental.chargeSaturdays ?? true,
                 rental.chargeSundays ?? true
             );
-            // 'rental.value' for open-ended is the daily rate
-            currentTotalValue = billableDays * rental.value; 
+            itemsSubtotal = billableDays * rental.value; 
             finalRentalDays = billableDays;
-            finalExpectedReturnDate = closeUntilDateStr; // For display purposes on the consolidated receipt
+            finalExpectedReturnDate = closeUntilDateStr;
+        } else {
+            itemsSubtotal = rental.value - (rental.freightValue ?? 0);
         }
         
         const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+        const totalContractValue = itemsSubtotal + (rental.freightValue ?? 0);
         
         return {
             ...rental,
-            value: currentTotalValue, // The contract's total value
+            itemsSubtotal,
+            totalContractValue,
             totalPaid: totalPaid,
-            pendingValue: Math.max(0, currentTotalValue - totalPaid), // The amount still pending
+            pendingValue: Math.max(0, totalContractValue - totalPaid), 
             rentalDays: finalRentalDays,
             expectedReturnDate: finalExpectedReturnDate
         };
@@ -99,13 +100,11 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
       notFound();
   }
 
-
   const totalValue = validRentals.reduce((sum, rental) => sum + rental.pendingValue, 0);
 
   let pixPayload: string | null = null;
   if (companySettings.pixKey && totalValue > 0) {
     const city = extractCityFromAddress(companySettings.address);
-    // Create a unique-ish TXID for the consolidated payment
     const txidForPix = `CONSOLIDADO-${customerId.substring(5, 10)}-${new Date().getTime().toString().slice(-6)}`;
     const descriptionForPix = `Pagamento Consolidado - ${customer.name}`;
 

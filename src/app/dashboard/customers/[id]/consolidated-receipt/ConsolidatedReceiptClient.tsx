@@ -144,7 +144,7 @@ const formatDocumentForDisplay = (docType?: 'cpf' | 'cnpj', docNumber?: string |
 };
 
 interface ConsolidatedReceiptClientProps {
-  rentals: Array<Rental & { totalPaid: number; pendingValue: number }>;
+  rentals: Array<Rental & { totalPaid: number; pendingValue: number; itemsSubtotal: number; totalContractValue: number }>;
   customer: Customer;
   companySettings: CompanyDetails;
   inventory: InventoryItem[];
@@ -191,6 +191,7 @@ export default function ConsolidatedReceiptClient({
         .contract-header .logo-container { position: relative; width: 150px; height: 75px; flex-shrink: 0; }
         .contract-header .company-info { text-align: right; font-size: 10px; line-height: 1.1; }
         .contract-header .company-info h1 { font-size: 14px; margin-bottom: 2px;}
+        .contract-header .company-info p, .contract-section p { margin-top: 0; margin-bottom: 0; }
         .contract-section { margin-bottom: 0.5rem; line-height: 1.1; } 
         .contract-table { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; }
         .contract-table th, .contract-table td { border: 1px solid #ddd; padding: 0.25rem 0.4rem 0.5rem 0.4rem; text-align: left; vertical-align: middle; }
@@ -256,7 +257,9 @@ export default function ConsolidatedReceiptClient({
           </div>
         </section>
 
-        {rentals.map((rental, index) => (
+        {rentals.map((rental, index) => {
+             const singlePayment = rental.payments?.length === 1 ? rental.payments[0] : null;
+            return (
             <section key={rental.id} className="contract-section mt-4 border-t pt-2">
                 <div className="flex justify-between items-baseline mb-1">
                     <h3 className="font-semibold text-sm">Contrato de Aluguel {index + 1} (ID: {rental.id})</h3>
@@ -295,9 +298,16 @@ export default function ConsolidatedReceiptClient({
                             <td className="text-right">{formatToBRL(rental.freightValue)}</td>
                         </tr>
                     )}
+                    <tr className="font-bold">
+                        <td colSpan={4}>Total do Contrato #{index + 1}</td>
+                        <td className="text-right">{formatToBRL(rental.totalContractValue)}</td>
+                    </tr>
                     {(rental.totalPaid ?? 0) > 0 && (
                         <tr className="font-bold text-green-700">
-                            <td colSpan={4}>Adiantamento / Pago Parcial</td>
+                            <td colSpan={4}>
+                                Adiantamento / Pago Parcial
+                                {singlePayment && ` (em ${format(parseISO(singlePayment.paymentDate), 'dd/MM/yy')})`}
+                            </td>
                             <td className="text-right">-{formatToBRL(rental.totalPaid ?? 0)}</td>
                         </tr>
                     )}
@@ -308,7 +318,7 @@ export default function ConsolidatedReceiptClient({
                 </tbody>
                 </table>
             </section>
-        ))}
+        )})}
 
         <div className="contract-summary-grid contract-section mt-4">
           <div>
