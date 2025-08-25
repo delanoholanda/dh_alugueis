@@ -14,7 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit, History, FileText } from 'lucide-react';
+import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit, History, FileText, RotateCcw } from 'lucide-react';
 import type { Rental, PaymentMethod, Customer, RentalPhoto, Equipment as InventoryEquipment } from '@/types';
 import RentalPhotoGallery from '../../components/RentalPhotoGallery';
 import { MarkAsPaidDialog } from '../../components/MarkAsPaidDialog';

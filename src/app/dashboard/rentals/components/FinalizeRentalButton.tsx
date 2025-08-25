@@ -14,9 +14,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { CheckSquare, Loader2 } from 'lucide-react';
+import { CheckSquare, Loader2, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { finalizeRental as finalizeRentalAction } from '@/actions/rentalActions';
+import { finalizeRental as finalizeRentalAction, reopenRental as reopenRentalAction } from '@/actions/rentalActions';
 import type { Rental } from '@/types';
 
 interface FinalizeRentalButtonProps {
@@ -52,13 +52,59 @@ export default function FinalizeRentalButton({ rental, isFinalized, onFinalized 
     }
   };
 
+  const handleReopen = async () => {
+    setIsLoading(true);
+    try {
+      await reopenRentalAction(rental.id);
+      toast({
+        title: 'Aluguel Reaberto',
+        description: `O aluguel ID ${rental.id} foi reaberto.`,
+        variant: 'success',
+      });
+      setIsDialogOpen(false);
+      await onFinalized(); 
+    } catch (error) {
+      toast({
+        title: 'Erro ao Reabrir',
+        description: (error as Error).message || 'Não foi possível reabrir o aluguel.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (isFinalized) {
     return (
-      <Button variant="outline" title="Aluguel já finalizado (devolvido)" disabled>
-        <CheckSquare className="h-4 w-4 mr-2 text-green-500" /> Itens Devolvidos
-      </Button>
+      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <AlertDialogTrigger asChild>
+           <Button 
+              variant="outline" 
+              title="Reabrir Aluguel"
+              className="text-orange-600 border-orange-600/50 hover:bg-orange-600/10 hover:text-orange-700"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" /> Reabrir Aluguel
+           </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reabrir Aluguel ID: {rental.id}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação removerá a data de devolução efetiva. Isso é útil se o aluguel foi finalizado por engano. O aluguel voltará ao seu estado anterior. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReopen} disabled={isLoading} className="bg-orange-600 hover:bg-orange-700">
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Confirmar Reabertura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     );
   }
+
 
   const isDisabled = !!rental.isOpenEnded;
   const getTitle = () => {

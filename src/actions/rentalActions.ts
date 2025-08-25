@@ -629,6 +629,33 @@ export async function finalizeRental(id: number): Promise<Rental | null> {
   }
 }
 
+export async function reopenRental(id: number): Promise<Rental | null> {
+    const existingRental = await getRentalById(id);
+
+    if (!existingRental) {
+        throw new Error(`Aluguel com ID ${id} não encontrado.`);
+    }
+
+    if (!existingRental.actualReturnDate) {
+        console.warn(`reopenRental: Rental with id ${id} is not finalized.`);
+        return existingRental;
+    }
+
+    try {
+        const updatedRental = await updateRental(id, { actualReturnDate: null });
+        if (updatedRental) {
+            revalidatePath('/dashboard/rentals');
+            revalidatePath('/dashboard', 'layout');
+            console.log(`Rental ${id} has been reopened.`);
+        }
+        return updatedRental;
+    } catch (error) {
+        console.error(`Failed to reopen rental with id ${id}:`, error);
+        throw new Error(`Falha ao reabrir o aluguel ${id}.`);
+    }
+}
+
+
 export async function addRentalPhoto(rentalId: number, imageDataUrl: string, photoType: 'delivery' | 'return'): Promise<RentalPhoto> {
   const db = getDb();
 
