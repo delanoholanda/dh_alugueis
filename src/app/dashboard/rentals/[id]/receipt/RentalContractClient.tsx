@@ -209,11 +209,10 @@ export default function RentalContractClient({ rental, customer, companySettings
     return pixKey;
   };
 
-  const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
+  const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + (eq.quantity * eq.dailyRentalRateUsed), 0);
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
   
-  // For open-ended, the `value` is the total daily rate (items + freight).
-  const grandTotal = rental.isOpenEnded ? rental.value : itemsSubtotal + (rental.freightValue || 0);
+  const grandTotal = rental.value;
   const pendingValue = grandTotal - totalPaid;
 
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
@@ -393,7 +392,7 @@ export default function RentalContractClient({ rental, customer, companySettings
           <div> {/* Coluna da direita */}
             <table className="contract-table w-auto ml-auto"><tbody>
                   <tr>
-                    <td>Soma das Diárias:</td>
+                    <td>Soma das Diárias (Itens):</td>
                     <td className="text-right">{formatToBRL(itemsSubtotal)}</td>
                   </tr>
                   {typeof rental.freightValue === 'number' && rental.freightValue > 0 && (

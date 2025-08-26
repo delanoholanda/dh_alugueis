@@ -264,9 +264,11 @@ export function RentalForm({
     let subTotalBasedOnStandardRates = 0;
 
     const daysInput = watchedRentalDays;
-    const days = (!watchedIsOpenEnded && daysInput && !isNaN(Number(daysInput)) && Number(daysInput) > 0) ? Number(daysInput) : (watchedIsOpenEnded ? 1 : 0);
+    const days = (!watchedIsOpenEnded && daysInput && !isNaN(Number(daysInput)) && Number(daysInput) > 0) ? Number(daysInput) : 0;
 
-    if (watchedEquipment && (days > 0 || watchedIsOpenEnded)) {
+    let itemsTotalValue = 0;
+
+    if (watchedEquipment) {
       watchedEquipment.forEach(item => {
         const qtyInput = item.quantity;
         const qty = (qtyInput && !isNaN(Number(qtyInput))) ? Number(qtyInput) : 0;
@@ -287,7 +289,7 @@ export function RentalForm({
                 customRate = standardRate; 
             }
             
-            subTotalBasedOnCustomRates += (qty * customRate * (watchedIsOpenEnded ? 1 : days));
+            itemsTotalValue += (qty * customRate * (watchedIsOpenEnded ? 1 : days));
             subTotalBasedOnStandardRates += (qty * standardRate * (watchedIsOpenEnded ? 1 : days));
           }
         }
@@ -297,11 +299,12 @@ export function RentalForm({
     const freightInput = watchedFreightValue;
     const freight = (typeof freightInput === 'number' && !isNaN(freightInput)) ? freightInput : 0;
     
-    let finalContractValue = subTotalBasedOnCustomRates + freight;
+    // For open-ended, the contract value is just the daily rate. Freight is separate.
+    let finalContractValue = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight;
     
     let calculatedDiscount = 0;
-    if (subTotalBasedOnCustomRates < subTotalBasedOnStandardRates) {
-        calculatedDiscount = subTotalBasedOnStandardRates - subTotalBasedOnCustomRates;
+    if (itemsTotalValue < subTotalBasedOnStandardRates) {
+        calculatedDiscount = subTotalBasedOnStandardRates - itemsTotalValue;
     }
 
     form.setValue('value', isNaN(finalContractValue) ? 0 : Math.max(0, finalContractValue), { shouldValidate: true });
@@ -985,8 +988,8 @@ export function RentalForm({
                     </FormControl>
                     <FormDescription>
                         {watchedIsOpenEnded 
-                            ? "Calculado (Soma das diárias + Frete)."
-                            : "Calculado (Equip. Custom. + Frete)."
+                            ? "Calculado (Soma das diárias dos itens)."
+                            : "Calculado (Equipamentos + Frete)."
                         }
                     </FormDescription>
                     <FormMessage />
