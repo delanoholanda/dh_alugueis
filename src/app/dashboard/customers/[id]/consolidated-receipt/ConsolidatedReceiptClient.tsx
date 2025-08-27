@@ -303,18 +303,20 @@ export default function ConsolidatedReceiptClient({
                         <td className="text-right">{formatToBRL(rental.totalContractValue)}</td>
                     </tr>
                     {(rental.totalPaid ?? 0) > 0 && (
-                        <tr className="font-bold text-green-700">
-                            <td colSpan={4}>
-                                Adiantamento / Pago Parcial
-                                {singlePayment && ` (em ${format(parseISO(singlePayment.paymentDate), 'dd/MM/yy')})`}
-                            </td>
-                            <td className="text-right">-{formatToBRL(rental.totalPaid ?? 0)}</td>
-                        </tr>
+                        <>
+                            <tr className="font-bold text-green-700">
+                                <td colSpan={4}>
+                                    Adiantamento / Pago Parcial
+                                    {singlePayment && ` (em ${format(parseISO(singlePayment.paymentDate), 'dd/MM/yy')})`}
+                                </td>
+                                <td className="text-right">-{formatToBRL(rental.totalPaid ?? 0)}</td>
+                            </tr>
+                            <tr className="font-bold bg-gray-50">
+                                <td colSpan={4}>Subtotal Pendente do Contrato #{index + 1}</td>
+                                <td className="text-right">{formatToBRL(rental.pendingValue)}</td>
+                            </tr>
+                        </>
                     )}
-                    <tr className="font-bold bg-gray-50">
-                        <td colSpan={4}>Subtotal Pendente do Contrato #{index + 1}</td>
-                        <td className="text-right">{formatToBRL(rental.pendingValue)}</td>
-                    </tr>
                 </tbody>
                 </table>
             </section>

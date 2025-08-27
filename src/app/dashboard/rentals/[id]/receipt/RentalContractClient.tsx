@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -209,14 +208,14 @@ export default function RentalContractClient({ rental, customer, companySettings
     return pixKey;
   };
 
-  const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + (eq.quantity * eq.dailyRentalRateUsed), 0);
+  const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
   
-  const grandTotal = rental.value;
+  const grandTotal = itemsSubtotal + (rental.freightValue ?? 0);
   const pendingValue = grandTotal - totalPaid;
 
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
-  const valorPorExtenso = numberToWords(rental.value);
+  const valorPorExtenso = numberToWords(grandTotal);
   const displayContractLogo = companySettings.contractLogoUrl || companySettings.companyLogoUrl || DEFAULT_COMPANY_LOGO;
   const contractTitle = "Contrato de Aluguel";
   const rentalPeriod = rental.isOpenEnded
@@ -392,7 +391,7 @@ export default function RentalContractClient({ rental, customer, companySettings
           <div> {/* Coluna da direita */}
             <table className="contract-table w-auto ml-auto"><tbody>
                   <tr>
-                    <td>Soma das Diárias (Itens):</td>
+                    <td>Soma dos Itens (Total):</td>
                     <td className="text-right">{formatToBRL(itemsSubtotal)}</td>
                   </tr>
                   {typeof rental.freightValue === 'number' && rental.freightValue > 0 && (
@@ -408,7 +407,7 @@ export default function RentalContractClient({ rental, customer, companySettings
                     </tr>
                    )}
                   <tr className="total-line">
-                    <td>{rental.isOpenEnded ? 'Valor Diária (Total):' : 'Total Geral:'}</td>
+                    <td>Total Geral:</td>
                     <td className="text-right">{formatToBRL(grandTotal)}</td>
                   </tr>
                   {pendingValue > 0 && !rental.isOpenEnded && (

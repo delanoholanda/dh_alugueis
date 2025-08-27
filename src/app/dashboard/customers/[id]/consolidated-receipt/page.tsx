@@ -64,7 +64,8 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
   const validRentals = rentals
     .filter((r): r is Rental => r !== undefined && r !== null)
     .map(rental => {
-        let itemsSubtotal = 0;
+        let itemsSubtotal: number;
+        let totalContractValue: number;
         let finalRentalDays = rental.rentalDays;
         let finalExpectedReturnDate = rental.expectedReturnDate;
 
@@ -75,15 +76,25 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
                 rental.chargeSaturdays ?? true,
                 rental.chargeSundays ?? true
             );
-            itemsSubtotal = billableDays * rental.value; 
+            itemsSubtotal = billableDays * rental.value; // For open-ended, rental.value is the daily rate.
+            totalContractValue = itemsSubtotal + (rental.freightValue ?? 0);
             finalRentalDays = billableDays;
             finalExpectedReturnDate = closeUntilDateStr;
         } else {
-            itemsSubtotal = rental.value - (rental.freightValue ?? 0);
+            // This is the logic split as requested
+            const hasPayments = rental.payments && rental.payments.length > 0;
+            if (hasPayments) {
+                // If there are payments, assume rental.value is the GRAND TOTAL (items + freight)
+                totalContractValue = rental.value;
+                itemsSubtotal = totalContractValue - (rental.freightValue ?? 0);
+            } else {
+                // If no payments, assume rental.value is ONLY the items' cost
+                itemsSubtotal = rental.value;
+                totalContractValue = itemsSubtotal + (rental.freightValue ?? 0);
+            }
         }
-        
+
         const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
-        const totalContractValue = itemsSubtotal + (rental.freightValue ?? 0);
         
         return {
             ...rental,
@@ -92,7 +103,8 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
             totalPaid: totalPaid,
             pendingValue: Math.max(0, totalContractValue - totalPaid), 
             rentalDays: finalRentalDays,
-            expectedReturnDate: finalExpectedReturnDate
+            expectedReturnDate: finalExpectedReturnDate,
+            value: rental.value, 
         };
     });
 

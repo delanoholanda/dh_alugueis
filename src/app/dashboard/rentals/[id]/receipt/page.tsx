@@ -7,6 +7,8 @@ import { notFound } from 'next/navigation';
 import { generatePixPayload } from '@/lib/pix';
 import RentalContractClient from './RentalContractClient';
 import type { Rental, CompanyDetails, Customer, Equipment } from '@/types';
+import { countBillableDays } from '@/lib/utils';
+import { format } from 'date-fns';
 
 function extractCityFromAddress(address?: string): string {
   if (!address) return 'CIDADE';
@@ -27,28 +29,56 @@ export default async function RentalContractPage({ params }: { params: { id: str
   }
 
   // Fetch rental data first
-  const rental = await getRentalById(rentalIdNum);
+  const initialRental = await getRentalById(rentalIdNum);
   
   // Guard clause to ensure rental exists
-  if (!rental) {
+  if (!initialRental) {
     notFound();
   }
+
+  // --- Start: Dynamic Value Calculation for Rendering ---
+  let finalRentalForDisplay = { ...initialRental };
+  if (initialRental.isOpenEnded && !initialRental.actualReturnDate) {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const billableDays = countBillableDays(
+          initialRental.rentalStartDate,
+          todayStr,
+          initialRental.chargeSaturdays ?? true,
+          initialRental.chargeSundays ?? true
+      );
+      // For open-ended, rental.value is the daily rate.
+      const calculatedValue = (billableDays * initialRental.value);
+      finalRentalForDisplay.value = calculatedValue;
+      finalRentalForDisplay.rentalDays = billableDays;
+  }
+  // --- End: Dynamic Value Calculation ---
   
   // Now that rental is confirmed to exist, fetch dependent data in parallel
   const [companySettings, customer, inventory] = await Promise.all([
     getCompanySettings(),
-    rental.customerId ? getCustomerById(rental.customerId) : Promise.resolve(null),
+    initialRental.customerId ? getCustomerById(initialRental.customerId) : Promise.resolve(null),
     getInventoryItems()
   ]);
 
   let pixPayload: string | null = null;
-  const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
-  const pendingValue = rental.value - totalPaid;
 
-  if (rental.paymentMethod === 'pix' && companySettings.pixKey && pendingValue > 0 && !rental.isOpenEnded) {
+  // Calculate totals based on the final, possibly calculated, rental value
+  const totalPaid = finalRentalForDisplay.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+  const itemsSubtotal = finalRentalForDisplay.equipment.reduce((sum, eq) => {
+      const inventoryItem = inventory.find(i => i.id === eq.equipmentId);
+      const dailyRate = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+      const days = finalRentalForDisplay.isOpenEnded ? 1 : (finalRentalForDisplay.rentalDays || 0);
+      return sum + (dailyRate * eq.quantity * days);
+  }, 0);
+  
+  const grandTotal = itemsSubtotal + (finalRentalForDisplay.freightValue ?? 0);
+  const pendingValue = grandTotal - totalPaid;
+
+
+  if (finalRentalForDisplay.paymentMethod === 'pix' && companySettings.pixKey && pendingValue > 0 && !finalRentalForDisplay.isOpenEnded) {
     const city = extractCityFromAddress(companySettings.address);
-    const txidForPix = `DHALUGUEIS${rental.id.toString().padStart(6, '0')}${rental.payments?.length ?? 0}`;
-    const descriptionForPix = `Pagamento Aluguel ID ${rental.id}`;
+    const txidForPix = `DHALUGUEIS${finalRentalForDisplay.id.toString().padStart(6, '0')}${finalRentalForDisplay.payments?.length ?? 0}`;
+    const descriptionForPix = `Pagamento Aluguel ID ${finalRentalForDisplay.id}`;
     
     pixPayload = generatePixPayload({
       pixKey: companySettings.pixKey,
@@ -62,7 +92,7 @@ export default async function RentalContractPage({ params }: { params: { id: str
 
   return (
     <RentalContractClient 
-      rental={rental}
+      rental={finalRentalForDisplay}
       customer={customer}
       companySettings={companySettings}
       pixPayload={pixPayload}
