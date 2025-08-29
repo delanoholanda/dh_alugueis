@@ -61,6 +61,8 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
     notFound();
   }
 
+  const inventoryMap = new Map(inventory.map(item => [item.id, item]));
+
   const validRentals = rentals
     .filter((r): r is Rental => r !== undefined && r !== null)
     .map(rental => {
@@ -76,22 +78,19 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
                 rental.chargeSaturdays ?? true,
                 rental.chargeSundays ?? true
             );
-            itemsSubtotal = billableDays * rental.value; // For open-ended, rental.value is the daily rate.
+            // For open-ended, rental.value is the daily rate.
+            itemsSubtotal = billableDays * rental.value; 
             totalContractValue = itemsSubtotal + (rental.freightValue ?? 0);
             finalRentalDays = billableDays;
             finalExpectedReturnDate = closeUntilDateStr;
         } else {
-            // This is the logic split as requested
-            const hasPayments = rental.payments && rental.payments.length > 0;
-            if (hasPayments) {
-                // If there are payments, assume rental.value is the GRAND TOTAL (items + freight)
-                totalContractValue = rental.value;
-                itemsSubtotal = totalContractValue - (rental.freightValue ?? 0);
-            } else {
-                // If no payments, assume rental.value is ONLY the items' cost
-                itemsSubtotal = rental.value;
-                totalContractValue = itemsSubtotal + (rental.freightValue ?? 0);
-            }
+            // For fixed-value contracts, calculate itemsSubtotal from equipment list
+            itemsSubtotal = rental.equipment.reduce((sum, eq) => {
+                const inventoryItem = inventoryMap.get(eq.equipmentId);
+                const dailyRate = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+                return sum + (dailyRate * eq.quantity * (rental.rentalDays || 0));
+            }, 0);
+            totalContractValue = itemsSubtotal + (rental.freightValue ?? 0);
         }
 
         const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
