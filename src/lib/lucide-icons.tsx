@@ -3,7 +3,7 @@ import {
   Building2, Construction, LayoutPanelTop, Package, Wrench,
   HardHat, Lightbulb, Power, Layers, Truck, HelpCircle, Palette, ListTree, Hammer, Drill, Cable, Box, Factory, BarChartBig, CircleDollarSign,
   TrendingUp, TrendingDown, Users, LayoutDashboard, BarChart, PieChart, LineChart, CalendarClock, Bell, MailCheck, MessageCircleQuestion,
-  ClipboardList, Handshake
+  ClipboardList, Handshake, PackageSearch, ScrollText
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -40,7 +40,7 @@ export const iconMap: { [key: string]: LucideIcon } = {
   Building2, Construction, LayoutPanelTop, Package, Wrench,
   HardHat, Lightbulb, Power, Layers, Truck, HelpCircle, Palette, ListTree, Hammer, Drill, Cable, Box, Factory, BarChartBig, CircleDollarSign,
   TrendingUp, TrendingDown, Users, LayoutDashboard, BarChart, PieChart, LineChart, CalendarClock, Bell, MailCheck, MessageCircleQuestion,
-  ClipboardList, Handshake
+  ClipboardList, Handshake, PackageSearch, ScrollText
 };
 
 export const DefaultIcon = Package; // Default icon if specific one not found

@@ -20,7 +20,8 @@ import {
   Bell,
   MailCheck,
   ClipboardList,
-  Handshake
+  Handshake,
+  PackageSearch,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -56,7 +57,15 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Painel', iconName: 'LayoutDashboard' },
-  { href: '/dashboard/rentals', label: 'Aluguéis', iconName: 'ScrollText' },
+  { 
+    href: '/dashboard/rentals', 
+    label: 'Aluguéis', 
+    iconName: 'ScrollText',
+    subItems: [
+        { href: '/dashboard/rentals', label: 'Visão Geral', iconName: 'ScrollText' },
+        { href: '/dashboard/rentals/rented-items', label: 'Itens Alugados', iconName: 'PackageSearch' },
+    ]
+  },
   { href: '/dashboard/quotes', label: 'Orçamentos', iconName: 'ClipboardList' },
   { 
     href: '/dashboard/inventory', 
@@ -102,9 +111,6 @@ export function SidebarNav() {
   const [dynamicNavItems, setDynamicNavItems] = useState<NavItem[]>(mainNavItems);
 
   useEffect(() => {
-    // This effect runs once to fetch the logo from the DB.
-    // It's not designed to be reactive to DB changes while the user is on the page,
-    // which is generally fine for a company logo. A page refresh would pick up changes.
     const fetchLogo = async () => {
         try {
             const settings = await getCompanySettings();
@@ -160,11 +166,9 @@ export function SidebarNav() {
   };
 
   const isNavItemActive = (item: NavItem) => {
-    if (item.href === '/dashboard') {
+    if (item.href === '/dashboard' || item.href === '/dashboard/rentals') {
       return pathname === item.href;
     }
-    // Check if the current path starts with the item's href.
-    // This correctly handles parent items like /dashboard/inventory and its subpages.
     return pathname.startsWith(item.href);
   };
 
@@ -206,7 +210,6 @@ export function SidebarNav() {
                   <SidebarMenuSub className={cn("group-data-[collapsible=icon]:hidden", isActive ? "flex" : "hidden")}>
                     {item.subItems.map((subItem) => {
                       const SubIconComp = getIcon(subItem.iconName);
-                      // Exact match for sub-items
                       const isSubActive = pathname === subItem.href;
                       return (
                         <SidebarMenuSubItem key={subItem.href}>
@@ -263,7 +266,7 @@ export function SidebarNav() {
             className="w-full justify-start bg-destructive/20 text-destructive-foreground hover:bg-destructive/30 group-data-[collapsible=icon]:bg-transparent"
             onClick={() => {
               logout();
-              handleLinkClick(); // Also close sidebar on logout if mobile
+              handleLinkClick(); 
             }}
             tooltip={{children: "Sair", className: "bg-destructive text-destructive-foreground"}}
             >
