@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Filter, RotateCcw, PackageX, Eye } from 'lucide-react';
-import { formatToBRL, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
+import { formatToBRL, getPaymentStatusVariant, paymentStatusMap, cn } from '@/lib/utils';
 import type { RentalWithFinancials } from '../page';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -68,13 +68,14 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
   const totals = useMemo(() => {
     return filteredData.reduce(
       (acc, rental) => {
-        acc.totalValue += rental.value - (rental.freightValue ?? 0);
-        acc.totalFreight += rental.freightValue ?? 0;
+        acc.totalValue += rental.totalContractValue;
         acc.totalPaid += rental.totalPaid;
         acc.totalPending += rental.pendingValue;
+        acc.totalFreight += rental.freightValue ?? 0;
+        acc.totalItems += rental.itemsValue;
         return acc;
       },
-      { totalValue: 0, totalFreight: 0, totalPaid: 0, totalPending: 0 }
+      { totalValue: 0, totalPaid: 0, totalPending: 0, totalFreight: 0, totalItems: 0 }
     );
   }, [filteredData]);
   
@@ -127,47 +128,52 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
                         <TableRow>
                             <TableHead className="w-[80px]">ID</TableHead>
                             <TableHead>Cliente</TableHead>
-                            <TableHead>Data Início</TableHead>
                             <TableHead>Status Pag.</TableHead>
-                            <TableHead className="text-right">Valor Contrato</TableHead>
+                            <TableHead className="text-right">Itens</TableHead>
                             <TableHead className="text-right">Frete</TableHead>
-                            <TableHead className="text-right">Valor Pago</TableHead>
-                            <TableHead className="text-right font-semibold">Valor Pendente</TableHead>
+                            <TableHead className="text-right font-semibold">Total Contrato</TableHead>
+                            <TableHead className="text-right">Pago / Pendente</TableHead>
                             <TableHead className="text-center w-[50px]">Ações</TableHead>
                         </TableRow>
                         </TableHeader>
                         <TableBody>
                         {filteredData.map((rental) => (
                             <TableRow key={rental.id}>
-                            <TableCell className="font-mono">#{String(rental.id).padStart(4, '0')}</TableCell>
-                            <TableCell className="font-medium">{rental.customerName}</TableCell>
-                            <TableCell>{format(parseISO(rental.rentalStartDate), 'dd/MM/yy', { locale: ptBR })}</TableCell>
-                            <TableCell>
-                                <Badge variant={getPaymentStatusVariant(rental.paymentStatus)}>
-                                {paymentStatusMap[rental.paymentStatus]}
-                                </Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-mono">{formatToBRL(rental.value - (rental.freightValue || 0))}</TableCell>
-                            <TableCell className="text-right font-mono">{formatToBRL(rental.freightValue ?? 0)}</TableCell>
-                            <TableCell className="text-right font-mono text-green-600">{formatToBRL(rental.totalPaid)}</TableCell>
-                            <TableCell className="text-right font-mono font-semibold text-red-600">{formatToBRL(rental.pendingValue)}</TableCell>
-                            <TableCell className="text-center">
-                                <Button asChild variant="ghost" size="icon">
-                                    <Link href={`/dashboard/rentals/${rental.id}/details`} title="Ver detalhes do aluguel">
-                                        <Eye className="h-4 w-4" />
-                                    </Link>
-                                </Button>
-                            </TableCell>
+                                <TableCell className="font-mono">#{String(rental.id).padStart(4, '0')}</TableCell>
+                                <TableCell className="font-medium">{rental.customerName}</TableCell>
+                                <TableCell>
+                                    <Badge variant={getPaymentStatusVariant(rental.paymentStatus)}>
+                                    {paymentStatusMap[rental.paymentStatus]}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-right font-mono">{formatToBRL(rental.itemsValue)}</TableCell>
+                                <TableCell className="text-right font-mono">{formatToBRL(rental.freightValue ?? 0)}</TableCell>
+                                <TableCell className="text-right font-mono font-semibold">{formatToBRL(rental.totalContractValue)}</TableCell>
+                                <TableCell className={cn(
+                                    "text-right font-mono font-semibold",
+                                    rental.pendingValue > 0.01 ? 'text-red-600' : 'text-green-600'
+                                )}>
+                                    {rental.pendingValue > 0.01 ? `-${formatToBRL(rental.pendingValue)}` : formatToBRL(rental.totalPaid)}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                    <Button asChild variant="ghost" size="icon">
+                                        <Link href={`/dashboard/rentals/${rental.id}/details`} title="Ver detalhes do aluguel">
+                                            <Eye className="h-4 w-4" />
+                                        </Link>
+                                    </Button>
+                                </TableCell>
                             </TableRow>
                         ))}
                         </TableBody>
                         <TableFooter>
                             <TableRow className="bg-muted/50 font-bold hover:bg-muted/50">
-                                <TableCell colSpan={4} className="text-right">Totais</TableCell>
-                                <TableCell className="text-right font-mono">{formatToBRL(totals.totalValue)}</TableCell>
+                                <TableCell colSpan={3} className="text-right">Totais</TableCell>
+                                <TableCell className="text-right font-mono">{formatToBRL(totals.totalItems)}</TableCell>
                                 <TableCell className="text-right font-mono">{formatToBRL(totals.totalFreight)}</TableCell>
-                                <TableCell className="text-right font-mono text-green-600">{formatToBRL(totals.totalPaid)}</TableCell>
-                                <TableCell className="text-right font-mono text-red-600">{formatToBRL(totals.totalPending)}</TableCell>
+                                <TableCell className="text-right font-mono">{formatToBRL(totals.totalValue)}</TableCell>
+                                <TableCell className="text-right font-mono">
+                                    <span className="text-green-600">{formatToBRL(totals.totalPaid)}</span> / <span className="text-red-600">{formatToBRL(totals.totalPending)}</span>
+                                </TableCell>
                                 <TableCell></TableCell>
                             </TableRow>
                         </TableFooter>

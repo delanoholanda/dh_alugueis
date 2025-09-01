@@ -12,15 +12,17 @@ import { countBillableDays } from '@/lib/utils';
 export interface RentalWithFinancials extends Rental {
   totalPaid: number;
   pendingValue: number;
+  itemsValue: number;
+  totalContractValue: number;
 }
 
 export default async function FinancialContractsPage() {
   const rentals = await getRentals();
 
   const rentalsWithFinancials: RentalWithFinancials[] = rentals.map(rental => {
-    let finalValue = rental.value;
+    let totalContractValue: number;
+    let itemsValue: number;
     
-    // If rental is open-ended and not returned, calculate value up to today
     if (rental.isOpenEnded && !rental.actualReturnDate) {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const billableDays = countBillableDays(
@@ -30,18 +32,26 @@ export default async function FinancialContractsPage() {
           rental.chargeSundays ?? true
       );
       // For open-ended, rental.value is the daily rate.
-      finalValue = (billableDays * rental.value) + (rental.freightValue ?? 0);
+      itemsValue = billableDays * rental.value;
+      totalContractValue = itemsValue + (rental.freightValue ?? 0);
+    } else {
+      // For fixed-term contracts, rental.value already includes freight.
+      totalContractValue = rental.value;
+      itemsValue = totalContractValue - (rental.freightValue ?? 0);
     }
     
-    const totalPaid = rental.paymentStatus === 'paid' && (!rental.payments || rental.payments.length === 0)
-      ? finalValue
+    // Legacy support: if a rental was fully paid before the 'payments' table existed.
+    const hasLegacyFullPayment = rental.paymentStatus === 'paid' && (!rental.payments || rental.payments.length === 0);
+    const totalPaid = hasLegacyFullPayment
+      ? totalContractValue 
       : rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
       
-    const pendingValue = finalValue - totalPaid;
+    const pendingValue = totalContractValue - totalPaid;
 
     return {
       ...rental,
-      value: finalValue, // Override original value with the calculated one
+      itemsValue,
+      totalContractValue,
       totalPaid,
       pendingValue: pendingValue < 0.01 ? 0 : pendingValue,
     };
