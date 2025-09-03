@@ -14,7 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit, History, FileText } from 'lucide-react';
+import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit, History, FileText, Fuel } from 'lucide-react';
 import type { Rental, PaymentMethod, Customer, RentalPhoto, Equipment as InventoryEquipment } from '@/types';
 import RentalPhotoGallery from '../../components/RentalPhotoGallery';
 import { MarkAsPaidDialog } from '../../components/MarkAsPaidDialog';
@@ -430,6 +430,15 @@ export default function RentalDetailsPage() {
                   <div>
                       <p className="text-sm text-muted-foreground">Valor do Frete (Incluso no Total)</p>
                       <p className="font-medium">{formatToBRL(rental.freightValue)}</p>
+                  </div>
+              )}
+              {typeof rental.fuelValue === 'number' && rental.fuelValue > 0 && (
+                  <div>
+                    <p className="text-sm text-muted-foreground flex items-center">
+                        <Fuel className="mr-1.5 h-4 w-4"/> Valor do Combustível (Incluso no Total)
+                    </p>
+                    <p className="font-medium">{formatToBRL(rental.fuelValue)}</p>
+                    {rental.deliveredWithFullTank && <p className="text-xs text-muted-foreground">Entregue com tanque cheio</p>}
                   </div>
               )}
               {typeof rental.discountValue === 'number' && rental.discountValue > 0 && (

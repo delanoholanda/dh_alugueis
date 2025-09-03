@@ -20,6 +20,25 @@ function hashPassword(password: string): { salt: string; hash: string } {
 function runMigrations(db: Database.Database) {
     console.log("[DB Migration] Checking for necessary schema migrations...");
 
+    try {
+        const columns = db.pragma('table_info(rentals)') as { name: string }[];
+        const hasFuelValue = columns.some(col => col.name === 'fuelValue');
+        const hasFullTank = columns.some(col => col.name === 'deliveredWithFullTank');
+        
+        if (!hasFuelValue) {
+            console.log("[DB Migration] Applying migration: Adding 'fuelValue' column to 'rentals' table.");
+            db.exec('ALTER TABLE rentals ADD COLUMN fuelValue REAL DEFAULT 0');
+        }
+        if (!hasFullTank) {
+            console.log("[DB Migration] Applying migration: Adding 'deliveredWithFullTank' column to 'rentals' table.");
+            db.exec('ALTER TABLE rentals ADD COLUMN deliveredWithFullTank INTEGER DEFAULT 0');
+        }
+
+    } catch (error) {
+        console.error("[DB Migration] Error during fuel columns check/add:", error);
+    }
+
+
     // Migration for returnNotificationSent column in rentals table
     try {
         const columns = db.pragma('table_info(rentals)') as { name: string }[];
@@ -247,6 +266,8 @@ function initializeSchemaAndSeed(db: Database.Database) {
         actualReturnDate TEXT,
         freightValue REAL DEFAULT 0,
         discountValue REAL DEFAULT 0,
+        fuelValue REAL DEFAULT 0,
+        deliveredWithFullTank INTEGER DEFAULT 0,
         value REAL NOT NULL,
         paymentStatus TEXT CHECK(paymentStatus IN ('paid', 'pending', 'overdue')) NOT NULL,
         paymentMethod TEXT CHECK(paymentMethod IN ('pix', 'dinheiro', 'cartao_credito', 'cartao_debito', 'nao_definido')),

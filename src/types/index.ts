@@ -65,6 +65,8 @@ export interface Rental {
   actualReturnDate?: string | null; 
   freightValue?: number;
   discountValue?: number; 
+  fuelValue?: number;
+  deliveredWithFullTank?: boolean;
   value: number; 
   paymentStatus: PaymentStatus;
   paymentMethod?: PaymentMethod;

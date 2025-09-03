@@ -8,7 +8,7 @@ import { formatToBRL } from '@/lib/utils';
 import type { Rental, Equipment as InventoryItem, PaymentMethod, CompanyDetails, Customer } from '@/types';
 import ContractPrintActions from './ContractPrintActions';
 import { QRCodeCanvas } from 'qrcode.react';
-import { MapPin, AlertCircle } from 'lucide-react';
+import { MapPin, AlertCircle, Fuel } from 'lucide-react';
 
 const DEFAULT_COMPANY_LOGO = '/dh-alugueis-logo.png';
 
@@ -211,7 +211,7 @@ export default function RentalContractClient({ rental, customer, companySettings
   const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
   
-  const grandTotal = itemsSubtotal + (rental.freightValue ?? 0);
+  const grandTotal = itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0);
   const pendingValue = grandTotal - totalPaid;
 
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
@@ -352,6 +352,14 @@ export default function RentalContractClient({ rental, customer, companySettings
               ))}
             </tbody>
           </table>
+          {typeof rental.fuelValue === 'number' && rental.fuelValue > 0 && (
+             <div className="flex justify-between text-xs mt-1">
+                <span className="flex items-center">
+                    <Fuel className="inline h-3 w-3 mr-1" />
+                    Combustível: {rental.deliveredWithFullTank ? 'Entregue com tanque cheio' : 'Entregue com tanque parcial'}
+                </span>
+             </div>
+          )}
         </section>
 
         <div className="contract-summary-grid contract-section">
@@ -398,6 +406,12 @@ export default function RentalContractClient({ rental, customer, companySettings
                     <tr>
                       <td>Frete:</td>
                       <td className="text-right">{formatToBRL(rental.freightValue)}</td>
+                    </tr>
+                  )}
+                   {typeof rental.fuelValue === 'number' && rental.fuelValue > 0 && (
+                    <tr>
+                      <td>Combustível:</td>
+                      <td className="text-right">{formatToBRL(rental.fuelValue)}</td>
                     </tr>
                   )}
                    {totalPaid > 0 && (

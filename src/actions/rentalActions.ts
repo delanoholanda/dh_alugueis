@@ -1,4 +1,3 @@
-
 'use server';
 
 import type { Rental, PaymentMethod, Equipment as InventoryEquipment, RentalPhoto, Payment } from '@/types';
@@ -40,6 +39,8 @@ export async function getRentals(): Promise<Rental[]> {
       chargeSaturdays: row.chargeSaturdays !== 0,
       chargeSundays: row.chargeSundays !== 0,
       returnNotificationSent: row.returnNotificationSent || null,
+      fuelValue: row.fuelValue ?? 0,
+      deliveredWithFullTank: row.deliveredWithFullTank === 1,
     }));
   } catch (error) {
     console.error("Failed to fetch rentals:", error);
@@ -75,6 +76,8 @@ export async function getRentalById(id: number): Promise<Rental | undefined> {
       chargeSaturdays: row.chargeSaturdays !== 0,
       chargeSundays: row.chargeSundays !== 0,
       returnNotificationSent: row.returnNotificationSent || null,
+      fuelValue: row.fuelValue ?? 0,
+      deliveredWithFullTank: row.deliveredWithFullTank === 1,
     };
   } catch (error) {
     console.error(`Failed to fetch rental with id ${id}:`, error);
@@ -137,6 +140,8 @@ export async function createRental(
     isOpenEnded: rentalData.isOpenEnded ? 1 : 0,
     freightValue: rentalData.freightValue ?? 0,
     discountValue: rentalData.discountValue ?? 0,
+    fuelValue: rentalData.fuelValue ?? 0,
+    deliveredWithFullTank: rentalData.deliveredWithFullTank ? 1 : 0,
     paymentDate: formattedPaymentDate,
     notes: rentalData.notes ?? null,
     actualReturnDate: rentalData.actualReturnDate ?? null,
@@ -148,8 +153,8 @@ export async function createRental(
   const rentalFieldsToInsert = newRentalForDbBase;
 
   const insertRentalStmt = db.prepare(`
-    INSERT INTO rentals (customerId, customerName, rentalStartDate, rentalDays, expectedReturnDate, actualReturnDate, freightValue, discountValue, value, paymentStatus, paymentMethod, paymentDate, notes, deliveryAddress, isOpenEnded, chargeSaturdays, chargeSundays, returnNotificationSent)
-    VALUES (@customerId, @customerName, @rentalStartDate, @rentalDays, @expectedReturnDate, @actualReturnDate, @freightValue, @discountValue, @value, @paymentStatus, @paymentMethod, @paymentDate, @notes, @deliveryAddress, @isOpenEnded, @chargeSaturdays, @chargeSundays, @returnNotificationSent)
+    INSERT INTO rentals (customerId, customerName, rentalStartDate, rentalDays, expectedReturnDate, actualReturnDate, freightValue, discountValue, value, paymentStatus, paymentMethod, paymentDate, notes, deliveryAddress, isOpenEnded, chargeSaturdays, chargeSundays, returnNotificationSent, fuelValue, deliveredWithFullTank)
+    VALUES (@customerId, @customerName, @rentalStartDate, @rentalDays, @expectedReturnDate, @actualReturnDate, @freightValue, @discountValue, @value, @paymentStatus, @paymentMethod, @paymentDate, @notes, @deliveryAddress, @isOpenEnded, @chargeSaturdays, @chargeSundays, @returnNotificationSent, @fuelValue, @deliveredWithFullTank)
   `);
 
   const insertRentalEquipmentStmt = db.prepare(`
@@ -188,6 +193,7 @@ export async function createRental(
       isOpenEnded: newRentalForDbBase.isOpenEnded === 1,
       chargeSaturdays: newRentalForDbBase.chargeSaturdays === 1,
       chargeSundays: newRentalForDbBase.chargeSundays === 1, 
+      deliveredWithFullTank: newRentalForDbBase.deliveredWithFullTank === 1,
       equipment: equipment.map(eq => { 
           let equipmentName = eq.name;
           if (!equipmentName) {
@@ -302,6 +308,8 @@ export async function updateRental(
     rentalDays: currentRentalDays,
     freightValue: updatedRentalData.freightValue ?? existingRental.freightValue ?? 0,
     discountValue: updatedRentalData.discountValue ?? existingRental.discountValue ?? 0,
+    fuelValue: updatedRentalData.fuelValue ?? existingRental.fuelValue ?? 0,
+    deliveredWithFullTank: typeof updatedRentalData.deliveredWithFullTank === 'boolean' ? (updatedRentalData.deliveredWithFullTank ? 1 : 0) : (existingRental.deliveredWithFullTank ? 1 : 0),
     paymentMethod: updatedRentalData.paymentMethod ?? existingRental.paymentMethod ?? 'nao_definido',
     notes: updatedRentalData.notes ?? existingRental.notes ?? null,
     actualReturnDate: updatedRentalData.actualReturnDate ?? existingRental.actualReturnDate ?? null,
@@ -320,7 +328,7 @@ export async function updateRental(
       expectedReturnDate = @expectedReturnDate, actualReturnDate = @actualReturnDate, freightValue = @freightValue, discountValue = @discountValue,
       value = @value, paymentStatus = @paymentStatus, paymentMethod = @paymentMethod, paymentDate = @paymentDate, notes = @notes,
       deliveryAddress = @deliveryAddress, isOpenEnded = @isOpenEnded, chargeSaturdays = @chargeSaturdays, chargeSundays = @chargeSundays,
-      returnNotificationSent = @returnNotificationSent
+      returnNotificationSent = @returnNotificationSent, fuelValue = @fuelValue, deliveredWithFullTank = @deliveredWithFullTank
     WHERE id = @id
   `);
 
@@ -487,7 +495,9 @@ export async function extendRental(
     equipment: equipmentForNewRental,
     paymentStatus: 'pending' as const,
     paymentMethod: existingRental.paymentMethod || 'pix',
-    freightValue: 0,
+    freightValue: 0, // Extensions do not carry over freight
+    fuelValue: 0, // Extensions do not carry over fuel costs
+    deliveredWithFullTank: false, // Default to false for new extension
     discountValue: 0,
     notes: `Extensão do aluguel ID: ${rentalId}. Período original de ${format(parseISO(existingRental.rentalStartDate), 'dd/MM/yyyy', { locale: ptBR })} a ${format(parseISO(existingRental.expectedReturnDate), 'dd/MM/yyyy', { locale: ptBR })}.`,
     deliveryAddress: existingRental.deliveryAddress || 'A definir',
@@ -505,18 +515,12 @@ export async function extendRental(
   } else { // type === 'fixed'
     const additionalDays = options.additionalDays ?? 1;
     if (additionalDays <= 0) throw new Error("Additional days must be positive for a fixed extension.");
-
-    // Find the end date by adding the specified number of BILLABLE days.
-    let newRentalEndDateObj = newRentalStartDateObj;
-    let billableDaysCounted = 1;
-    while (billableDaysCounted < additionalDays) {
-      newRentalEndDateObj = addDays(newRentalEndDateObj, 1);
-      if (!isNonBillableWeekend(newRentalEndDateObj, options.chargeSaturdays, options.chargeSundays)) {
-        billableDaysCounted++;
-      }
-    }
     
-    const totalCalendarDays = differenceInDays(newRentalEndDateObj, newRentalStartDateObj) + 1;
+    const totalCalendarDays = differenceInDays(
+        findNthBillableDay(newRentalStartDateObj, additionalDays, options.chargeSaturdays, options.chargeSundays), 
+        newRentalStartDateObj
+    ) + 1;
+
     const newRentalValue = dailyRateSum * additionalDays;
 
     newRentalData = {

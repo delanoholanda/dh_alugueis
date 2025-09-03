@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
-import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, Info, CreditCard, Landmark, CircleDollarSign, UserPlus, PackagePlus, MapPin, AlertCircle, ChevronsUpDown, Check, Package } from 'lucide-react';
+import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, Info, CreditCard, Landmark, CircleDollarSign, UserPlus, PackagePlus, MapPin, AlertCircle, ChevronsUpDown, Check, Package, Fuel } from 'lucide-react';
 import { format, addDays, parseISO, isSameDay, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
@@ -60,6 +60,13 @@ const rentalFormSchema = z.object({
         .min(0, "Valor do frete não pode ser negativo")
         .optional()
     ),
+  fuelValue: z.preprocess(
+      (val) => (val === '' || val === undefined || val === null ? 0 : val), 
+      z.coerce.number({invalid_type_error: "Valor do combustível deve ser um número."})
+        .min(0, "Valor do combustível não pode ser negativo")
+        .optional()
+    ),
+  deliveredWithFullTank: z.boolean().default(false),
   discountValue: z.coerce.number({invalid_type_error: "Valor do desconto deve ser um número."})
     .min(0, "Valor do desconto não pode ser negativo")
     .optional(),
@@ -183,6 +190,8 @@ export function RentalForm({
       rentalDays: initialData.isOpenEnded ? 0 : initialData.rentalDays,
       freightValue: initialData.freightValue || 0,
       discountValue: initialData.discountValue || 0,
+      fuelValue: initialData.fuelValue || 0,
+      deliveredWithFullTank: initialData.deliveredWithFullTank || false,
       paymentMethod: initialData.paymentMethod || 'pix',
       paymentDate: initialData.paymentDate ? parseISO(initialData.paymentDate) : undefined,
       notes: initialData.notes ?? '', 
@@ -198,6 +207,8 @@ export function RentalForm({
       rentalDays: 5,
       freightValue: 0,
       discountValue: 0,
+      fuelValue: 0,
+      deliveredWithFullTank: false,
       value: 0,
       paymentStatus: 'pending',
       paymentMethod: 'pix',
@@ -216,6 +227,7 @@ export function RentalForm({
   const watchedEquipment = form.watch("equipment");
   const watchedRentalDays = form.watch("rentalDays");
   const watchedFreightValue = form.watch("freightValue");
+  const watchedFuelValue = form.watch("fuelValue");
   const watchedPaymentStatus = form.watch("paymentStatus");
   const watchedRentalStartDate = form.watch("rentalStartDate");
   const watchedChargeSaturdays = form.watch("chargeSaturdays");
@@ -299,8 +311,11 @@ export function RentalForm({
     const freightInput = watchedFreightValue;
     const freight = (typeof freightInput === 'number' && !isNaN(freightInput)) ? freightInput : 0;
     
+    const fuelInput = watchedFuelValue;
+    const fuel = (typeof fuelInput === 'number' && !isNaN(fuelInput)) ? fuelInput : 0;
+
     // For open-ended, the contract value is just the daily rate. Freight is separate.
-    let finalContractValue = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight;
+    let finalContractValue = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight + fuel;
     
     let calculatedDiscount = 0;
     if (itemsTotalValue < subTotalBasedOnStandardRates) {
@@ -310,7 +325,7 @@ export function RentalForm({
     form.setValue('value', isNaN(finalContractValue) ? 0 : Math.max(0, finalContractValue), { shouldValidate: true });
     form.setValue('discountValue', isNaN(calculatedDiscount) ? 0 : Math.max(0, calculatedDiscount), { shouldValidate: true });
 
-  }, [JSON.stringify(watchedEquipment), watchedRentalDays, watchedFreightValue, inventoryList, form, watchedIsOpenEnded]);
+  }, [JSON.stringify(watchedEquipment), watchedRentalDays, watchedFreightValue, watchedFuelValue, inventoryList, form, watchedIsOpenEnded]);
 
 
   const getEquipmentStandardRate = (equipmentId: string): number | undefined => {
@@ -481,6 +496,7 @@ export function RentalForm({
       rentalDays: data.isOpenEnded ? 0 : data.rentalDays,
       freightValue: (typeof data.freightValue === 'number' && !isNaN(data.freightValue)) ? data.freightValue : 0,
       discountValue: (typeof data.discountValue === 'number' && !isNaN(data.discountValue)) ? data.discountValue : 0,
+      fuelValue: (typeof data.fuelValue === 'number' && !isNaN(data.fuelValue)) ? data.fuelValue : 0,
       value: (typeof data.value === 'number' && !isNaN(data.value)) ? data.value : 0,
       deliveryAddress: data.deliveryAddress && data.deliveryAddress.trim() !== '' ? data.deliveryAddress : 'A definir',
     } as any; 
@@ -926,6 +942,53 @@ export function RentalForm({
                 )}
             />
 
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-lg font-semibold flex items-center"><Fuel className="mr-2 h-5 w-5 text-primary" />Informações de Combustível</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                     <FormField
+                        control={form.control}
+                        name="fuelValue"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Valor Adicional de Combustível (R$)</FormLabel>
+                            <FormControl>
+                            <Input
+                                type="text"
+                                placeholder="R$ 0,00"
+                                value={field.value === undefined ? '' : formatToBRL(field.value)}
+                                onChange={(e) => {
+                                    const parsedValue = parseFromBRL(e.target.value);
+                                    field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
+                                }}
+                            />
+                            </FormControl>
+                            <FormDescription>Custo adicional pelo combustível fornecido. Será somado ao valor total.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                     <FormField
+                        control={form.control}
+                        name="deliveredWithFullTank"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                            <div className="space-y-0.5">
+                                <FormLabel>Entregue com Tanque Cheio?</FormLabel>
+                            </div>
+                            <FormControl>
+                                <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                />
+                            </FormControl>
+                            </FormItem>
+                        )}
+                    />
+                </CardContent>
+            </Card>
+
             <FormField
               control={form.control}
               name="freightValue"
@@ -989,7 +1052,7 @@ export function RentalForm({
                     <FormDescription>
                         {watchedIsOpenEnded 
                             ? "Calculado (Soma das diárias dos itens)."
-                            : "Calculado (Equipamentos + Frete)."
+                            : "Calculado (Equipamentos + Frete + Combustível)."
                         }
                     </FormDescription>
                     <FormMessage />
