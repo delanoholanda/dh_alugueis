@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2, Signature, DatabaseBackup } from 'lucide-react';
+import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2, Signature, DatabaseBackup, Landmark } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
@@ -43,6 +43,8 @@ export default function SettingsPage() {
     address: '',
     email: '',
     pixKey: '',
+    pixHolderName: '',
+    pixBankIconUrl: '',
     contractTermsAndConditions: '',
     contractFooterText: '',
     companyLogoUrl: '',
@@ -150,7 +152,7 @@ export default function SettingsPage() {
     });
   };
 
-  const handleImageChange = (event: ChangeEvent<HTMLInputElement>, type: 'company' | 'contract' | 'signature') => {
+  const handleImageChange = (event: ChangeEvent<HTMLInputElement>, type: 'company' | 'contract' | 'signature' | 'pixBank') => {
     const file = event.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) { 
@@ -166,12 +168,12 @@ export default function SettingsPage() {
       reader.onloadend = () => {
         const result = reader.result as string;
         let keyToUpdate: keyof CompanyDetails;
-        if (type === 'company') {
-          keyToUpdate = 'companyLogoUrl';
-        } else if (type === 'contract') {
-          keyToUpdate = 'contractLogoUrl';
-        } else {
-          keyToUpdate = 'signatureImageUrl';
+        switch (type) {
+            case 'company': keyToUpdate = 'companyLogoUrl'; break;
+            case 'contract': keyToUpdate = 'contractLogoUrl'; break;
+            case 'signature': keyToUpdate = 'signatureImageUrl'; break;
+            case 'pixBank': keyToUpdate = 'pixBankIconUrl'; break;
+            default: return;
         }
 
         setCompanyDetails(prev => ({
@@ -332,10 +334,27 @@ export default function SettingsPage() {
                      <Input id="address" name="address" value={companyDetails.address} onChange={handleCompanyDetailsInputChange} placeholder="Rua, Número, Bairro, Cidade, Estado" />
                      <p className="text-sm text-muted-foreground">Ex: Rua Exemplo, 123, Centro, Sua Cidade, SC</p>
                   </div>
-                  <div className="space-y-1.5">
-                     <Label htmlFor="pixKey">Chave PIX</Label>
-                     <Input id="pixKey" name="pixKey" value={companyDetails.pixKey} onChange={handleCompanyDetailsInputChange} placeholder="Sua chave PIX" />
-                     <p className="text-sm text-muted-foreground">Pode ser CPF/CNPJ (só números), Telefone (+55...), Email ou Chave Aleatória.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                         <Label htmlFor="pixKey">Chave PIX</Label>
+                         <Input id="pixKey" name="pixKey" value={companyDetails.pixKey} onChange={handleCompanyDetailsInputChange} placeholder="Sua chave PIX" />
+                         <p className="text-sm text-muted-foreground">CPF/CNPJ, Telefone, Email ou Chave Aleatória.</p>
+                      </div>
+                      <div className="space-y-1.5">
+                         <Label htmlFor="pixHolderName">Nome do Titular do PIX</Label>
+                         <Input id="pixHolderName" name="pixHolderName" value={companyDetails.pixHolderName} onChange={handleCompanyDetailsInputChange} placeholder="Nome que aparece no PIX" />
+                         <p className="text-sm text-muted-foreground">Nome completo do titular da chave.</p>
+                      </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ícone do Banco do PIX</Label>
+                     <div className="flex flex-col items-start space-y-2 mt-1">
+                          <div className="w-16 h-16 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center p-1">
+                              {companyDetails.pixBankIconUrl ? <Image src={companyDetails.pixBankIconUrl} alt="Pré-visualização do Ícone do Banco" layout="fill" objectFit="contain" key={companyDetails.pixBankIconUrl} data-ai-hint="bank icon"/> : <Landmark className="w-8 h-8 text-muted-foreground" data-ai-hint="bank icon placeholder"/>}
+                          </div>
+                          <Input name="pixBankIconUrl" placeholder="Cole a URL da imagem aqui" value={companyDetails.pixBankIconUrl || ''} onChange={handleCompanyDetailsInputChange} />
+                          <Input id="pixBankIconUpload" type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'pixBank')} className="w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                      </div>
                   </div>
                   
                   {/* LOGOS SECTION */}

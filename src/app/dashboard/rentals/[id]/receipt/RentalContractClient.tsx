@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo } from 'react';
@@ -8,7 +9,7 @@ import { formatToBRL } from '@/lib/utils';
 import type { Rental, Equipment as InventoryItem, PaymentMethod, CompanyDetails, Customer } from '@/types';
 import ContractPrintActions from './ContractPrintActions';
 import { QRCodeCanvas } from 'qrcode.react';
-import { MapPin, AlertCircle, Fuel } from 'lucide-react';
+import { MapPin, AlertCircle, Fuel, Landmark } from 'lucide-react';
 
 const DEFAULT_COMPANY_LOGO = '/dh-alugueis-logo.png';
 
@@ -455,8 +456,16 @@ export default function RentalContractClient({ rental, customer, companySettings
                 <h3 className="font-semibold text-sm mb-1">Pagar com PIX:</h3>
                 <QRCodeCanvas value={pixPayload} size={110} level="M" includeMargin={true} />
                 <div className="mt-1 text-center">
-                    <p className="font-semibold text-sm">Chave PIX:</p>
+                    <div className="flex justify-center items-center gap-2">
+                       {companySettings.pixBankIconUrl && (
+                           <div className="relative h-8 w-8">
+                              <Image src={companySettings.pixBankIconUrl} alt="Ícone do Banco" fill style={{objectFit: 'contain'}} />
+                           </div>
+                       )}
+                       <p className="font-semibold text-sm">Chave PIX:</p>
+                    </div>
                     <p className="font-mono font-bold text-base tracking-wider">{formattedPixKey}</p>
+                    {companySettings.pixHolderName && <p className="text-xs text-muted-foreground mt-1">Titular: {companySettings.pixHolderName}</p>}
                 </div>
               </div>
             )}
@@ -464,8 +473,16 @@ export default function RentalContractClient({ rental, customer, companySettings
                 <div className="pix-section">
                     <p className="text-xs text-muted-foreground">Gerando QR Code PIX...</p>
                     <div className="mt-1 text-center">
-                        <p className="font-semibold text-sm">Chave PIX:</p>
+                        <div className="flex justify-center items-center gap-2">
+                          {companySettings.pixBankIconUrl && (
+                            <div className="relative h-8 w-8">
+                                <Image src={companySettings.pixBankIconUrl} alt="Ícone do Banco" fill style={{objectFit: 'contain'}} />
+                            </div>
+                          )}
+                          <p className="font-semibold text-sm">Chave PIX:</p>
+                        </div>
                         <p className="font-mono font-bold text-base tracking-wider">{formattedPixKey}</p>
+                        {companySettings.pixHolderName && <p className="text-xs text-muted-foreground mt-1">Titular: {companySettings.pixHolderName}</p>}
                     </div>
                 </div>
              )}

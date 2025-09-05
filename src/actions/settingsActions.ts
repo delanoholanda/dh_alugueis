@@ -13,6 +13,8 @@ const defaultSettings: CompanyDetails = {
     address: 'Rua Ana Ventura de Oliveira, 189, Ipu, CE',
     email: 'dhalugueis@gmail.com',
     pixKey: '+5588982248384',
+    pixHolderName: 'Delano José Holanda Maia',
+    pixBankIconUrl: '',
     contractTermsAndConditions: `1. O locatário é responsável por quaisquer danos, perda ou roubo do equipamento alugado.
 2. O equipamento deve ser devolvido na data e hora especificadas no contrato. Atrasos podem incorrer em taxas adicionais.
 3. O pagamento deve ser efetuado conforme acordado. Em caso de inadimplência, medidas legais poderão ser tomadas.
@@ -87,6 +89,19 @@ export async function updateCompanySettings(settings: Partial<CompanyDetails>): 
                 await deleteFile(currentSettings.signatureImageUrl);
             }
             settingsToUpdate.signatureImageUrl = '';
+        }
+        
+        // Handle pixBankIconUrl
+        if (settings.pixBankIconUrl && settings.pixBankIconUrl.startsWith('data:image/')) {
+            if (currentSettings.pixBankIconUrl && currentSettings.pixBankIconUrl.startsWith('/uploads/')) {
+                await deleteFile(currentSettings.pixBankIconUrl);
+            }
+            settingsToUpdate.pixBankIconUrl = await saveFile(settings.pixBankIconUrl, 'logos');
+        } else if (settings.pixBankIconUrl === '') {
+             if (currentSettings.pixBankIconUrl && currentSettings.pixBankIconUrl.startsWith('/uploads/')) {
+                await deleteFile(currentSettings.pixBankIconUrl);
+            }
+            settingsToUpdate.pixBankIconUrl = '';
         }
 
         const stmt = db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (@key, @value)');

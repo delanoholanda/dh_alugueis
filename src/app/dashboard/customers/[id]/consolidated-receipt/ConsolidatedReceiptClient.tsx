@@ -368,8 +368,16 @@ export default function ConsolidatedReceiptClient({
                 <h3 className="font-semibold text-sm mb-1">Pagar com PIX:</h3>
                 <QRCodeCanvas value={pixPayload} size={110} level="M" includeMargin={true} />
                 <div className="mt-1 text-center">
-                  <p className="font-semibold text-sm">Chave PIX:</p>
+                   <div className="flex justify-center items-center gap-2">
+                       {companySettings.pixBankIconUrl && (
+                           <div className="relative h-8 w-8">
+                              <Image src={companySettings.pixBankIconUrl} alt="Ícone do Banco" fill style={{objectFit: 'contain'}} />
+                           </div>
+                       )}
+                       <p className="font-semibold text-sm">Chave PIX:</p>
+                  </div>
                   <p className="font-mono font-bold text-base tracking-wider">{formattedPixKey}</p>
+                  {companySettings.pixHolderName && <p className="text-xs text-muted-foreground mt-1">Titular: {companySettings.pixHolderName}</p>}
                 </div>
               </div>
             )}
@@ -389,3 +397,4 @@ export default function ConsolidatedReceiptClient({
     </div>
   );
 }
+
