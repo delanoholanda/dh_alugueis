@@ -38,16 +38,22 @@ export function parseFromBRL(value: string): number {
 }
 
 export function findNthBillableDay(startDate: Date, totalBillableDays: number, chargeSaturdays: boolean, chargeSundays: boolean): Date {
-  if (totalBillableDays < 1) {
+  // If we have a fraction, we need to find the ceiling to get the actual return day.
+  // The fractional part is only for financial calculation.
+  const fullDaysToFind = Math.ceil(totalBillableDays);
+
+  if (fullDaysToFind < 1) {
     return startDate; 
   }
 
   let endDate = startDate;
-  let daysCounted = 1;
+  let daysCounted = 1; // Start counting from the first day
 
-  while (daysCounted < totalBillableDays) {
+  // We loop until we have found the required number of full billable days.
+  while (daysCounted < fullDaysToFind) {
     endDate = addDays(endDate, 1);
     const dayOfWeek = getDay(endDate);
+    
     // Only count if it's NOT a non-billable weekend day
     if (!((dayOfWeek === 6 && !chargeSaturdays) || (dayOfWeek === 0 && !chargeSundays))) {
       daysCounted++;

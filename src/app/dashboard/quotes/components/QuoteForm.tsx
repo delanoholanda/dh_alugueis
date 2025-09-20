@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { Quote, Customer, Equipment as InventoryEquipment, EquipmentType, Rental } from '@/types';
@@ -48,8 +47,7 @@ const quoteFormSchema = z.object({
   chargeSaturdays: z.boolean().default(true),
   chargeSundays: z.boolean().default(true),
   rentalDays: z.coerce.number({invalid_type_error: "Dias de aluguel deve ser um número."})
-      .min(1, "Deve ser pelo menos 1 dia.")
-      .refine(val => !isNaN(val) && Number.isInteger(val), { message: "Dias de aluguel deve ser um número inteiro válido." }),
+      .min(1, "Deve ser pelo menos 1 dia."),
   freightValue: z.preprocess(
       (val) => (val === '' || val === undefined || val === null ? 0 : val), 
       z.coerce.number({invalid_type_error: "Valor do frete deve ser um número."})
@@ -445,7 +443,7 @@ export function QuoteForm({
                 </FormItem>
               )} />
               <FormField control={form.control} name="rentalDays" render={({ field }) => (
-                <FormItem><FormLabel>Dias de Aluguel</FormLabel><FormControl><Input type="number" {...field} min="1"/></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Dias de Aluguel</FormLabel><FormControl><Input type="number" {...field} min="1" step="0.5"/></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="expectedReturnDate" render={({ field }) => (
                 <FormItem className="flex flex-col"><FormLabel>Data de Retorno (Calculada)</FormLabel>

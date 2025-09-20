@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { Rental, Customer, Equipment as InventoryEquipment, PaymentMethod, EquipmentType } from '@/types';
@@ -52,8 +51,7 @@ const rentalFormSchema = z.object({
   chargeSaturdays: z.boolean().default(true),
   chargeSundays: z.boolean().default(true),
   rentalDays: z.coerce.number({invalid_type_error: "Dias de aluguel deve ser um número."})
-      .min(0, "Dias de aluguel deve ser no mínimo 0")
-      .refine(val => !isNaN(val) && Number.isInteger(val), { message: "Dias de aluguel deve ser um número inteiro válido." }),
+      .min(0, "Dias de aluguel deve ser no mínimo 0"),
   freightValue: z.preprocess(
       (val) => (val === '' || val === undefined || val === null ? 0 : val), 
       z.coerce.number({invalid_type_error: "Valor do frete deve ser um número."})
@@ -842,6 +840,7 @@ export function RentalForm({
                           {...field} 
                           disabled={watchedIsOpenEnded}
                           min={watchedIsOpenEnded ? "0" : "1"}
+                          step="0.5"
                         />
                       </FormControl>
                       <FormMessage />
