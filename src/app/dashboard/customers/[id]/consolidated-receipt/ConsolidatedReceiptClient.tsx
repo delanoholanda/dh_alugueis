@@ -304,6 +304,12 @@ export default function ConsolidatedReceiptClient({
                             <td className="text-right">{formatToBRL(rental.fuelValue)}</td>
                         </tr>
                     )}
+                    {typeof rental.discountValue === 'number' && rental.discountValue > 0 && (
+                      <tr className="text-orange-600">
+                          <td colSpan={4}>Desconto Concedido</td>
+                          <td className="text-right">-{formatToBRL(rental.discountValue)}</td>
+                      </tr>
+                    )}
                     <tr className="font-bold">
                         <td colSpan={4}>Total do Contrato #{index + 1}</td>
                         <td className="text-right">{formatToBRL(rental.totalContractValue)}</td>

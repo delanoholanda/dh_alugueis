@@ -65,9 +65,12 @@ const rentalFormSchema = z.object({
         .optional()
     ),
   deliveredWithFullTank: z.boolean().default(false),
-  discountValue: z.coerce.number({invalid_type_error: "Valor do desconto deve ser um número."})
-    .min(0, "Valor do desconto não pode ser negativo")
-    .optional(),
+  discountValue: z.preprocess(
+      (val) => (val === '' || val === undefined || val === null ? 0 : val),
+      z.coerce.number({invalid_type_error: "Valor do desconto deve ser um número."})
+        .min(0, "Valor do desconto não pode ser negativo")
+        .optional()
+    ),
   value: z.coerce.number({invalid_type_error: "Valor deve ser um número.", required_error: "Valor é obrigatório."})
     .min(0, "Valor não pode ser negativo"),
   paymentStatus: z.enum(['paid', 'pending', 'overdue']),
@@ -226,6 +229,7 @@ export function RentalForm({
   const watchedRentalDays = form.watch("rentalDays");
   const watchedFreightValue = form.watch("freightValue");
   const watchedFuelValue = form.watch("fuelValue");
+  const watchedDiscountValue = form.watch("discountValue");
   const watchedPaymentStatus = form.watch("paymentStatus");
   const watchedRentalStartDate = form.watch("rentalStartDate");
   const watchedChargeSaturdays = form.watch("chargeSaturdays");
@@ -271,7 +275,6 @@ export function RentalForm({
   // Effect to calculate final value
   useEffect(() => {
     let subTotalBasedOnCustomRates = 0;
-    let subTotalBasedOnStandardRates = 0;
 
     const daysInput = watchedRentalDays;
     const days = (!watchedIsOpenEnded && daysInput && !isNaN(Number(daysInput)) && Number(daysInput) > 0) ? Number(daysInput) : 0;
@@ -300,7 +303,6 @@ export function RentalForm({
             }
             
             itemsTotalValue += (qty * customRate * (watchedIsOpenEnded ? 1 : days));
-            subTotalBasedOnStandardRates += (qty * standardRate * (watchedIsOpenEnded ? 1 : days));
           }
         }
       });
@@ -311,19 +313,16 @@ export function RentalForm({
     
     const fuelInput = watchedFuelValue;
     const fuel = (typeof fuelInput === 'number' && !isNaN(fuelInput)) ? fuelInput : 0;
-
-    // For open-ended, the contract value is just the daily rate. Freight is separate.
-    let finalContractValue = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight + fuel;
     
-    let calculatedDiscount = 0;
-    if (itemsTotalValue < subTotalBasedOnStandardRates) {
-        calculatedDiscount = subTotalBasedOnStandardRates - itemsTotalValue;
-    }
+    const discountInput = watchedDiscountValue;
+    const discount = (typeof discountInput === 'number' && !isNaN(discountInput)) ? discountInput : 0;
 
+    // For open-ended, the contract value is just the daily rate.
+    let finalContractValue = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight + fuel - discount;
+    
     form.setValue('value', isNaN(finalContractValue) ? 0 : Math.max(0, finalContractValue), { shouldValidate: true });
-    form.setValue('discountValue', isNaN(calculatedDiscount) ? 0 : Math.max(0, calculatedDiscount), { shouldValidate: true });
 
-  }, [JSON.stringify(watchedEquipment), watchedRentalDays, watchedFreightValue, watchedFuelValue, inventoryList, form, watchedIsOpenEnded]);
+  }, [JSON.stringify(watchedEquipment), watchedRentalDays, watchedFreightValue, watchedFuelValue, watchedDiscountValue, inventoryList, form, watchedIsOpenEnded]);
 
 
   const getEquipmentStandardRate = (equipmentId: string): number | undefined => {
@@ -839,7 +838,7 @@ export function RentalForm({
                           type="number" 
                           {...field} 
                           disabled={watchedIsOpenEnded}
-                          min={watchedIsOpenEnded ? "0" : "1"}
+                          min={watchedIsOpenEnded ? "0" : "0.5"}
                           step="0.5"
                         />
                       </FormControl>
@@ -1009,28 +1008,31 @@ export function RentalForm({
               </FormItem>
               )}
             />
+            
+            <FormField
+              control={form.control}
+              name="discountValue"
+              render={({ field }) => (
+              <FormItem>
+                  <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4 text-muted-foreground"/>Aplicar Desconto (R$)</FormLabel>
+                  <FormControl>
+                  <Input
+                      type="text"
+                      placeholder="R$ 0,00"
+                      value={field.value === undefined ? '' : formatToBRL(field.value)}
+                      onChange={(e) => {
+                          const parsedValue = parseFromBRL(e.target.value);
+                          field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
+                      }}
+                  />
+                  </FormControl>
+                  <FormMessage />
+              </FormItem>
+              )}
+            />
+
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <FormField
-                    control={form.control}
-                    name="discountValue"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4 text-muted-foreground"/>Desconto Aplicado (R$)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="text"
-                            value={formatToBRL(field.value)}
-                            readOnly
-                            disabled
-                            className="bg-muted/50 font-bold"
-                          />
-                        </FormControl>
-                         <FormDescription>Desconto calculado (Taxas Padrão - Taxas Customizadas).</FormDescription>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
               <FormField
                 control={form.control}
                 name="value"
@@ -1051,7 +1053,7 @@ export function RentalForm({
                     <FormDescription>
                         {watchedIsOpenEnded 
                             ? "Calculado (Soma das diárias dos itens)."
-                            : "Calculado (Equipamentos + Frete + Combustível)."
+                            : "Calculado (Itens + Frete + Combustível - Desconto)."
                         }
                     </FormDescription>
                     <FormMessage />

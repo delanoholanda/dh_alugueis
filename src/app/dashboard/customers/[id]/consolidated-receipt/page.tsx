@@ -80,17 +80,17 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
             );
             // For open-ended, rental.value is the daily rate.
             itemsSubtotal = billableDays * rental.value; 
-            totalContractValue = itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0);
+            totalContractValue = itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0) - (rental.discountValue ?? 0);
             finalRentalDays = billableDays;
             finalExpectedReturnDate = closeUntilDateStr;
         } else {
-            // For fixed-value contracts, calculate itemsSubtotal from equipment list
+            // For fixed-term contracts, calculate itemsSubtotal from equipment list
             itemsSubtotal = rental.equipment.reduce((sum, eq) => {
                 const inventoryItem = inventoryMap.get(eq.equipmentId);
                 const dailyRate = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
                 return sum + (dailyRate * eq.quantity * (rental.rentalDays || 0));
             }, 0);
-            totalContractValue = itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0);
+            totalContractValue = itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0) - (rental.discountValue ?? 0);
         }
 
         const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
@@ -103,7 +103,7 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
             pendingValue: Math.max(0, totalContractValue - totalPaid), 
             rentalDays: finalRentalDays,
             expectedReturnDate: finalExpectedReturnDate,
-            value: rental.value, 
+            value: totalContractValue, 
         };
     });
 

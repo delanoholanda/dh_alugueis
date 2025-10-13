@@ -33,11 +33,11 @@ export default async function FinancialContractsPage() {
       );
       // For open-ended, rental.value is the daily rate.
       itemsValue = billableDays * rental.value;
-      totalContractValue = itemsValue + (rental.freightValue ?? 0);
+      totalContractValue = itemsValue + (rental.freightValue ?? 0) - (rental.discountValue ?? 0);
     } else {
-      // For fixed-term contracts, rental.value already includes freight.
+      // For fixed-term contracts, rental.value already includes freight and discount.
       totalContractValue = rental.value;
-      itemsValue = totalContractValue - (rental.freightValue ?? 0);
+      itemsValue = totalContractValue - (rental.freightValue ?? 0) + (rental.discountValue ?? 0);
     }
     
     // Legacy support: if a rental was fully paid before the 'payments' table existed.

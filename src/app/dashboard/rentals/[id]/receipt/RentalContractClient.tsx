@@ -9,7 +9,7 @@ import { formatToBRL } from '@/lib/utils';
 import type { Rental, Equipment as InventoryItem, PaymentMethod, CompanyDetails, Customer } from '@/types';
 import ContractPrintActions from './ContractPrintActions';
 import { QRCodeCanvas } from 'qrcode.react';
-import { MapPin, AlertCircle, Fuel, Landmark } from 'lucide-react';
+import { MapPin, AlertCircle, Fuel, Landmark, Percent } from 'lucide-react';
 
 const DEFAULT_COMPANY_LOGO = '/dh-alugueis-logo.png';
 
@@ -84,7 +84,7 @@ function numberToWords(num: number): string {
            return currentStr.slice(0, -2) + blockText;
         }
         if (blockText.includes(" e ") || blockValue < 100 && !endsWithQualifier) {
-            return currentStr + ', ' + blockText;
+              return currentStr + ', ' + blockText;
         }
         return currentStr + ' e ' + blockText;
     } else {
@@ -213,10 +213,10 @@ export default function RentalContractClient({ rental, customer, companySettings
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
   
   const grandTotal = itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0);
-  const pendingValue = grandTotal - totalPaid;
+  const pendingValue = grandTotal - (rental.discountValue ?? 0) - totalPaid;
 
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
-  const valorPorExtenso = numberToWords(grandTotal);
+  const valorPorExtenso = numberToWords(rental.value);
   const displayContractLogo = companySettings.contractLogoUrl || companySettings.companyLogoUrl || DEFAULT_COMPANY_LOGO;
   const contractTitle = "Contrato de Aluguel";
   const rentalPeriod = rental.isOpenEnded
@@ -400,7 +400,7 @@ export default function RentalContractClient({ rental, customer, companySettings
           <div> {/* Coluna da direita */}
             <table className="contract-table w-auto ml-auto"><tbody>
                   <tr>
-                    <td>Soma dos Itens (Total):</td>
+                    <td>Soma dos Itens:</td>
                     <td className="text-right">{formatToBRL(itemsSubtotal)}</td>
                   </tr>
                   {typeof rental.freightValue === 'number' && rental.freightValue > 0 && (
@@ -415,6 +415,12 @@ export default function RentalContractClient({ rental, customer, companySettings
                       <td className="text-right">{formatToBRL(rental.fuelValue)}</td>
                     </tr>
                   )}
+                   {typeof rental.discountValue === 'number' && rental.discountValue > 0 && (
+                    <tr className="text-orange-600">
+                        <td>Desconto Concedido:</td>
+                        <td className="text-right">-{formatToBRL(rental.discountValue)}</td>
+                    </tr>
+                   )}
                    {totalPaid > 0 && (
                     <tr className="text-green-700 font-semibold">
                         <td>Adiantamento / Pago Parcial:</td>
@@ -423,7 +429,7 @@ export default function RentalContractClient({ rental, customer, companySettings
                    )}
                   <tr className="total-line">
                     <td>Total Geral:</td>
-                    <td className="text-right">{formatToBRL(grandTotal)}</td>
+                    <td className="text-right">{formatToBRL(rental.value)}</td>
                   </tr>
                   {pendingValue > 0 && !rental.isOpenEnded && (
                     <tr className="total-line text-destructive">

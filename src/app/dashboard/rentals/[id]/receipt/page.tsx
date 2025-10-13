@@ -72,8 +72,7 @@ export default async function RentalContractPage({ params }: { params: { id: str
   }, 0);
   
   const grandTotal = itemsSubtotal + (finalRentalForDisplay.freightValue ?? 0);
-  const pendingValue = grandTotal - totalPaid;
-
+  const pendingValue = grandTotal - (finalRentalForDisplay.discountValue ?? 0) - totalPaid;
 
   if (finalRentalForDisplay.paymentMethod === 'pix' && companySettings.pixKey && pendingValue > 0 && !finalRentalForDisplay.isOpenEnded) {
     const city = extractCityFromAddress(companySettings.address);

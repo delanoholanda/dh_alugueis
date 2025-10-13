@@ -47,16 +47,19 @@ const quoteFormSchema = z.object({
   chargeSaturdays: z.boolean().default(true),
   chargeSundays: z.boolean().default(true),
   rentalDays: z.coerce.number({invalid_type_error: "Dias de aluguel deve ser um número."})
-      .min(1, "Deve ser pelo menos 1 dia."),
+      .min(0.5, "Deve ser pelo menos 0.5 dia."),
   freightValue: z.preprocess(
       (val) => (val === '' || val === undefined || val === null ? 0 : val), 
       z.coerce.number({invalid_type_error: "Valor do frete deve ser um número."})
         .min(0, "Valor do frete não pode ser negativo")
         .optional()
     ),
-  discountValue: z.coerce.number({invalid_type_error: "Valor do desconto deve ser um número."})
-    .min(0, "Valor do desconto não pode ser negativo")
-    .optional(),
+  discountValue: z.preprocess(
+      (val) => (val === '' || val === undefined || val === null ? 0 : val),
+      z.coerce.number({invalid_type_error: "Valor do desconto deve ser um número."})
+      .min(0, "Valor do desconto não pode ser negativo")
+      .optional()
+    ),
   value: z.coerce.number({invalid_type_error: "Valor deve ser um número.", required_error: "Valor é obrigatório."})
     .min(0, "Valor não pode ser negativo"),
   notes: z.string().optional(),
@@ -171,6 +174,7 @@ export function QuoteForm({
   const watchedEquipment = form.watch("equipment");
   const watchedRentalDays = form.watch("rentalDays");
   const watchedFreightValue = form.watch("freightValue");
+  const watchedDiscountValue = form.watch("discountValue");
   const watchedRentalStartDate = form.watch("rentalStartDate");
   const watchedChargeSaturdays = form.watch("chargeSaturdays");
   const watchedChargeSundays = form.watch("chargeSundays");
@@ -189,8 +193,7 @@ export function QuoteForm({
   }, [watchedRentalDays, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, form]);
   
   useEffect(() => {
-    let subTotalBasedOnCustomRates = 0;
-    let subTotalBasedOnStandardRates = 0;
+    let itemsTotalValue = 0;
     const days = watchedRentalDays || 0;
 
     if (watchedEquipment && days > 0) {
@@ -199,22 +202,20 @@ export function QuoteForm({
         if (item.equipmentId && qty > 0) {
           const equipmentDetails = inventoryList.find(invItem => invItem.id === item.equipmentId);
           if (equipmentDetails) {
-            const standardRate = equipmentDetails.dailyRentalRate || 0;
-            const customRate = item.customDailyRentalRate ?? standardRate;
-            subTotalBasedOnCustomRates += (qty * customRate * days);
-            subTotalBasedOnStandardRates += (qty * standardRate * days);
+            const customRate = item.customDailyRentalRate ?? equipmentDetails.dailyRentalRate ?? 0;
+            itemsTotalValue += (qty * customRate * days);
           }
         }
       });
     }
 
     const freight = watchedFreightValue || 0;
-    const finalContractValue = subTotalBasedOnCustomRates + freight;
-    const calculatedDiscount = subTotalBasedOnStandardRates - subTotalBasedOnCustomRates;
+    const discount = watchedDiscountValue || 0;
+    const finalContractValue = itemsTotalValue + freight - discount;
     
     form.setValue('value', finalContractValue < 0 ? 0 : finalContractValue, { shouldValidate: true });
-    form.setValue('discountValue', calculatedDiscount < 0 ? 0 : calculatedDiscount, { shouldValidate: true });
-  }, [watchedEquipment, watchedRentalDays, watchedFreightValue, inventoryList, form]);
+
+  }, [watchedEquipment, watchedRentalDays, watchedFreightValue, watchedDiscountValue, inventoryList, form]);
 
   const getEquipmentStandardRate = (equipmentId: string): number | undefined => {
     const item = inventoryList.find(inv => inv.id === equipmentId);
@@ -316,7 +317,7 @@ export function QuoteForm({
                  const selectedEquipmentId = watchedEquipment[index]?.equipmentId;
                  const selectedEquipmentDetails = inventoryList.find(inv => inv.id === selectedEquipmentId);
                 return (
-                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-3 items-end mt-2 p-3 border rounded-md relative">
+                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end mt-2 p-3 border rounded-md relative">
                     <FormField
                       control={form.control}
                       name={`equipment.${index}.equipmentId`}
@@ -443,7 +444,7 @@ export function QuoteForm({
                 </FormItem>
               )} />
               <FormField control={form.control} name="rentalDays" render={({ field }) => (
-                <FormItem><FormLabel>Dias de Aluguel</FormLabel><FormControl><Input type="number" {...field} min="1" step="0.5"/></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Dias de Aluguel</FormLabel><FormControl><Input type="number" {...field} min="0.5" step="0.5"/></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="expectedReturnDate" render={({ field }) => (
                 <FormItem className="flex flex-col"><FormLabel>Data de Retorno (Calculada)</FormLabel>
@@ -470,10 +471,32 @@ export function QuoteForm({
               </FormItem>
             )} />
 
+             <FormField
+              control={form.control}
+              name="discountValue"
+              render={({ field }) => (
+              <FormItem>
+                  <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4 text-muted-foreground"/>Aplicar Desconto (R$)</FormLabel>
+                  <FormControl>
+                  <Input
+                      type="text"
+                      placeholder="R$ 0,00"
+                      value={field.value === undefined ? '' : formatToBRL(field.value)}
+                      onChange={(e) => {
+                          const parsedValue = parseFromBRL(e.target.value);
+                          field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
+                      }}
+                  />
+                  </FormControl>
+                  <FormMessage />
+              </FormItem>
+              )}
+            />
+
             <FormField control={form.control} name="value" render={({ field }) => (
               <FormItem><FormLabel>Valor Total do Orçamento</FormLabel>
                 <FormControl><Input type="text" value={formatToBRL(field.value)} readOnly disabled className="bg-muted/50 font-bold text-lg" /></FormControl>
-                <FormDescription>Calculado (Equipamentos + Frete).</FormDescription>
+                <FormDescription>Calculado (Equipamentos + Frete - Desconto).</FormDescription>
                 <FormMessage />
               </FormItem>
             )} />
