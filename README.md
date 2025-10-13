@@ -171,4 +171,12 @@ Para garantir a segurança de todos os seus dados, é fundamental entender como 
             ```
             Agora, o Docker usará a pasta `data` que você acabou de copiar, e todos os seus dados estarão seguros e persistentes.
 
+*   **Preciso recriar o container Docker após cada mudança no código?**
+    *   **Não.** O ambiente de desenvolvimento do Next.js (rodando dentro do container) detecta automaticamente alterações em arquivos de código (como `.tsx`, `.ts`, `.css`) e atualiza a aplicação no navegador (hot-reload).
+    *   Você só precisa usar `docker-compose down` e `docker-compose up -d --build` quando fizer alterações em arquivos que afetam a **estrutura do container**, como:
+        *   O arquivo `.env` (para carregar novas variáveis de ambiente).
+        *   O arquivo `docker-compose.yml` (para mudar portas, volumes, etc.).
+        *   O `Dockerfile` (se precisar instalar novos pacotes no sistema operacional do container).
+        *   O `package.json` (após adicionar ou remover dependências, você deve rodar `npm install` localmente e depois recriar o container).
+
 Seguindo esses passos, você deverá conseguir executar e testar a aplicação completamente no seu ambiente local!
