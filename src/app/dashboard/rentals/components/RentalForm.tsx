@@ -148,6 +148,7 @@ export function RentalForm({
     initialEquipmentTypes.sort((a, b) => a.name.localeCompare(b.name))
   );
   const [currentEquipmentIndexForAddItem, setCurrentEquipmentIndexForAddItem] = useState<number | null>(null);
+  const [focusedCurrencyField, setFocusedCurrencyField] = useState<string | null>(null);
 
 
    useEffect(() => {
@@ -730,13 +731,16 @@ export function RentalForm({
                            <div className="flex items-center gap-1">
                             <FormControl>
                                 <Input
-                                type="text"
+                                type={focusedCurrencyField === `customRate-${index}` ? 'number' : 'text'}
                                 placeholder="Padrão se vazio"
-                                value={field.value === undefined ? '' : formatToBRL(field.value)}
+                                value={focusedCurrencyField === `customRate-${index}` ? field.value || '' : formatToBRL(field.value)}
+                                onFocus={() => setFocusedCurrencyField(`customRate-${index}`)}
+                                onBlur={() => setFocusedCurrencyField(null)}
                                 onChange={(e) => {
-                                  const parsedValue = parseFromBRL(e.target.value);
-                                  field.onChange(e.target.value.trim() === '' || isNaN(parsedValue) ? undefined : parsedValue);
+                                    const value = e.target.value;
+                                    field.onChange(value === '' ? undefined : parseFloat(value));
                                 }}
+                                step="0.01"
                                 className="w-full"
                                 />
                             </FormControl>
@@ -953,13 +957,16 @@ export function RentalForm({
                             <FormLabel>Valor Adicional de Combustível (R$)</FormLabel>
                             <FormControl>
                             <Input
-                                type="text"
+                                type={focusedCurrencyField === 'fuel' ? 'number' : 'text'}
                                 placeholder="R$ 0,00"
-                                value={field.value === undefined ? '' : formatToBRL(field.value)}
+                                value={focusedCurrencyField === 'fuel' ? field.value || '' : formatToBRL(field.value)}
+                                onFocus={() => setFocusedCurrencyField('fuel')}
+                                onBlur={() => setFocusedCurrencyField(null)}
                                 onChange={(e) => {
-                                    const parsedValue = parseFromBRL(e.target.value);
-                                    field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
+                                    const value = e.target.value;
+                                    field.onChange(value === '' ? undefined : parseFloat(value));
                                 }}
+                                step="0.01"
                             />
                             </FormControl>
                             <FormDescription>Custo adicional pelo combustível fornecido. Será somado ao valor total.</FormDescription>
@@ -995,13 +1002,16 @@ export function RentalForm({
                   <FormLabel className="flex items-center"><Truck className="mr-2 h-4 w-4 text-muted-foreground"/>Valor do Frete (R$)</FormLabel>
                   <FormControl>
                   <Input
-                      type="text"
+                      type={focusedCurrencyField === 'freight' ? 'number' : 'text'}
                       placeholder="R$ 0,00"
-                      value={field.value === undefined ? '' : formatToBRL(field.value)}
+                      value={focusedCurrencyField === 'freight' ? field.value || '' : formatToBRL(field.value)}
+                      onFocus={() => setFocusedCurrencyField('freight')}
+                      onBlur={() => setFocusedCurrencyField(null)}
                       onChange={(e) => {
-                          const parsedValue = parseFromBRL(e.target.value);
-                          field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
+                          const value = e.target.value;
+                          field.onChange(value === '' ? undefined : parseFloat(value));
                       }}
+                      step="0.01"
                   />
                   </FormControl>
                   <FormMessage />
@@ -1017,13 +1027,16 @@ export function RentalForm({
                   <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4 text-muted-foreground"/>Aplicar Desconto (R$)</FormLabel>
                   <FormControl>
                   <Input
-                      type="text"
+                      type={focusedCurrencyField === 'discount' ? 'number' : 'text'}
                       placeholder="R$ 0,00"
-                      value={field.value === undefined ? '' : formatToBRL(field.value)}
+                      value={focusedCurrencyField === 'discount' ? field.value || '' : formatToBRL(field.value)}
+                      onFocus={() => setFocusedCurrencyField('discount')}
+                      onBlur={() => setFocusedCurrencyField(null)}
                       onChange={(e) => {
-                          const parsedValue = parseFromBRL(e.target.value);
-                          field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
+                          const value = e.target.value;
+                          field.onChange(value === '' ? undefined : parseFloat(value));
                       }}
+                      step="0.01"
                   />
                   </FormControl>
                   <FormMessage />

@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { Expense, ExpenseCategory } from '@/types';
@@ -44,11 +43,12 @@ export function ExpenseForm({ initialData, onSubmit, onClose, initialExpenseCate
   const [isLoading, setIsLoading] = useState(false);
   const [currentExpenseCategories, setCurrentExpenseCategories] = useState<ExpenseCategory[]>(initialExpenseCategories);
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false);
+  const [isAmountFocused, setIsAmountFocused] = useState(false);
   
   useEffect(() => {
     setCurrentExpenseCategories(initialExpenseCategories.sort((a, b) => a.name.localeCompare(b.name)));
   }, [initialExpenseCategories]);
-
+  
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
     defaultValues: initialData ? {
@@ -61,6 +61,8 @@ export function ExpenseForm({ initialData, onSubmit, onClose, initialExpenseCate
       categoryId: currentExpenseCategories.find(cat => cat.name.toLowerCase() === 'outro')?.id || currentExpenseCategories[0]?.id || '',
     },
   });
+
+  const watchedAmount = form.watch('amount');
 
   const handleNewCategoryCreated = async (data: Pick<ExpenseCategory, 'name' | 'iconName'>) => {
     try {
@@ -155,10 +157,25 @@ export function ExpenseForm({ initialData, onSubmit, onClose, initialExpenseCate
               <FormItem>
                 <FormLabel>Valor (R$)</FormLabel>
                 <FormControl>
-                  <Input 
-                    type="text" 
-                    value={formatToBRL(field.value)}
-                    onChange={(e) => field.onChange(parseFromBRL(e.target.value))}
+                   <Input 
+                    type={isAmountFocused ? 'number' : 'text'}
+                    placeholder="R$ 0,00"
+                    value={isAmountFocused ? field.value : formatToBRL(field.value)}
+                    onFocus={() => setIsAmountFocused(true)}
+                    onBlur={() => setIsAmountFocused(false)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Allow clearing the field or typing numbers/decimals
+                      if (value === '') {
+                        field.onChange(0);
+                      } else {
+                        const numericValue = parseFloat(value);
+                        if (!isNaN(numericValue)) {
+                          field.onChange(numericValue);
+                        }
+                      }
+                    }}
+                    step="0.01"
                   />
                 </FormControl>
                 <FormMessage />

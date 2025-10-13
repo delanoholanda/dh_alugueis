@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { Equipment, EquipmentType } from '@/types';
@@ -53,6 +52,7 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
   const [isLoading, setIsLoading] = useState(false);
   const [currentEquipmentTypes, setCurrentEquipmentTypes] = useState<EquipmentType[]>(initialEquipmentTypes);
   const [isEquipmentTypeFormOpen, setIsEquipmentTypeFormOpen] = useState(false);
+  const [isRateFocused, setIsRateFocused] = useState(false);
 
   useEffect(() => {
     setCurrentEquipmentTypes(initialEquipmentTypes.sort((a, b) => a.name.localeCompare(b.name)));
@@ -76,6 +76,7 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
   });
 
   const watchedImageUrl = form.watch("imageUrl");
+  const watchedRate = form.watch("dailyRentalRate");
 
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -339,10 +340,24 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
                 <FormItem>
                   <FormLabel>Taxa de Aluguel Diária (R$)</FormLabel>
                   <FormControl>
-                    <Input
-                      type="text"
-                      value={formatToBRL(field.value)}
-                      onChange={(e) => field.onChange(parseFromBRL(e.target.value))}
+                     <Input
+                      type={isRateFocused ? 'number' : 'text'}
+                      placeholder="R$ 0,00"
+                      value={isRateFocused ? field.value : formatToBRL(field.value)}
+                      onFocus={() => setIsRateFocused(true)}
+                      onBlur={() => setIsRateFocused(false)}
+                      onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '') {
+                              field.onChange(0);
+                          } else {
+                              const numericValue = parseFloat(value);
+                              if (!isNaN(numericValue)) {
+                                  field.onChange(numericValue);
+                              }
+                          }
+                      }}
+                      step="0.01"
                     />
                   </FormControl>
                   <FormMessage />

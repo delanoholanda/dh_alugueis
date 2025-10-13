@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Function to format a number to BRL currency string
+// Function to format a number to BRL currency string FOR DISPLAY PURPOSES
 export function formatToBRL(value: number | undefined | null): string {
   if (value === undefined || value === null || isNaN(value)) {
     return 'R$ 0,00'; // Default for invalid/missing values
@@ -27,15 +27,14 @@ export function parseFromBRL(value: string): number {
   }
   // Remove "R$", non-breaking spaces, then all dots (thousands separators), then replace comma with dot
   const cleanedValue = value
-    .replace(/\R\$\s?/g, '') // Remove "R$" and optional space
-    .replace(/\u00A0/g, '') // Remove non-breaking spaces often inserted by toLocaleString
-    .replace(/\./g, '')       // Remove all dots (thousands separators)
-    .replace(/,/g, '.');      // Replace comma with dot (decimal separator)
+    .replace(/[^\d,]/g, '')   // Remove tudo que não for dígito ou vírgula
+    .replace(/,/g, '.');      // Substitui vírgula por ponto
   
   const parsed = parseFloat(cleanedValue);
   // parseFloat itself returns NaN for invalid strings like "abc"
   return parsed; 
 }
+
 
 export function findNthBillableDay(startDate: Date, totalBillableDays: number, chargeSaturdays: boolean, chargeSundays: boolean): Date {
   // If we have a fraction, we need to find the ceiling to get the actual return day.

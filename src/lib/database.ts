@@ -8,8 +8,18 @@ const DB_FILE_NAME = 'dhalugueis.db';
 const dataDirectory = path.join(process.cwd(), 'data');
 const dbPath = path.join(dataDirectory, DB_FILE_NAME);
 
+// --- Start of Singleton Pattern ---
 // This will hold the single, persistent database instance.
-let dbInstance: Database.Database | null = null;
+// Using a global symbol ensures this is truly a singleton in Next.js dev environment.
+const symbolForDb = Symbol.for('dhalugueis.db.instance');
+
+interface GlobalWithDb {
+  [symbolForDb]?: Database.Database;
+}
+
+const globalWithDb = global as GlobalWithDb;
+// --- End of Singleton Pattern ---
+
 
 function hashPassword(password: string): { salt: string; hash: string } {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -164,10 +174,6 @@ function runMigrations(db: Database.Database) {
 }
 
 function initializeDb() {
-  if (dbInstance) {
-    return dbInstance;
-  }
-  
   if (!fs.existsSync(dataDirectory)) {
     fs.mkdirSync(dataDirectory, { recursive: true });
     console.log(`[DB] Created data directory at ${dataDirectory}.`);
@@ -192,15 +198,17 @@ function initializeDb() {
       console.log("[DB] Existing database file found. Running migrations if needed.");
       runMigrations(db);
     }
+    
+    // Only attach the exit handler once
+    if (process.env.NODE_ENV !== 'production' || !globalWithDb[symbolForDb]) {
+        process.on('exit', () => {
+            if(db && db.open) {
+                console.log('[DB] Closing database connection on process exit.');
+                db.close();
+            }
+        });
+    }
 
-    process.on('exit', () => {
-        if(db && db.open) {
-            console.log('[DB] Closing database connection on process exit.');
-            db.close();
-        }
-    });
-
-    dbInstance = db;
     return db;
 
   } catch (error) {
@@ -210,10 +218,19 @@ function initializeDb() {
 }
 
 export function getDb() {
-    if (!dbInstance) {
-      dbInstance = initializeDb();
+    if (process.env.NODE_ENV === 'production') {
+        if (!globalWithDb[symbolForDb]) {
+            globalWithDb[symbolForDb] = initializeDb();
+        }
+        return globalWithDb[symbolForDb]!;
+    } else {
+        // In development, Next.js clears the require cache on every request,
+        // so we need to constantly check if the global instance exists.
+        if (!globalWithDb[symbolForDb]) {
+            globalWithDb[symbolForDb] = initializeDb();
+        }
+        return globalWithDb[symbolForDb]!;
     }
-    return dbInstance;
 }
 
 function initializeSchemaAndSeed(db: Database.Database) {

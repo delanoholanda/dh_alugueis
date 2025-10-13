@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -41,6 +40,7 @@ interface MarkAsPaidDialogProps {
 export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: MarkAsPaidDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const [isAmountFocused, setIsAmountFocused] = useState(false);
   
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
   const remainingValue = rental.value - totalPaid;
@@ -55,6 +55,20 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
     },
   });
 
+  useEffect(() => {
+    if (isOpen) {
+        const newRemainingValue = rental.value - (rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0);
+        const initialAmount = newRemainingValue > 0 ? newRemainingValue : 0;
+        form.reset({
+            paymentDate: new Date(),
+            paymentMethod: rental.paymentMethod || 'pix',
+            amount: initialAmount,
+            isPartial: false,
+        });
+    }
+  }, [isOpen, rental, form]);
+
+
   const watchedAmount = form.watch("amount");
 
   useEffect(() => {
@@ -65,19 +79,6 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
       form.setValue('isPartial', false);
     }
   }, [watchedAmount, remainingValue, form]);
-  
-  useEffect(() => {
-    // Reset form when dialog opens with new rental data
-    if (isOpen) {
-        const newRemainingValue = rental.value - (rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0);
-        form.reset({
-            paymentDate: new Date(),
-            paymentMethod: rental.paymentMethod || 'pix',
-            amount: newRemainingValue > 0 ? newRemainingValue : 0,
-            isPartial: false,
-        });
-    }
-  }, [isOpen, rental, form]);
 
 
   const handleSubmit = async (data: PaymentFormValues) => {
@@ -107,6 +108,7 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
       setIsLoading(false);
     }
   };
+  
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -116,8 +118,8 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
             <DollarSign className="mr-2 h-5 w-5 text-primary" /> Registrar Pagamento (ID: {rental.id})
           </DialogTitle>
            <DialogDescription>
-            Valor total do contrato: {formatToBRL(rental.value)}. 
-            Valor pendente: <span className="font-bold">{formatToBRL(remainingValue)}</span>.
+            Valor total do contrato: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(rental.value)}. 
+            Valor pendente: <span className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingValue)}</span>.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -130,14 +132,25 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
                     <FormItem>
                         <FormLabel>Valor do Pagamento</FormLabel>
                         <FormControl>
-                        <Input
-                            type="text"
-                            value={formatToBRL(field.value)}
-                            onChange={(e) => {
-                                const parsedValue = parseFromBRL(e.target.value);
-                                field.onChange(isNaN(parsedValue) ? 0 : parsedValue);
-                            }}
-                        />
+                          <Input
+                              type={isAmountFocused ? 'number' : 'text'}
+                              placeholder="R$ 0,00"
+                              value={isAmountFocused ? field.value : formatToBRL(field.value)}
+                              onFocus={() => setIsAmountFocused(true)}
+                              onBlur={() => setIsAmountFocused(false)}
+                              onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value === '') {
+                                      field.onChange(0);
+                                  } else {
+                                      const numericValue = parseFloat(value);
+                                      if (!isNaN(numericValue)) {
+                                          field.onChange(numericValue);
+                                      }
+                                  }
+                              }}
+                              step="0.01"
+                          />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
