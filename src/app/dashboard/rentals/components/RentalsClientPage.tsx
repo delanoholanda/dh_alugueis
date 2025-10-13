@@ -148,7 +148,7 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="active">Ativos</SelectItem>
+                    <SelectItem value="active">Ativos (Não Finalizados)</SelectItem>
                     <SelectItem value="finalized">Finalizados</SelectItem>
                 </SelectContent>
                 </Select>

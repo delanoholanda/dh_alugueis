@@ -135,7 +135,9 @@ export default function DashboardDisplay({
             </CardHeader>
             <CardContent>
                 <div className="text-xl font-bold text-foreground">{item.value}</div>
-                {item.trendText && <p className={`text-xs ${item.trendColorClass || 'text-muted-foreground'} mt-1`}>{item.trendText}</p>}
+                {item.trendText && (
+                   <p className={`text-xs ${item.trendColorClass || 'text-muted-foreground'} mt-1`}>{item.trendText}</p>
+                )}
             </CardContent>
           </Card>
         ))}

@@ -16,11 +16,11 @@ import DashboardActionTrigger from './components/DashboardActionTrigger';
 
 // Helper functions for data aggregation
 const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
-  const monthlyData: { [key: string]: { revenue: number, expenses: number } } = {};
+  const monthlyData: { [key: string]: { revenue: number, expenses: number, profit: number } } = {};
 
   const getMonthYearKey = (dateStr: string) => {
     try {
-        const date = parseISO(dateStr);
+        const date = parseISO(dateStr); 
         return format(date, 'MMM/yy', { locale: ptBR });
     } catch (e) {
         return 'invalid_date'; 
@@ -35,23 +35,27 @@ const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
     });
     lastSixMonths.forEach(monthDate => {
       const monthYear = format(monthDate, 'MMM/yy', { locale: ptBR });
-      monthlyData[monthYear] = { revenue: 0, expenses: 0 };
+      monthlyData[monthYear] = { revenue: 0, expenses: 0, profit: 0 };
     });
   } else {
       rentals.filter(r => r.paymentStatus === 'paid' && r.paymentDate).forEach(rental => {
         const paymentMonthYear = getMonthYearKey(rental.paymentDate!);
         if (paymentMonthYear === 'invalid_date') return;
-        if (!monthlyData[paymentMonthYear]) monthlyData[paymentMonthYear] = { revenue: 0, expenses: 0 };
+        if (!monthlyData[paymentMonthYear]) monthlyData[paymentMonthYear] = { revenue: 0, expenses: 0, profit: 0 };
         monthlyData[paymentMonthYear].revenue += rental.value;
       });
 
       expenses.forEach(expense => {
         const expenseMonthYear = getMonthYearKey(expense.date);
         if (expenseMonthYear === 'invalid_date') return;
-        if (!monthlyData[expenseMonthYear]) monthlyData[expenseMonthYear] = { revenue: 0, expenses: 0 };
+        if (!monthlyData[expenseMonthYear]) monthlyData[expenseMonthYear] = { revenue: 0, expenses: 0, profit: 0 };
         monthlyData[expenseMonthYear].expenses += expense.amount;
       });
   }
+  
+  Object.keys(monthlyData).forEach(key => {
+    monthlyData[key].profit = monthlyData[key].revenue - monthlyData[key].expenses;
+  });
 
   return Object.entries(monthlyData)
     .map(([month, values]) => ({
@@ -164,17 +168,16 @@ export default async function DashboardPage() {
     }
   });
   
-  const activeRentals = rentals.filter(r => !r.actualReturnDate || r.paymentStatus !== 'paid');
+  const activeRentals = rentals.filter(r => !r.actualReturnDate);
+  const pendingPaymentCount = rentals.filter(r => !!r.actualReturnDate && r.paymentStatus !== 'paid').length;
 
-  // Calculate daily revenue only from rentals that are actually generating revenue today
   const revenueGeneratingRentals = rentals.filter(rental => {
     if (rental.actualReturnDate) {
-      return false; // Not generating revenue if returned
+      return false;
     }
     if (rental.isOpenEnded) {
-      return true; // Is generating revenue if open-ended and not returned
+      return true;
     }
-    // Is generating revenue if it's fixed-term, not returned, and today is within the rental period
     return isWithinInterval(today, { 
       start: parseISO(rental.rentalStartDate), 
       end: parseISO(rental.expectedReturnDate) 
@@ -184,7 +187,7 @@ export default async function DashboardPage() {
   let dailyRevenueFromActiveRentals = 0;
   revenueGeneratingRentals.forEach(rental => {
     if (rental.isOpenEnded) {
-      dailyRevenueFromActiveRentals += rental.value; // 'value' is the daily rate for open-ended
+      dailyRevenueFromActiveRentals += rental.value; 
     } else {
       let rentalDailyRateSum = 0;
       rental.equipment.forEach(eq => {
@@ -210,7 +213,7 @@ export default async function DashboardPage() {
   const overviewCardsData = [
     { title: 'Receita (Paga / Contratos)', value: `${formatToBRL(summary.totalRevenue)} / ${formatToBRL(totalContractValue)}`, iconName: 'TrendingUp', trendText: 'Total pago vs. valor de todos os contratos.', trendColorClass: 'text-muted-foreground' },
     { title: 'Despesas Totais', value: formatToBRL(summary.totalExpenses), iconName: 'TrendingDown', trendText: expensesTrendText, trendColorClass: expensesTrendColor },
-    { title: 'Aluguéis Ativos', value: `${activeRentals.length} contrato(s)`, iconName: 'Package', trendText: `Gerando ${formatToBRL(dailyRevenueFromActiveRentals)} / dia`, trendColorClass: dailyRevenueFromActiveRentals > 0 ? 'text-green-500' : 'text-muted-foreground' },
+    { title: 'Ativos / Pendentes', value: `${activeRentals.length} / ${pendingPaymentCount}`, iconName: 'Package', trendText: `Gerando ${formatToBRL(dailyRevenueFromActiveRentals)} / dia`, trendColorClass: 'text-green-500' },
     { title: 'Total de Clientes', value: customersData.length.toString(), iconName: 'Users', trendText: null },
   ];
 
