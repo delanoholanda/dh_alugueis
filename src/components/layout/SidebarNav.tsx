@@ -22,6 +22,7 @@ import {
   ClipboardList,
   Handshake,
   PackageSearch,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -66,6 +67,7 @@ const mainNavItems: NavItem[] = [
         { href: '/dashboard/rentals/rented-items', label: 'Itens Alugados', iconName: 'PackageSearch' },
     ]
   },
+  { href: '/dashboard/scheduling', label: 'Agendamentos', iconName: 'CalendarDays' },
   { href: '/dashboard/quotes', label: 'Orçamentos', iconName: 'ClipboardList' },
   { 
     href: '/dashboard/inventory', 

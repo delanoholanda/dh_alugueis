@@ -1,6 +1,7 @@
 
 import type {NextConfig} from 'next';
 
+// Version: 2024-08-22T10:00:00Z - Edit this comment to force a server restart and clear DB cache.
 const nextConfig: NextConfig = {
   output: 'standalone',
   typescript: {

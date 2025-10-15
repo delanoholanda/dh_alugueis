@@ -13,11 +13,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, UserPlus, PackagePlus, MapPin, Info, ChevronsUpDown, Check, Package } from 'lucide-react';
-import { format, parseISO, isSameDay } from 'date-fns';
+import { format, parseISO, isSameDay, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { formatToBRL, parseFromBRL, cn, findNthBillableDay } from '@/lib/utils';
 import { CustomerForm } from '@/app/dashboard/customers/components/CustomerForm';
 import { createCustomer, getCustomers } from '@/actions/customerActions';
@@ -105,36 +105,12 @@ export function QuoteForm({
   const [inventoryList, setInventoryList] = useState<InventoryEquipment[]>(() =>
     initialInventory.sort((a, b) => a.name.localeCompare(b.name))
   );
-  const [inventoryWithAvailability, setInventoryWithAvailability] = useState<Array<InventoryEquipment & { availableQuantity: number }>>([]);
   const [equipmentTypesList, setEquipmentTypesList] = useState<EquipmentType[]>(() =>
     initialEquipmentTypes.sort((a, b) => a.name.localeCompare(b.name))
   );
   const [currentEquipmentIndexForAddItem, setCurrentEquipmentIndexForAddItem] = useState<number | null>(null);
 
   const [focusedCurrencyField, setFocusedCurrencyField] = useState<string | null>(null);
-
-  useEffect(() => {
-    const calculateAvailability = () => {
-      const rentedMap = new Map<string, number>();
-      allRentals.forEach(r => {
-        if (!r.actualReturnDate && (!initialData || r.id !== initialData.id)) {
-          r.equipment.forEach(eq => {
-            rentedMap.set(eq.equipmentId, (rentedMap.get(eq.equipmentId) || 0) + eq.quantity);
-          });
-        }
-      });
-
-      const newInventoryWithAvailability = inventoryList.map(invItem => {
-        const totalRentedByOthers = rentedMap.get(invItem.id) || 0;
-        const available = invItem.quantity - totalRentedByOthers;
-        return { ...invItem, availableQuantity: Math.max(0, available) };
-      }).sort((a, b) => a.name.localeCompare(b.name));
-      
-      setInventoryWithAvailability(newInventoryWithAvailability);
-    };
-
-    calculateAvailability();
-  }, [inventoryList, allRentals, initialData]);
 
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
@@ -180,6 +156,53 @@ export function QuoteForm({
   const watchedRentalStartDate = form.watch("rentalStartDate");
   const watchedChargeSaturdays = form.watch("chargeSaturdays");
   const watchedChargeSundays = form.watch("chargeSundays");
+  const watchedExpectedReturnDate = form.watch("expectedReturnDate");
+
+  const inventoryWithAvailability = useMemo(() => {
+    const newStartDate = form.getValues('rentalStartDate');
+    const newEndDate = form.getValues('expectedReturnDate');
+
+    if (!newStartDate || !newEndDate) {
+      return inventoryList.map(item => ({ ...item, availableQuantity: item.quantity }));
+    }
+
+    const newInterval = { start: startOfDay(newStartDate), end: endOfDay(newEndDate) };
+
+    const rentedQuantities = new Map<string, number>();
+
+    for (const rental of allRentals) {
+      if (initialData?.status === 'converted') { // This logic is specific to quotes -> rentals
+          // If editing a converted quote, we don't check against its corresponding rental.
+          // This assumes a more complex check might be needed if you could edit a quote *after* conversion
+          // and want to see availability excluding the rental it became.
+          // For now, we assume converted quotes are not edited or we check all rentals.
+      }
+      if (rental.actualReturnDate) continue;
+
+      const existingInterval = {
+        start: startOfDay(parseISO(rental.rentalStartDate)),
+        end: rental.isOpenEnded ? addDays(new Date(), 3650) : endOfDay(parseISO(rental.expectedReturnDate)),
+      };
+
+      const overlaps = isWithinInterval(newInterval.start, existingInterval) ||
+                       isWithinInterval(newInterval.end, existingInterval) ||
+                       isWithinInterval(existingInterval.start, newInterval) ||
+                       isWithinInterval(existingInterval.end, newInterval);
+
+      if (overlaps) {
+        for (const eq of rental.equipment) {
+          rentedQuantities.set(eq.equipmentId, (rentedQuantities.get(eq.equipmentId) || 0) + eq.quantity);
+        }
+      }
+    }
+    
+    return inventoryList.map(item => {
+      const rented = rentedQuantities.get(item.id) || 0;
+      return { ...item, availableQuantity: item.quantity - rented };
+    });
+
+  }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate]);
+
 
   useEffect(() => {
     const startDate = watchedRentalStartDate ? new Date(watchedRentalStartDate) : null;

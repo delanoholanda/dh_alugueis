@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, Info, CreditCard, Landmark, CircleDollarSign, UserPlus, PackagePlus, MapPin, AlertCircle, ChevronsUpDown, Check, Package, Fuel } from 'lucide-react';
-import { format, addDays, parseISO, isSameDay, differenceInDays } from 'date-fns';
+import { format, addDays, parseISO, isSameDay, differenceInDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -68,8 +68,8 @@ const rentalFormSchema = z.object({
   discountValue: z.preprocess(
       (val) => (val === '' || val === undefined || val === null ? 0 : val),
       z.coerce.number({invalid_type_error: "Valor do desconto deve ser um número."})
-        .min(0, "Valor do desconto não pode ser negativo")
-        .optional()
+      .min(0, "Valor do desconto não pode ser negativo")
+      .optional()
     ),
   value: z.coerce.number({invalid_type_error: "Valor deve ser um número.", required_error: "Valor é obrigatório."})
     .min(0, "Valor não pode ser negativo"),
@@ -143,36 +143,11 @@ export function RentalForm({
   const [inventoryList, setInventoryList] = useState<InventoryEquipment[]>(() =>
     initialInventory.sort((a, b) => a.name.localeCompare(b.name))
   );
-  const [inventoryWithAvailability, setInventoryWithAvailability] = useState<Array<InventoryEquipment & { availableQuantity: number }>>([]);
   const [equipmentTypesList, setEquipmentTypesList] = useState<EquipmentType[]>(() =>
     initialEquipmentTypes.sort((a, b) => a.name.localeCompare(b.name))
   );
   const [currentEquipmentIndexForAddItem, setCurrentEquipmentIndexForAddItem] = useState<number | null>(null);
   const [focusedCurrencyField, setFocusedCurrencyField] = useState<string | null>(null);
-
-
-   useEffect(() => {
-    const calculateAvailability = () => {
-      const rentedMap = new Map<string, number>();
-      allRentals.forEach(r => {
-        if (!r.actualReturnDate && (!initialData || r.id !== initialData.id)) {
-          r.equipment.forEach(eq => {
-            rentedMap.set(eq.equipmentId, (rentedMap.get(eq.equipmentId) || 0) + eq.quantity);
-          });
-        }
-      });
-
-      const newInventoryWithAvailability = inventoryList.map(invItem => {
-        const totalRentedByOthers = rentedMap.get(invItem.id) || 0;
-        const available = invItem.quantity - totalRentedByOthers;
-        return { ...invItem, availableQuantity: Math.max(0, available) };
-      }).sort((a, b) => a.name.localeCompare(b.name));
-      
-      setInventoryWithAvailability(newInventoryWithAvailability);
-    };
-
-    calculateAvailability();
-  }, [inventoryList, allRentals, initialData]);
 
 
   const form = useForm<RentalFormValues>({
@@ -235,7 +210,47 @@ export function RentalForm({
   const watchedRentalStartDate = form.watch("rentalStartDate");
   const watchedChargeSaturdays = form.watch("chargeSaturdays");
   const watchedChargeSundays = form.watch("chargeSundays");
+  const watchedExpectedReturnDate = form.watch("expectedReturnDate");
 
+  const inventoryWithAvailability = useMemo(() => {
+    const newStartDate = form.getValues('rentalStartDate');
+    const newEndDate = form.getValues('expectedReturnDate');
+
+    if (!newStartDate || !newEndDate) {
+      return inventoryList.map(item => ({ ...item, availableQuantity: item.quantity }));
+    }
+
+    const newInterval = { start: startOfDay(newStartDate), end: endOfDay(newEndDate) };
+
+    const rentedQuantities = new Map<string, number>();
+
+    for (const rental of allRentals) {
+      if (initialData && rental.id === initialData.id) continue;
+      if (rental.actualReturnDate) continue;
+
+      const existingInterval = {
+        start: startOfDay(parseISO(rental.rentalStartDate)),
+        end: rental.isOpenEnded ? addDays(new Date(), 3650) : endOfDay(parseISO(rental.expectedReturnDate)),
+      };
+
+      const overlaps = isWithinInterval(newInterval.start, existingInterval) ||
+                       isWithinInterval(newInterval.end, existingInterval) ||
+                       isWithinInterval(existingInterval.start, newInterval) ||
+                       isWithinInterval(existingInterval.end, newInterval);
+
+      if (overlaps) {
+        for (const eq of rental.equipment) {
+          rentedQuantities.set(eq.equipmentId, (rentedQuantities.get(eq.equipmentId) || 0) + eq.quantity);
+        }
+      }
+    }
+    
+    return inventoryList.map(item => {
+      const rented = rentedQuantities.get(item.id) || 0;
+      return { ...item, availableQuantity: item.quantity - rented };
+    });
+
+  }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate]);
 
   // Effect to handle isOpenEnded toggling
   useEffect(() => {
@@ -365,7 +380,8 @@ export function RentalForm({
       const newItem = await createInventoryItem(data);
       if (newItem) {
         const refreshedInventory = await getInventoryItems(); 
-        
+        setInventoryList(refreshedInventory.sort((a, b) => a.name.localeCompare(b.name)));
+
         if (currentEquipmentIndexForAddItem !== null) {
           form.setValue(`equipment.${currentEquipmentIndexForAddItem}.equipmentId`, newItem.id, { shouldValidate: true });
           const rateToSet = (typeof newItem.dailyRentalRate === 'number' && !isNaN(newItem.dailyRentalRate)) ? newItem.dailyRentalRate : undefined;
@@ -378,25 +394,6 @@ export function RentalForm({
         });
         setIsInventoryItemFormOpen(false);
         setCurrentEquipmentIndexForAddItem(null);
-        
-        const updatedFullInventory = await getInventoryItems();
-        setInventoryList(updatedFullInventory.sort((a, b) => a.name.localeCompare(b.name)));
-        
-        const currentAllRentals = allRentals; 
-        const rentedMap = new Map<string, number>();
-        currentAllRentals.forEach(r => {
-            if (!r.actualReturnDate && (!initialData || r.id !== initialData.id)) {
-            r.equipment.forEach(eq => {
-                rentedMap.set(eq.equipmentId, (rentedMap.get(eq.equipmentId) || 0) + eq.quantity);
-            });
-            }
-        });
-        const newInventoryWithAvailability = updatedFullInventory.map(invItem => {
-            const totalRentedByOthers = rentedMap.get(invItem.id) || 0;
-            const available = invItem.quantity - totalRentedByOthers;
-            return { ...invItem, availableQuantity: Math.max(0, available) };
-        }).sort((a, b) => a.name.localeCompare(b.name));
-        setInventoryWithAvailability(newInventoryWithAvailability);
       }
     } catch (error) {
        toast({
@@ -444,17 +441,8 @@ export function RentalForm({
             return;
         }
 
-        let currentlyAvailableForThisCheck = inventoryItemDetails.availableQuantity;
-
-        if (initialData) { 
-            const originalItemInThisRental = initialData.equipment.find(origEq => origEq.equipmentId === eqInForm.equipmentId);
-            if (originalItemInThisRental) {
-                currentlyAvailableForThisCheck += originalItemInThisRental.quantity;
-            }
-        }
-        
-        if (eqInForm.quantity > currentlyAvailableForThisCheck) {
-            form.setError(`equipment.${index}.quantity`, { message: `Máx ${currentlyAvailableForThisCheck} unid. disponíveis.` });
+        if (eqInForm.quantity > inventoryItemDetails.availableQuantity) {
+            form.setError(`equipment.${index}.quantity`, { message: `Máx ${inventoryItemDetails.availableQuantity} unid. disponíveis.` });
             validationPassed = false;
         }
     });

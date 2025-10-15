@@ -6,15 +6,24 @@ import { getDb } from '@/lib/database';
 import { sendEmail } from '@/lib/email';
 import { getCompanySettings } from './settingsActions';
 import type { Rental, NotificationLog } from '@/types';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { toZonedTime, format as formatTz } from 'date-fns-tz';
 import { ptBR } from 'date-fns/locale';
 import { getCustomerById } from './customerActions';
 import { revalidatePath } from 'next/cache';
 
+const TIME_ZONE = 'America/Fortaleza';
+
+function getTodayInFortaleza(): string {
+  const now = new Date();
+  const zonedDate = toZonedTime(now, TIME_ZONE);
+  return formatTz(zonedDate, 'yyyy-MM-dd', { timeZone: TIME_ZONE });
+}
+
 // This is the function the automatic trigger will call
 export async function sendTodaysReturnReminders(): Promise<void> {
   const db = getDb();
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = getTodayInFortaleza();
   
   // Only run automatic check once per day to avoid spamming.
   // We look for a successful run (either 'success' or 'no_reminders_needed')
@@ -60,7 +69,7 @@ async function runReminderCheck({ triggerType, forceResend = false }: {
       throw new Error('O email da empresa não está configurado nas Configurações Gerais.');
     }
 
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const today = getTodayInFortaleza();
     
     let query = `
       SELECT r.*,
@@ -112,10 +121,10 @@ async function runReminderCheck({ triggerType, forceResend = false }: {
         return { ...rental, customer };
     }));
 
-    const subject = `Lembrete de Devolução: ${dueRentals.length} aluguel(eis) vence(m) hoje - ${format(new Date(), 'dd/MM/yyyy')}`;
+    const subject = `Lembrete de Devolução: ${dueRentals.length} aluguel(eis) vence(m) hoje - ${format(toZonedTime(new Date(), TIME_ZONE), 'dd/MM/yyyy', { locale: ptBR })}`;
     const html = `
       <h1>Olá, ${companySettings.responsibleName || companySettings.companyName}!</h1>
-      <p>Este é um lembrete automático sobre os seguintes contratos de aluguel que têm a devolução esperada para hoje, <strong>${format(new Date(), 'dd/MM/yyyy', { locale: ptBR })}</strong>:</p>
+      <p>Este é um lembrete automático sobre os seguintes contratos de aluguel que têm a devolução esperada para hoje, <strong>${format(toZonedTime(new Date(), TIME_ZONE), 'dd/MM/yyyy', { locale: ptBR })}</strong>:</p>
       <table border="1" cellpadding="10" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: sans-serif; border-color: #ddd;">
         <thead style="background-color: #f2f2f2;">
           <tr>
