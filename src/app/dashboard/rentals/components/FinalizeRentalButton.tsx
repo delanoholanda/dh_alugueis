@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, type ButtonProps } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,14 +18,16 @@ import { CheckSquare, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { finalizeRental as finalizeRentalAction } from '@/actions/rentalActions';
 import type { Rental } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface FinalizeRentalButtonProps {
   rental: Rental;
   isFinalized: boolean;
   onFinalized: () => Promise<void>; 
+  buttonProps?: ButtonProps;
 }
 
-export default function FinalizeRentalButton({ rental, isFinalized, onFinalized }: FinalizeRentalButtonProps) {
+export default function FinalizeRentalButton({ rental, isFinalized, onFinalized, buttonProps }: FinalizeRentalButtonProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -52,9 +54,17 @@ export default function FinalizeRentalButton({ rental, isFinalized, onFinalized 
     }
   };
 
+  const defaultButtonProps: ButtonProps = {
+    variant: "outline",
+    title: isFinalized ? "Aluguel já finalizado (devolvido)" : "Finalizar Aluguel (Marcar como Devolvido)",
+    disabled: isFinalized,
+    className: isFinalized ? "" : "text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700",
+    ...buttonProps, // User props override defaults
+  };
+
   if (isFinalized) {
     return (
-      <Button variant="outline" title="Aluguel já finalizado (devolvido)" disabled>
+      <Button {...defaultButtonProps}>
         <CheckSquare className="h-4 w-4 mr-2 text-green-500" /> Itens Devolvidos
       </Button>
     );
@@ -70,10 +80,10 @@ export default function FinalizeRentalButton({ rental, isFinalized, onFinalized 
     <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <AlertDialogTrigger asChild>
         <Button 
-          variant="outline" 
+          {...defaultButtonProps}
           title={getTitle()} 
           disabled={isDisabled}
-          className="text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700"
+          className={cn(defaultButtonProps.className, isDisabled && "opacity-50 cursor-not-allowed")}
         >
           <CheckSquare className="h-4 w-4 mr-2" /> Marcar como Devolvido
         </Button>

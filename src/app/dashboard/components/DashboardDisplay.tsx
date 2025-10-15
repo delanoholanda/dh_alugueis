@@ -1,12 +1,12 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import type { Rental, Customer, EquipmentType } from '@/types';
@@ -20,6 +20,10 @@ import { Button } from '@/components/ui/button';
 import { DynamicLucideIcon } from '@/lib/lucide-icons';
 import { Badge } from '@/components/ui/badge';
 import { MarkAsPaidDialog } from '@/app/dashboard/rentals/components/MarkAsPaidDialog';
+import FinalizeRentalButton from '@/app/dashboard/rentals/components/FinalizeRentalButton';
+import { getRentals } from '@/actions/rentalActions';
+import { getCustomers } from '@/actions/customerActions';
+
 
 interface MonthlyFinancialData {
   month: string;
@@ -51,9 +55,9 @@ interface OverviewCardData {
 
 interface DashboardDisplayProps {
   overviewCards: OverviewCardData[];
-  upcomingReturns: Rental[];
-  pendingPaymentRentals: Rental[];
-  customers: Customer[];
+  initialUpcomingReturns: Rental[];
+  initialPendingPaymentRentals: Rental[];
+  initialCustomers: Customer[];
   monthlyLineChartData: MonthlyFinancialData[];
   equipmentActivityChartData: EquipmentItemActivityData[];
   mostRentedTypesData: MostRentedTypeData[];
@@ -100,9 +104,9 @@ const CustomTooltipContentFormatter = (value: any, name: any, props: any) => {
 
 export default function DashboardDisplay({
   overviewCards,
-  upcomingReturns,
-  pendingPaymentRentals,
-  customers,
+  initialUpcomingReturns,
+  initialPendingPaymentRentals,
+  initialCustomers,
   monthlyLineChartData,
   equipmentActivityChartData,
   mostRentedTypesData
@@ -111,6 +115,37 @@ export default function DashboardDisplay({
   const router = useRouter();
   const [selectedRentalForPayment, setSelectedRentalForPayment] = useState<Rental | null>(null);
 
+  const [customers, setCustomers] = useState(initialCustomers);
+  const [upcomingReturns, setUpcomingReturns] = useState(initialUpcomingReturns);
+  const [pendingPaymentRentals, setPendingPaymentRentals] = useState(initialPendingPaymentRentals);
+
+  const handleActionSuccess = useCallback(async () => {
+    // This function re-fetches the necessary data from the server
+    const [refreshedRentals, refreshedCustomers] = await Promise.all([
+        getRentals(),
+        getCustomers()
+    ]);
+    
+    // Logic to re-calculate upcoming returns
+    const today = new Date();
+    const upcomingCutoff = new Date(today.setDate(today.getDate() + 8));
+    const newUpcoming = refreshedRentals.filter(rental => !rental.actualReturnDate && !rental.isOpenEnded && parseISO(rental.expectedReturnDate) < upcomingCutoff)
+                                  .sort((a, b) => parseISO(a.expectedReturnDate).getTime() - parseISO(b.expectedReturnDate).getTime());
+
+    // Logic to re-calculate pending payments
+    const newPending = refreshedRentals.filter(rental => !!rental.actualReturnDate && (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue'))
+                                   .sort((a, b) => parseISO(a.actualReturnDate!).getTime() - parseISO(b.actualReturnDate!).getTime());
+
+    setUpcomingReturns(newUpcoming);
+    setPendingPaymentRentals(newPending);
+    setCustomers(refreshedCustomers);
+    
+    // Additionally, refresh the entire page to update financial summary cards
+    router.refresh();
+
+  }, [router]);
+
+
   const pieChartConfig = useMemo(() => {
     return mostRentedTypesData.reduce((acc, entry) => {
         acc[entry.name] = { label: entry.name, color: entry.fill };
@@ -118,9 +153,9 @@ export default function DashboardDisplay({
     }, {} as ChartConfig);
   }, [mostRentedTypesData]);
 
-  const handleMarkAsPaidSuccess = async () => {
-    setSelectedRentalForPayment(null); // Close dialog
-    router.refresh(); // Re-fetch server data and re-render the page
+  const getFirstName = (fullName?: string) => {
+    if (!fullName) return '';
+    return fullName.split(' ')[0];
   };
 
 
@@ -163,41 +198,52 @@ export default function DashboardDisplay({
                                 return (
                                     <AccordionItem value={`item-${rental.id}`} key={rental.id} className="border rounded-md hover:bg-muted/50 transition-colors">
                                         <AccordionTrigger className="p-3 w-full hover:no-underline [&[data-state=open]]:border-b">
-                                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 w-full text-left">
-                                                <div className="flex items-center gap-3">
-                                                    <Avatar className="h-10 w-10">
-                                                        <AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name || 'Avatar'} />
-                                                        <AvatarFallback>{customer ? customer.name.charAt(0).toUpperCase() : 'C'}</AvatarFallback>
-                                                    </Avatar>
-                                                    <div>
-                                                        <p className="font-semibold">{rental.customerName}</p>
-                                                        <p className="text-xs text-muted-foreground">Contrato ID: {String(rental.id).padStart(4, '0')}</p>
+                                           <div className="flex items-center gap-3 w-full text-left">
+                                                <Avatar className="h-10 w-10">
+                                                    <AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name || 'Avatar'} />
+                                                    <AvatarFallback>{customer ? getFirstName(customer.name).charAt(0).toUpperCase() : 'C'}</AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-grow">
+                                                    <p className="font-semibold">{getFirstName(rental.customerName)}</p>
+                                                    <div className={cn("text-sm font-medium", isOverdue && "text-destructive", isDueToday && "text-orange-500")}>
+                                                        Devolução: {format(returnDate, 'PP', { locale: ptBR })}
+                                                        {isOverdue && ' (Atrasado)'}
+                                                        {isDueToday && ' (Hoje)'}
                                                     </div>
-                                                </div>
-                                                <div className={cn("text-sm font-medium whitespace-nowrap self-start sm:self-center mt-1 sm:mt-0", isOverdue && "text-destructive", isDueToday && "text-orange-500")}>
-                                                    Devolução: {format(returnDate, 'PP', { locale: ptBR })}
-                                                    {isOverdue && ' (Atrasado)'}
-                                                    {isDueToday && ' (Hoje)'}
                                                 </div>
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                            <div className="pl-16 pr-4 pb-3 pt-2 text-sm">
-                                                <h4 className="font-semibold mb-2">Itens a serem devolvidos:</h4>
-                                                {rental.equipment.length > 0 ? (
-                                                    <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                                                        {rental.equipment.map((eq, index) => (
-                                                            <li key={index}>
-                                                                {eq.quantity}x {eq.name || 'Equipamento desconhecido'}
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                ) : (
-                                                    <p className="text-muted-foreground italic">Nenhum item listado neste aluguel.</p>
-                                                )}
-                                                <Button asChild variant="link" size="sm" className="p-0 h-auto mt-2">
-                                                   <Link href={`/dashboard/rentals/${rental.id}/details`}>Ver detalhes completos do contrato</Link>
-                                                </Button>
+                                            <div className="pl-16 pr-4 pb-3 pt-2 text-sm space-y-3">
+                                                <div>
+                                                  <h4 className="font-semibold mb-2">Itens a serem devolvidos:</h4>
+                                                  {rental.equipment.length > 0 ? (
+                                                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                                                          {rental.equipment.map((eq, index) => (
+                                                              <li key={index}>
+                                                                  {eq.quantity}x {eq.name || 'Equipamento desconhecido'}
+                                                              </li>
+                                                          ))}
+                                                      </ul>
+                                                  ) : (
+                                                      <p className="text-muted-foreground italic">Nenhum item listado neste aluguel.</p>
+                                                  )}
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                                    <FinalizeRentalButton
+                                                        rental={rental}
+                                                        isFinalized={!!rental.actualReturnDate}
+                                                        onFinalized={handleActionSuccess}
+                                                        buttonProps={{
+                                                          variant: "outline",
+                                                          size: "sm",
+                                                          className: "text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700"
+                                                        }}
+                                                    />
+                                                    <Button asChild variant="link" size="sm" className="p-0 h-auto">
+                                                      <Link href={`/dashboard/rentals/${rental.id}/details`}>Ver detalhes completos do contrato</Link>
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </AccordionContent>
                                     </AccordionItem>
@@ -227,19 +273,16 @@ export default function DashboardDisplay({
                                 return (
                                     <AccordionItem value={`item-pending-${rental.id}`} key={`pending-${rental.id}`} className="border rounded-md hover:bg-muted/50 transition-colors">
                                         <AccordionTrigger className="p-3 w-full hover:no-underline [&[data-state=open]]:border-b">
-                                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 w-full text-left">
-                                                <div className="flex items-center gap-3">
-                                                    <Avatar className="h-10 w-10">
-                                                        <AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name || 'Avatar'} />
-                                                        <AvatarFallback>{customer ? customer.name.charAt(0).toUpperCase() : 'C'}</AvatarFallback>
-                                                    </Avatar>
-                                                    <div>
-                                                        <p className="font-semibold">{rental.customerName}</p>
-                                                        <p className="text-xs text-muted-foreground">Contrato ID: {String(rental.id).padStart(4, '0')}</p>
+                                           <div className="flex items-center gap-3 w-full text-left">
+                                                <Avatar className="h-10 w-10">
+                                                    <AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name || 'Avatar'} />
+                                                    <AvatarFallback>{customer ? getFirstName(customer.name).charAt(0).toUpperCase() : 'C'}</AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-grow">
+                                                    <p className="font-semibold">{getFirstName(rental.customerName)}</p>
+                                                    <div className="text-sm font-bold text-destructive">
+                                                        Valor: {formatToBRL(rental.value)}
                                                     </div>
-                                                </div>
-                                                <div className="text-sm font-bold text-destructive whitespace-nowrap self-start sm:self-center mt-1 sm:mt-0">
-                                                    Valor: {formatToBRL(rental.value)}
                                                 </div>
                                             </div>
                                         </AccordionTrigger>
@@ -256,7 +299,7 @@ export default function DashboardDisplay({
                                                         </Badge>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                                                     <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}>
                                                         Marcar como Pago
                                                     </Button>
@@ -368,7 +411,7 @@ export default function DashboardDisplay({
             onOpenChange={(open) => {
                 if (!open) setSelectedRentalForPayment(null);
             }}
-            onSuccess={handleMarkAsPaidSuccess}
+            onSuccess={handleActionSuccess}
         />
       )}
     </>

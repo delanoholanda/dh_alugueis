@@ -226,9 +226,9 @@ export default async function DashboardPage() {
       <PageHeader title="Visão Geral do Painel" icon={LayoutDashboard} description="Bem-vindo à DH Alugueis. Aqui está um resumo do seu negócio." />
       <DashboardDisplay
         overviewCards={overviewCardsData}
-        upcomingReturns={upcomingReturns}
-        pendingPaymentRentals={pendingPaymentRentals}
-        customers={customersData}
+        initialUpcomingReturns={upcomingReturns}
+        initialPendingPaymentRentals={pendingPaymentRentals}
+        initialCustomers={customersData}
         monthlyLineChartData={aggregatedMonthly}
         equipmentActivityChartData={equipmentActivityChartData}
         mostRentedTypesData={mostRentedTypesData}
