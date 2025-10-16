@@ -7,7 +7,7 @@ import { getCustomers } from '@/actions/customerActions';
 import { getEquipmentTypes } from '@/actions/equipmentTypeActions';
 import type { Rental, Expense, Equipment, Customer, EquipmentType } from '@/types';
 import { LayoutDashboard } from 'lucide-react';
-import DashboardDisplay from './components/DashboardDisplay';
+import DashboardDisplay, { type GroupedPendingPayment } from './components/DashboardDisplay';
 import { format, parseISO, startOfMonth, eachMonthOfInterval, parse, isToday, isPast, addDays, isBefore, startOfDay, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, countBillableDays } from '@/lib/utils';
@@ -154,9 +154,33 @@ export default async function DashboardPage() {
   const upcomingReturns = rentals.filter(rental => !rental.actualReturnDate && !rental.isOpenEnded && isBefore(parseISO(rental.expectedReturnDate), upcomingCutoff))
                                 .sort((a, b) => parseISO(a.expectedReturnDate).getTime() - parseISO(b.expectedReturnDate).getTime());
 
-  const pendingPaymentRentals = rentals
+  // Group pending payment rentals by customer
+  const groupedPendingRentals: GroupedPendingPayment[] = [];
+  const customerMap: { [key: string]: GroupedPendingPayment } = {};
+
+  rentals
     .filter(rental => !!rental.actualReturnDate && (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue'))
-    .sort((a, b) => parseISO(a.actualReturnDate!).getTime() - parseISO(b.actualReturnDate!).getTime());
+    .forEach(rental => {
+        if (!customerMap[rental.customerId]) {
+            const customer = customersData.find(c => c.id === rental.customerId);
+            customerMap[rental.customerId] = {
+                customerId: rental.customerId,
+                customerName: rental.customerName || 'Cliente Desconhecido',
+                customerImageUrl: customer?.imageUrl,
+                totalPendingValue: 0,
+                rentals: []
+            };
+            groupedPendingRentals.push(customerMap[rental.customerId]);
+        }
+        const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
+        const pendingValue = rental.value - totalPaid;
+        
+        customerMap[rental.customerId].totalPendingValue += pendingValue;
+        customerMap[rental.customerId].rentals.push(rental);
+    });
+
+    // Sort groups by total pending value, descending
+    groupedPendingRentals.sort((a,b) => b.totalPendingValue - a.totalPendingValue);
 
   let totalContractValue = 0;
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -227,7 +251,7 @@ export default async function DashboardPage() {
       <DashboardDisplay
         overviewCards={overviewCardsData}
         initialUpcomingReturns={upcomingReturns}
-        initialPendingPaymentRentals={pendingPaymentRentals}
+        initialGroupedPendingPayments={groupedPendingRentals}
         initialCustomers={customersData}
         monthlyLineChartData={aggregatedMonthly}
         equipmentActivityChartData={equipmentActivityChartData}

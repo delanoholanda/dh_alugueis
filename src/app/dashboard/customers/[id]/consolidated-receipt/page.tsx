@@ -90,7 +90,7 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
                 const dailyRate = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
                 return sum + (dailyRate * eq.quantity * (rental.rentalDays || 0));
             }, 0);
-            totalContractValue = itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0) - (rental.discountValue ?? 0);
+            totalContractValue = rental.value; // The pre-calculated value is correct for fixed-term.
         }
 
         const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;

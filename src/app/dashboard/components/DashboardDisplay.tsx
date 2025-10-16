@@ -6,10 +6,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
-import type { Rental, Customer, EquipmentType } from '@/types';
+import type { Rental, Customer } from '@/types';
 import { format, parseISO, isToday, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
@@ -53,10 +53,18 @@ interface OverviewCardData {
   trendColorClass?: string;
 }
 
+export interface GroupedPendingPayment {
+  customerId: string;
+  customerName: string;
+  customerImageUrl?: string;
+  totalPendingValue: number;
+  rentals: Rental[];
+}
+
 interface DashboardDisplayProps {
   overviewCards: OverviewCardData[];
   initialUpcomingReturns: Rental[];
-  initialPendingPaymentRentals: Rental[];
+  initialGroupedPendingPayments: GroupedPendingPayment[];
   initialCustomers: Customer[];
   monthlyLineChartData: MonthlyFinancialData[];
   equipmentActivityChartData: EquipmentItemActivityData[];
@@ -105,7 +113,7 @@ const CustomTooltipContentFormatter = (value: any, name: any, props: any) => {
 export default function DashboardDisplay({
   overviewCards,
   initialUpcomingReturns,
-  initialPendingPaymentRentals,
+  initialGroupedPendingPayments,
   initialCustomers,
   monthlyLineChartData,
   equipmentActivityChartData,
@@ -117,30 +125,10 @@ export default function DashboardDisplay({
 
   const [customers, setCustomers] = useState(initialCustomers);
   const [upcomingReturns, setUpcomingReturns] = useState(initialUpcomingReturns);
-  const [pendingPaymentRentals, setPendingPaymentRentals] = useState(initialPendingPaymentRentals);
+  const [groupedPendingPayments, setGroupedPendingPayments] = useState(initialGroupedPendingPayments);
 
   const handleActionSuccess = useCallback(async () => {
     // This function re-fetches the necessary data from the server
-    const [refreshedRentals, refreshedCustomers] = await Promise.all([
-        getRentals(),
-        getCustomers()
-    ]);
-    
-    // Logic to re-calculate upcoming returns
-    const today = new Date();
-    const upcomingCutoff = new Date(today.setDate(today.getDate() + 8));
-    const newUpcoming = refreshedRentals.filter(rental => !rental.actualReturnDate && !rental.isOpenEnded && parseISO(rental.expectedReturnDate) < upcomingCutoff)
-                                  .sort((a, b) => parseISO(a.expectedReturnDate).getTime() - parseISO(b.expectedReturnDate).getTime());
-
-    // Logic to re-calculate pending payments
-    const newPending = refreshedRentals.filter(rental => !!rental.actualReturnDate && (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue'))
-                                   .sort((a, b) => parseISO(a.actualReturnDate!).getTime() - parseISO(b.actualReturnDate!).getTime());
-
-    setUpcomingReturns(newUpcoming);
-    setPendingPaymentRentals(newPending);
-    setCustomers(refreshedCustomers);
-    
-    // Additionally, refresh the entire page to update financial summary cards
     router.refresh();
 
   }, [router]);
@@ -157,6 +145,10 @@ export default function DashboardDisplay({
     if (!fullName) return '';
     return fullName.split(' ')[0];
   };
+
+  const totalPendingSum = useMemo(() => {
+    return groupedPendingPayments.reduce((sum, group) => sum + group.totalPendingValue, 0);
+  }, [groupedPendingPayments]);
 
 
   return (
@@ -229,7 +221,7 @@ export default function DashboardDisplay({
                                                       <p className="text-muted-foreground italic">Nenhum item listado neste aluguel.</p>
                                                   )}
                                                 </div>
-                                                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
                                                     <FinalizeRentalButton
                                                         rental={rental}
                                                         isFinalized={!!rental.actualReturnDate}
@@ -240,8 +232,10 @@ export default function DashboardDisplay({
                                                           className: "text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700"
                                                         }}
                                                     />
-                                                    <Button asChild variant="link" size="sm" className="p-0 h-auto">
-                                                      <Link href={`/dashboard/rentals/${rental.id}/details`}>Ver detalhes completos do contrato</Link>
+                                                    <Button asChild variant="outline" size="sm">
+                                                      <Link href={`/dashboard/rentals/${rental.id}/details`}>
+                                                        <Eye className="mr-2 h-4 w-4" /> Ver detalhes
+                                                      </Link>
                                                     </Button>
                                                 </div>
                                             </div>
@@ -262,56 +256,67 @@ export default function DashboardDisplay({
                         <HandCoins className="h-6 w-6 mr-2 text-primary" />
                         Pagamentos Pendentes (Itens Devolvidos)
                     </CardTitle>
-                    <CardDescription>Aluguéis que já foram finalizados mas aguardam o pagamento.</CardDescription>
+                    <CardDescription>
+                        Aluguéis finalizados que aguardam pagamento. 
+                        {totalPendingSum > 0 && <span className="font-bold"> Total: {formatToBRL(totalPendingSum)}</span>}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {pendingPaymentRentals.length > 0 ? (
+                    {groupedPendingPayments.length > 0 ? (
                         <Accordion type="single" collapsible className="w-full space-y-2">
-                            {pendingPaymentRentals.map(rental => {
-                                const customer = customers.find(c => c.id === rental.customerId);
-                                const returnDate = rental.actualReturnDate ? parseISO(rental.actualReturnDate) : null;
-                                return (
-                                    <AccordionItem value={`item-pending-${rental.id}`} key={`pending-${rental.id}`} className="border rounded-md hover:bg-muted/50 transition-colors">
-                                        <AccordionTrigger className="p-3 w-full hover:no-underline [&[data-state=open]]:border-b">
-                                           <div className="flex items-center gap-3 w-full text-left">
-                                                <Avatar className="h-10 w-10">
-                                                    <AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name || 'Avatar'} />
-                                                    <AvatarFallback>{customer ? getFirstName(customer.name).charAt(0).toUpperCase() : 'C'}</AvatarFallback>
-                                                </Avatar>
-                                                <div className="flex-grow">
-                                                    <p className="font-semibold">{getFirstName(rental.customerName)}</p>
-                                                    <div className="text-sm font-bold text-destructive">
-                                                        Valor: {formatToBRL(rental.value)}
-                                                    </div>
+                            {groupedPendingPayments.map(group => (
+                                <AccordionItem value={`group-${group.customerId}`} key={group.customerId} className="border rounded-md hover:bg-muted/50 transition-colors">
+                                    <AccordionTrigger className="p-3 w-full hover:no-underline [&[data-state=open]]:border-b">
+                                        <div className="flex items-center gap-3 w-full text-left">
+                                            <Avatar className="h-10 w-10">
+                                                <AvatarImage src={group.customerImageUrl || undefined} alt={group.customerName} />
+                                                <AvatarFallback>{group.customerName.charAt(0).toUpperCase()}</AvatarFallback>
+                                            </Avatar>
+                                            <div className="flex-grow">
+                                                <p className="font-semibold">{group.customerName}</p>
+                                                <div className="text-sm font-bold text-destructive">
+                                                    Dívida Total: {formatToBRL(group.totalPendingValue)}
                                                 </div>
                                             </div>
-                                        </AccordionTrigger>
-                                        <AccordionContent>
-                                            <div className="pl-16 pr-4 pb-3 pt-2 text-sm space-y-3">
-                                                <div className="space-y-1">
-                                                    <p className="text-muted-foreground">
-                                                        Devolvido em: <span className="font-medium text-foreground">{returnDate ? format(returnDate, 'PP', { locale: ptBR }) : 'N/A'}</span>
-                                                    </p>
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="text-muted-foreground">Status do Pagamento:</p>
-                                                        <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="capitalize">
-                                                            {paymentStatusMap[rental.paymentStatus]}
-                                                        </Badge>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                                                    <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}>
-                                                        Marcar como Pago
-                                                    </Button>
-                                                    <Button asChild variant="link" size="sm" className="p-0 h-auto">
-                                                       <Link href={`/dashboard/rentals/${rental.id}/details`}>Ver detalhes</Link>
-                                                    </Button>
-                                                </div>
+                                        </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                        <div className="pl-4 pr-4 pb-3 pt-2 text-sm space-y-3">
+                                            <div className="space-y-2">
+                                                {group.rentals.map(rental => {
+                                                    const pendingValue = rental.value - (rental.payments?.reduce((acc,p)=>acc+p.amount,0) ?? 0);
+                                                    return(
+                                                        <div key={rental.id} className="flex flex-wrap items-center justify-between gap-2 p-2 border-b last:border-b-0">
+                                                            <div>
+                                                                <p className="text-muted-foreground">Contrato ID: {rental.id}</p>
+                                                                <p className="font-semibold text-destructive">Pendente: {formatToBRL(pendingValue)}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <Button asChild variant="outline" size="sm">
+                                                                    <Link href={`/dashboard/rentals/${rental.id}/details`}>
+                                                                        <Eye className="mr-2 h-4 w-4" /> Ver
+                                                                    </Link>
+                                                                </Button>
+                                                                <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}>
+                                                                    Registrar Pagamento
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                );
-                            })}
+                                            <div className="flex justify-end pt-2">
+                                                <Button asChild>
+                                                    <Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}>
+                                                        <FileText className="h-4 w-4 mr-2" />
+                                                        Gerar Recibo Consolidado
+                                                    </Link>
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            ))}
                         </Accordion>
                     ) : (
                         <p className="text-sm text-muted-foreground text-center py-4">Nenhum pagamento pendente para itens já devolvidos.</p>
