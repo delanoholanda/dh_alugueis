@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2, Signature, DatabaseBackup, Landmark, Upload, AlertTriangle, History } from 'lucide-react';
+import { Settings as SettingsIcon, UserCircle, Bell, Image as ImageIconLucide, Building, FileText, Eye, EyeOff, Save, Mail, Send, Loader2, Signature, DatabaseBackup, Landmark, Upload, AlertTriangle, History, Download } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from '@/hooks/use-auth';
@@ -603,7 +603,7 @@ export default function SettingsPage() {
                           <TabsContent value="restore-server" className="mt-4">
                                <div className="space-y-2">
                                 <p className="text-sm text-muted-foreground">
-                                  Selecione um backup da lista abaixo para restaurar.
+                                  Selecione um backup da lista abaixo para restaurar ou baixar.
                                 </p>
                                 <Select value={selectedBackup} onValueChange={setSelectedBackup} disabled={backupFiles.length === 0}>
                                     <SelectTrigger className="w-full">
@@ -624,10 +624,18 @@ export default function SettingsPage() {
                                         )}
                                     </SelectContent>
                                 </Select>
-                                <Button onClick={handleRestoreFromPath} className="w-full sm:w-auto" disabled={!selectedBackup || isRestoring}>
-                                    {isRestoring ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                                    Restaurar Selecionado
-                                </Button>
+                                <div className="flex flex-wrap gap-2">
+                                  <Button onClick={handleRestoreFromPath} className="flex-1 sm:flex-auto" disabled={!selectedBackup || isRestoring}>
+                                      {isRestoring ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                                      Restaurar
+                                  </Button>
+                                  <Button asChild variant="outline" className="flex-1 sm:flex-auto" disabled={!selectedBackup}>
+                                    <a href={selectedBackup ? `/api/backups/download?filename=${selectedBackup}` : '#'} download>
+                                      <Download className="mr-2 h-4 w-4" />
+                                      Baixar
+                                    </a>
+                                  </Button>
+                                </div>
                               </div>
                           </TabsContent>
                            <TabsContent value="restore-upload" className="mt-4">
