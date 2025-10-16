@@ -1,4 +1,5 @@
 
+
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
@@ -232,6 +233,19 @@ export function getDb() {
         return globalWithDb[symbolForDb]!;
     }
 }
+
+/**
+ * Explicitly closes the database connection.
+ * This is useful for manual operations like restoring from a backup.
+ */
+export function closeDb() {
+  if (globalWithDb[symbolForDb] && globalWithDb[symbolForDb]!.open) {
+    globalWithDb[symbolForDb]!.close();
+    globalWithDb[symbolForDb] = undefined;
+    console.log("[DB] Singleton database instance closed.");
+  }
+}
+
 
 function initializeSchemaAndSeed(db: Database.Database) {
   // --- SCHEMA CREATION ---

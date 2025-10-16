@@ -1,16 +1,16 @@
 
 'use server';
 
-import { getDb } from '@/lib/database';
+import { getDb, closeDb } from '@/lib/database';
 import fs from 'fs';
 import path from 'path';
 import { format as formatTz, toZonedTime } from 'date-fns-tz';
 import { differenceInDays, parseISO } from 'date-fns';
 
-
 const dataDirectory = path.join(process.cwd(), 'data');
 const backupsDirectory = path.join(dataDirectory, 'backups');
 const DB_FILE_NAME = 'dhalugueis.db';
+const DB_PATH = path.join(dataDirectory, DB_FILE_NAME);
 const TIME_ZONE = 'America/Sao_Paulo'; // Using a consistent timezone
 
 /**
@@ -39,6 +39,7 @@ export async function backupDatabase(): Promise<{ success: boolean; message: str
     
     console.log(`[DB Action] Starting manual backup to ${backupFilePath}`);
 
+    // Use the backup method from better-sqlite3
     await db.backup(backupFilePath);
 
     console.log(`[DB Action] Manual backup completed successfully to ${backupFilePath}`);
@@ -57,6 +58,97 @@ export async function backupDatabase(): Promise<{ success: boolean; message: str
       message: `Falha ao criar o backup do banco de dados: ${(error as Error).message}`,
     };
   }
+}
+
+/**
+ * Retrieves a list of available backup files.
+ */
+export async function getBackupFiles(): Promise<string[]> {
+    await ensureBackupsDir();
+    try {
+        const files = await fs.promises.readdir(backupsDirectory);
+        return files
+            .filter(file => file.endsWith('.db') && file.startsWith('backup-'))
+            .sort((a, b) => b.localeCompare(a)); // Sort descending, newest first
+    } catch (error) {
+        console.error('[DB Action] Failed to list backup files:', error);
+        return [];
+    }
+}
+
+
+/**
+ * Restores the database from an uploaded base64 string.
+ * This is a destructive operation. The server/container MUST be restarted manually afterwards.
+ */
+export async function restoreDatabase(base64DbString: string): Promise<{ success: boolean; message: string }> {
+    const tempRestorePath = path.join(dataDirectory, `restore-temp-${Date.now()}.db`);
+
+    try {
+        // 1. Decode base64 and write to a temporary file
+        const dbBuffer = Buffer.from(base64DbString, 'base64');
+        await fs.promises.writeFile(tempRestorePath, dbBuffer);
+        console.log(`[DB Restore] Temporary backup file written to ${tempRestorePath}`);
+
+        // 2. Close the active database connection
+        console.log('[DB Restore] Closing active database connection...');
+        closeDb();
+        console.log('[DB Restore] Database connection closed.');
+
+        // 3. Replace the current database file with the new one
+        console.log(`[DB Restore] Moving ${tempRestorePath} to ${DB_PATH}`);
+        await fs.promises.rename(tempRestorePath, DB_PATH);
+        console.log('[DB Restore] Database file replaced successfully.');
+        
+        return { success: true, message: 'Banco de dados restaurado. Reinicie a aplicação para aplicar as mudanças.' };
+
+    } catch (error) {
+        console.error('[DB Restore] An error occurred during database restoration:', error);
+        if (fs.existsSync(tempRestorePath)) {
+            await fs.promises.unlink(tempRestorePath);
+        }
+        return {
+            success: false,
+            message: `Falha ao restaurar o banco de dados: ${(error as Error).message}`,
+        };
+    }
+}
+
+
+/**
+ * Restores the database from a backup file already on the server.
+ * This is a destructive operation. The server/container MUST be restarted manually afterwards.
+ */
+export async function restoreDatabaseFromPath(backupFileName: string): Promise<{ success: boolean; message: string }> {
+    const sourcePath = path.join(backupsDirectory, backupFileName);
+
+    try {
+        // 1. Verify the backup file exists
+        if (!fs.existsSync(sourcePath)) {
+            throw new Error(`Arquivo de backup não encontrado: ${backupFileName}`);
+        }
+        console.log(`[DB Restore] Starting restoration from ${sourcePath}`);
+
+        // 2. Close the active database connection
+        console.log('[DB Restore] Closing active database connection...');
+        closeDb();
+        console.log('[DB Restore] Database connection closed.');
+        
+        // 3. Replace the current database file by copying the backup over it
+        // Copying is safer than renaming as it keeps the original backup file intact.
+        console.log(`[DB Restore] Copying ${sourcePath} to ${DB_PATH}`);
+        await fs.promises.copyFile(sourcePath, DB_PATH);
+        console.log('[DB Restore] Database file replaced successfully.');
+
+        return { success: true, message: 'Banco de dados restaurado. Reinicie a aplicação para aplicar as mudanças.' };
+
+    } catch (error) {
+        console.error(`[DB Restore] An error occurred during database restoration from path:`, error);
+        return {
+            success: false,
+            message: `Falha ao restaurar o banco de dados: ${(error as Error).message}`,
+        };
+    }
 }
 
 /**
