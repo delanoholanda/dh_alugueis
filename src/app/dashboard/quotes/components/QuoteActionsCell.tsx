@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -76,7 +77,7 @@ export function QuoteActionsCell({ quote, onActionSuccess }: QuoteActionsCellPro
             <div className="space-y-2">
                 <p className="font-semibold">Período: <span className="font-normal">{format(parseISO(quote.rentalStartDate), 'P', { locale: ptBR })} por {quote.rentalDays} dias</span></p>
                 <p className="font-semibold">Valor Total: <span className="font-normal">{formatToBRL(quote.value)}</span></p>
-                {quote.freightValue && quote.freightValue > 0 && <p className="font-semibold">Frete: <span className="font-normal">{formatToBRL(quote.freightValue)}</span></p>}
+                {(quote.freightValue ?? 0) > 0 && <p className="font-semibold">Frete: <span className="font-normal">{formatToBRL(quote.freightValue)}</span></p>}
                 <h4 className="font-semibold mt-2">Equipamentos:</h4>
                 <ul className="list-disc list-inside text-sm text-muted-foreground pl-2">
                     {quote.equipment.map((eq, index) => <li key={index}>{eq.quantity}x {eq.name}</li>)}

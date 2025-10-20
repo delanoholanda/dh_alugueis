@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, UserPlus, PackagePlus, MapPin, Info, ChevronsUpDown, Check, Package } from 'lucide-react';
-import { format, parseISO, isSameDay, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { format, parseISO, isSameDay, isWithinInterval, startOfDay, endOfDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -238,9 +238,19 @@ export function QuoteForm({
     const discount = watchedDiscountValue || 0;
     const finalContractValue = itemsTotalValue + freight - discount;
     
-    form.setValue('value', finalContractValue < 0 ? 0 : finalContractValue, { shouldValidate: true });
+    // Only update if the value is different, to avoid infinite loops
+    if (form.getValues('value') !== finalContractValue) {
+        form.setValue('value', finalContractValue < 0 ? 0 : finalContractValue, { shouldValidate: true });
+    }
 
-  }, [watchedEquipment, watchedRentalDays, watchedFreightValue, watchedDiscountValue, inventoryList, form]);
+  }, [
+    JSON.stringify(watchedEquipment), // Stringify to detect deep changes
+    watchedRentalDays, 
+    watchedFreightValue, 
+    watchedDiscountValue, 
+    inventoryList, 
+    form
+  ]);
 
   const getEquipmentStandardRate = (equipmentId: string): number | undefined => {
     const item = inventoryList.find(inv => inv.id === equipmentId);
