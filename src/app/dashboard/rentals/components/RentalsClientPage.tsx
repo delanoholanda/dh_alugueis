@@ -37,7 +37,7 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
   const [searchTerm, setSearchTerm] = useState('');
   const [rentalStatusFilter, setRentalStatusFilter] = useState<RentalStatusFilter>('active');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilterType>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
 
   const refreshData = useCallback(async () => {
     setIsLoading(true);
@@ -91,17 +91,17 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
         }
         
         // If both are finalized, sort by return date (most recent first)
-        if (finalA && finalB) {
-            return parseISO(b.actualReturnDate!).getTime() - parseISO(a.actualReturnDate!).getTime();
+        if (finalA && finalB && b.actualReturnDate && a.actualReturnDate) {
+            return parseISO(b.actualReturnDate).getTime() - parseISO(a.actualReturnDate).getTime();
         }
 
         // --- Both are active/pending attention ---
         const getPriorityScore = (rental: Rental) => {
+            if (!!rental.actualReturnDate && rental.paymentStatus !== 'paid') return 6; // Returned, pending payment (LOWER PRIORITY)
             if (!rental.actualReturnDate && !rental.isOpenEnded && isPast(parseISO(rental.expectedReturnDate)) && !isToday(parseISO(rental.expectedReturnDate))) return 1; // Overdue
-            if (!!rental.actualReturnDate && rental.paymentStatus !== 'paid') return 2; // Returned, pending payment
-            if (!rental.actualReturnDate && !rental.isOpenEnded && isToday(parseISO(rental.expectedReturnDate))) return 3; // Due today
-            if (rental.isOpenEnded && !rental.actualReturnDate) return 4; // Open-ended
-            return 5; // Other active
+            if (!rental.actualReturnDate && !rental.isOpenEnded && isToday(parseISO(rental.expectedReturnDate))) return 2; // Due today
+            if (rental.isOpenEnded && !rental.actualReturnDate) return 3; // Open-ended and active
+            return 4; // Other active
         };
 
         const scoreA = getPriorityScore(a);
@@ -112,9 +112,10 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
         }
 
         // Fallback sort for items with the same priority
-        if (scoreA === 1 || scoreA === 3) {
+        if (scoreA === 1 || scoreA === 2) { // Atrasado ou Devolve Hoje
             return parseISO(a.expectedReturnDate).getTime() - parseISO(b.expectedReturnDate).getTime();
         }
+        // Para outros casos, ordena por data de início mais recente
         return parseISO(b.rentalStartDate).getTime() - parseISO(a.rentalStartDate).getTime();
     });
 
@@ -137,7 +138,7 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
                  <ToggleGroup
                     type="single"
                     value={viewMode}
-                    onValueChange={(value) => { if (value) setViewMode(value as ViewMode)}}
+                    onValueChange={(value: string) => { if (value) setViewMode(value as ViewMode)}}
                     aria-label="Visualização"
                     >
                     <ToggleGroupItem value="cards" aria-label="Visualizar em cards">
