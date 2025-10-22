@@ -10,7 +10,7 @@ import { getExpenseCategories }
 from '@/actions/expenseCategoryActions';
 import { getRentals } from '@/actions/rentalActions';
 import type { Expense, Rental, ExpenseCategory } from '@/types'; 
-import { CircleDollarSign, TrendingUp, TrendingDown, Scale, FileText, Handshake } from 'lucide-react';
+import { CircleDollarSign, TrendingUp, TrendingDown, Scale, FileText, Handshake, BarChart } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Line, LineChart as RechartsLineChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import FinancialsClientPart from './components/FinancialsClientPart';
@@ -292,9 +292,9 @@ export default function FinancialsPage() {
         description="Acompanhe suas receitas, despesas e lucratividade geral."
         actions={
           <div className="flex gap-2">
-            <Button asChild>
-              <Link href="/dashboard/financials/contracts">
-                <Handshake className="mr-2 h-4 w-4" /> Ver Contratos Financeiros
+             <Button asChild>
+              <Link href="/dashboard/financials/item-performance">
+                <BarChart className="mr-2 h-4 w-4" /> Desempenho por Item
               </Link>
             </Button>
             <Button asChild>

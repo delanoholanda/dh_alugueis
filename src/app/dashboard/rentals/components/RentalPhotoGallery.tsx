@@ -45,10 +45,11 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title,
           if (file.size > maxFileSize) {
             toast({
               title: 'Arquivo Muito Grande',
-              description: `A imagem "${file.name}" excede o limite de 8MB.`,
+              description: `A imagem "${file.name}" excede o limite de 8MB e não será enviada.`,
               variant: 'destructive',
             });
-            resolve();
+            // CRITICAL FIX: Reject the promise for this file to stop processing it.
+            reject(new Error(`File ${file.name} is too large.`));
             return;
           }
 
@@ -70,7 +71,16 @@ export default function RentalPhotoGallery({ rentalId, photos, photoType, title,
         });
       });
 
-      await Promise.all(uploadPromises);
+      // Promise.allSettled will wait for all promises, even rejected ones.
+      const results = await Promise.allSettled(uploadPromises);
+
+      // Check for any failed uploads (excluding the file size rejections we created)
+      results.forEach(result => {
+        if (result.status === 'rejected' && !result.reason.message.includes('is too large')) {
+          throw result.reason; // Re-throw actual upload errors
+        }
+      });
+
 
       if (successfulUploads > 0) {
         toast({

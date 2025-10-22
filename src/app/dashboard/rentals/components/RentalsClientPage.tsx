@@ -11,12 +11,15 @@ import { getRentals as fetchRentalsAction } from '@/actions/rentalActions';
 import { getInventoryItems as fetchInventoryItemsAction } from '@/actions/inventoryActions';
 import { getCustomers as fetchCustomersAction } from '@/actions/customerActions';
 import type { Rental, Equipment as InventoryEquipment, PaymentStatus, Customer } from '@/types';
-import { Filter, RotateCcw, PackageX } from 'lucide-react';
+import { Filter, RotateCcw, PackageX, LayoutGrid, List } from 'lucide-react';
 import { parseISO, isPast, isToday } from 'date-fns';
 import { RentalCard } from './RentalCard';
+import { RentalTable } from './RentalTable';
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 type RentalStatusFilter = 'all' | 'active' | 'finalized';
 type PaymentStatusFilterType = 'all' | PaymentStatus;
+type ViewMode = 'cards' | 'table';
 
 interface RentalsClientPageProps {
   initialRentals: Rental[];
@@ -34,6 +37,7 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
   const [searchTerm, setSearchTerm] = useState('');
   const [rentalStatusFilter, setRentalStatusFilter] = useState<RentalStatusFilter>('active');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilterType>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
 
   const refreshData = useCallback(async () => {
     setIsLoading(true);
@@ -128,7 +132,22 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
     <>
       <Card className="mb-6 shadow-md">
         <CardHeader>
-            <CardTitle className="text-lg flex items-center"><Filter className="mr-2 h-5 w-5 text-primary"/> Filtros</CardTitle>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <CardTitle className="text-lg flex items-center"><Filter className="mr-2 h-5 w-5 text-primary"/> Filtros e Visualização</CardTitle>
+                 <ToggleGroup
+                    type="single"
+                    value={viewMode}
+                    onValueChange={(value) => { if (value) setViewMode(value as ViewMode)}}
+                    aria-label="Visualização"
+                    >
+                    <ToggleGroupItem value="cards" aria-label="Visualizar em cards">
+                        <LayoutGrid className="h-4 w-4" />
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="table" aria-label="Visualizar em tabela">
+                        <List className="h-4 w-4" />
+                    </ToggleGroupItem>
+                </ToggleGroup>
+            </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
             <div className="space-y-1">
@@ -176,31 +195,45 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
       <div className="mb-4 text-sm text-muted-foreground">
           Exibindo {filteredRentals.length} de {allRentals.length} aluguéis.
       </div>
-
-      {filteredRentals.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredRentals.map((rental) => (
-            <RentalCard key={rental.id} rental={rental} inventory={inventoryItems} customers={customers} onActionSuccess={refreshData} />
-          ))}
-        </div>
-      ) : (
-        <Card className="shadow-lg col-span-full">
-            <CardContent className="py-12 text-center">
-                <PackageX className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">Nenhum aluguel encontrado.</h3>
-                <p className="text-muted-foreground">
-                {allRentals.length === 0 
-                    ? "Nenhum aluguel foi registrado ainda. Adicione um novo aluguel para começar." 
-                    : "Tente ajustar os filtros ou adicione um novo contrato de aluguel."}
-                </p>
-                {allRentals.length > 0 && (
-                     <Button onClick={resetFilters} variant="outline" className="mt-4">
-                        <RotateCcw className="mr-2 h-4 w-4" /> Limpar Filtros
-                    </Button>
-                )}
-            </CardContent>
-        </Card>
+      
+      {viewMode === 'cards' && (
+        <>
+            {filteredRentals.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredRentals.map((rental) => (
+                    <RentalCard key={rental.id} rental={rental} inventory={inventoryItems} customers={customers} onActionSuccess={refreshData} />
+                ))}
+                </div>
+            ) : (
+                <Card className="shadow-lg col-span-full">
+                    <CardContent className="py-12 text-center">
+                        <PackageX className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+                        <h3 className="text-xl font-semibold text-foreground mb-2">Nenhum aluguel encontrado.</h3>
+                        <p className="text-muted-foreground">
+                        {allRentals.length === 0 
+                            ? "Nenhum aluguel foi registrado ainda. Adicione um novo aluguel para começar." 
+                            : "Tente ajustar os filtros ou adicione um novo contrato de aluguel."}
+                        </p>
+                        {allRentals.length > 0 && (
+                            <Button onClick={resetFilters} variant="outline" className="mt-4">
+                                <RotateCcw className="mr-2 h-4 w-4" /> Limpar Filtros
+                            </Button>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+        </>
       )}
+
+      {viewMode === 'table' && (
+         <RentalTable 
+            rentals={filteredRentals} 
+            inventory={inventoryItems} 
+            customers={customers} 
+            onActionSuccess={refreshData}
+         />
+      )}
+
     </>
   );
 }

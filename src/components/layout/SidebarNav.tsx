@@ -80,9 +80,9 @@ const mainNavItems: NavItem[] = [
     label: 'Financeiro', 
     iconName: 'CircleDollarSign',
     subItems: [
-        { href: '/dashboard/financials', label: 'Visão Geral', iconName: 'BarChart' },
+        { href: '/dashboard/financials', label: 'Visão Geral', iconName: 'CircleDollarSign' },
+        { href: '/dashboard/financials/item-performance', label: 'Desempenho por Item', iconName: 'BarChart' },
         { href: '/dashboard/financials/statement', label: 'Extrato', iconName: 'FileText' },
-        { href: '/dashboard/financials/contracts', label: 'Contratos', iconName: 'Handshake' },
     ]
   },
   { 
@@ -170,6 +170,9 @@ export function SidebarNav() {
   const isNavItemActive = (item: NavItem) => {
     if (item.href === '/dashboard' || item.href === '/dashboard/rentals') {
       return pathname === item.href;
+    }
+    if(item.subItems) {
+        return pathname.startsWith(item.href)
     }
     return pathname.startsWith(item.href);
   };
