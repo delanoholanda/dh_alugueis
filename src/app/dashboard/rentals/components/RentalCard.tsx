@@ -8,7 +8,7 @@ import { RentalActionsCell } from './RentalActionsCell';
 import { format, parseISO, isToday, isPast, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn, countBillableDays, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
-import { CalendarDays, DollarSign, Package, CircleAlert, CircleCheck, TrendingUp, Infinity } from 'lucide-react';
+import { CalendarDays, DollarSign, Package, CircleAlert, CircleCheck, TrendingUp, Infinity, HandCoins } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useState } from 'react';
 import { MarkAsPaidDialog } from './MarkAsPaidDialog';
@@ -117,6 +117,7 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
               </div>
               <div className="flex flex-col items-end flex-shrink-0 gap-1">
                   {isFullyFinalized && <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-xs whitespace-nowrap"><CircleCheck className="h-3 w-3 mr-1"/>Finalizado</Badge>}
+                  {isPhysicallyReturned && isPaymentPending && <Badge variant="secondary" className="border-orange-500/50 text-xs whitespace-nowrap"><HandCoins className="h-3 w-3 mr-1"/>Aguard. Pagamento</Badge>}
                   {rental.isOpenEnded && !isPhysicallyReturned && <Badge variant="secondary" className="border-blue-500/50 text-xs whitespace-nowrap"><Infinity className="h-3 w-3 mr-1"/>Em Aberto</Badge>}
                   {!isPhysicallyReturned && !rental.isOpenEnded && returnDateSuffix.includes('Atrasado') && <Badge variant="destructive" className="text-xs whitespace-nowrap"><CircleAlert className="h-3 w-3 mr-1"/>Atrasado</Badge>}
               </div>

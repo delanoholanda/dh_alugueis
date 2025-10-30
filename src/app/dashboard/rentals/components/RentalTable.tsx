@@ -10,7 +10,7 @@ import { format, parseISO, isToday, isPast, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, getPaymentStatusVariant, paymentStatusMap, cn, countBillableDays } from '@/lib/utils';
 import { RentalTableActions } from './RentalTableActions';
-import { CircleAlert, Infinity as InfinityIcon, ChevronDown, Package } from 'lucide-react';
+import { CircleAlert, Infinity as InfinityIcon, ChevronDown, Package, HandCoins } from 'lucide-react';
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
@@ -51,6 +51,16 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
 
   const getStatusInfo = (rental: Rental) => {
       const isPhysicallyReturned = !!rental.actualReturnDate;
+      const isPaymentPending = rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue';
+
+      if (isPhysicallyReturned && isPaymentPending) {
+        return { 
+            badge: <Badge variant="secondary" className="border-orange-500/50 text-xs whitespace-nowrap ml-2"><HandCoins className="h-3 w-3 mr-1"/>Aguard. Pagamento</Badge>,
+            dateClass: 'text-muted-foreground', 
+            suffix: '' 
+        };
+      }
+      
       if (isPhysicallyReturned) return { badge: null, dateClass: '', suffix: '' };
 
       if(rental.isOpenEnded) {
