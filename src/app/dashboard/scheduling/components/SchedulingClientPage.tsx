@@ -74,6 +74,18 @@ export default function SchedulingClientPage({
         if (!fullName) return 'Cliente';
         return fullName.split(' ')[0];
     }
+    
+    const totalItemsForDay = useMemo(() => {
+      if (!dayEvents || dayEvents.length === 0) return 0;
+      return dayEvents.reduce((total, rental) => {
+        return total + rental.equipment.reduce((rentalTotal, eq) => {
+          if (selectedEquipmentIds.length === 0 || selectedEquipmentIds.includes(eq.equipmentId)) {
+            return rentalTotal + eq.quantity;
+          }
+          return rentalTotal;
+        }, 0);
+      }, 0);
+    }, [dayEvents, selectedEquipmentIds]);
 
     return (
       <div
@@ -84,7 +96,7 @@ export default function SchedulingClientPage({
         <time dateTime={format(date, 'yyyy-MM-dd')} className={cn("text-xs font-semibold", isToday(date) && "bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center")}>
           {format(date, 'd')}
         </time>
-        <div className="flex-grow overflow-y-auto mt-1 space-y-0.5">
+        <div className="flex-grow overflow-y-auto mt-1 space-y-0.5 hide-scrollbar">
           {dayEvents.slice(0, 2).map(event => (
             <div key={event.id} className="text-[10px] leading-tight px-1 rounded-sm bg-primary/20 text-primary-foreground truncate" title={event.customerName}>
               {getFirstName(event.customerName)}
@@ -94,6 +106,12 @@ export default function SchedulingClientPage({
             <div className="text-[10px] text-muted-foreground font-semibold">+ {dayEvents.length - 2} mais</div>
           )}
         </div>
+        {totalItemsForDay > 0 && (
+          <div className="flex items-center justify-center text-xs text-muted-foreground font-bold mt-auto pt-1 border-t border-dashed">
+            <Package className="h-3 w-3 mr-1" />
+            {totalItemsForDay}
+          </div>
+        )}
          <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <PlusCircle className="h-4 w-4 text-primary" />
         </div>
@@ -103,6 +121,17 @@ export default function SchedulingClientPage({
 
   return (
     <>
+      {/* Add this style block to hide the scrollbar */}
+      <style jsx global>{`
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .hide-scrollbar {
+          -ms-overflow-style: none; /* IE and Edge */
+          scrollbar-width: none; /* Firefox */
+        }
+      `}</style>
+
       <Card className="shadow-lg">
         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex-grow">
