@@ -7,7 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { CustomerForm } from './CustomerForm';
 import { createCustomer, updateCustomer, deleteCustomer, getCustomers } from '@/actions/customerActions';
 import { PlusCircle, Edit, Trash2, User, Phone, Fingerprint, Home, UsersRound, History, PackageX, FileText, AlertTriangle, Calendar as CalendarIcon, ListChecks, Eraser } from 'lucide-react';
@@ -213,7 +213,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                         <CardTitle className="text-lg font-headline truncate" title={customer.name}>
                             {customer.name}
                         </CardTitle>
-                        <CardDescription className="text-xs text-muted-foreground space-y-0.5 mt-1">
+                        <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
                             <div className="flex items-center">
                                 <Phone className="h-3 w-3 mr-1.5 text-muted-foreground" /> {customer.phone}
                             </div>
@@ -224,22 +224,40 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                                     {formatDocument(customer.documentType, customer.documentNumber)}
                                 </span>
                             </div>
-                        </CardDescription>
+                        </div>
                     </div>
-                     <div className="w-16 h-16 relative rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0 border">
-                        {customer.imageUrl ? (
-                            <Image
-                            src={customer.imageUrl}
-                            alt={`Foto de ${customer.name}`}
-                            layout="fill"
-                            objectFit="cover"
-                            className="p-0.5"
-                            data-ai-hint="person portrait"
-                            />
-                        ) : (
-                            <User className="w-8 h-8 text-muted-foreground opacity-50" data-ai-hint="person portrait"/>
-                        )}
-                    </div>
+                     <Dialog>
+                        <DialogTrigger asChild>
+                             <div className="w-16 h-16 relative rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0 border cursor-pointer group">
+                                {customer.imageUrl ? (
+                                    <Image
+                                    src={customer.imageUrl}
+                                    alt={`Foto de ${customer.name}`}
+                                    layout="fill"
+                                    objectFit="cover"
+                                    className="p-0.5 group-hover:scale-110 transition-transform duration-300"
+                                    data-ai-hint="person portrait"
+                                    />
+                                ) : (
+                                    <User className="w-8 h-8 text-muted-foreground opacity-50" data-ai-hint="person portrait"/>
+                                )}
+                            </div>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle className="sr-only">Foto de {customer.name}</DialogTitle>
+                            </DialogHeader>
+                            <div className="relative w-full aspect-square">
+                                 <Image
+                                    src={customer.imageUrl || '/placeholder.png'}
+                                    alt={`Foto de ${customer.name}`}
+                                    layout="fill"
+                                    objectFit="contain"
+                                    className="rounded-md"
+                                />
+                            </div>
+                        </DialogContent>
+                     </Dialog>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm flex-grow">

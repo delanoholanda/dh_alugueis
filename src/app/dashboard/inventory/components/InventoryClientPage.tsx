@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { InventoryItemForm } from './InventoryItemForm';
 import { createInventoryItem, updateInventoryItem, deleteInventoryItem } from '@/actions/inventoryActions';
 import { PlusCircle, Edit, Trash2, ImageIcon as ImageIconLucide, PackageCheck, PackageX, DollarSign, Tag } from 'lucide-react';
@@ -150,24 +150,42 @@ export default function InventoryClientPage({ initialItems, rentedQuantities: in
             return (
               <Card key={item.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <CardHeader className="p-4">
-                  <div className="w-full h-40 relative rounded-md overflow-hidden bg-muted flex items-center justify-center mb-3">
-                    {item.imageUrl ? (
-                       <Image
-                         src={item.imageUrl}
-                         alt={item.name}
-                         fill
-                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw, 25vw"
-                         className="object-contain p-1"
-                         placeholder="blur"
-                         blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
-                         data-ai-hint={getAINTHintForItem(item)}
-                       />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-muted rounded-md" data-ai-hint={getAINTHintForItem(item)}>
-                         <ImageIconLucide className="w-16 h-16 text-muted-foreground opacity-50" />
-                      </div>
-                    )}
-                   </div>
+                 <Dialog>
+                    <DialogTrigger asChild>
+                        <div className="w-full h-40 relative rounded-md overflow-hidden bg-muted flex items-center justify-center mb-3 cursor-pointer group">
+                        {item.imageUrl ? (
+                           <Image
+                             src={item.imageUrl}
+                             alt={item.name}
+                             fill
+                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw, 25vw"
+                             className="object-contain p-1 group-hover:scale-110 transition-transform duration-300"
+                             placeholder="blur"
+                             blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+                             data-ai-hint={getAINTHintForItem(item)}
+                           />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-muted rounded-md" data-ai-hint={getAINTHintForItem(item)}>
+                             <ImageIconLucide className="w-16 h-16 text-muted-foreground opacity-50" />
+                          </div>
+                        )}
+                       </div>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-xl">
+                        <DialogHeader>
+                            <DialogTitle className="sr-only">Imagem de {item.name}</DialogTitle>
+                        </DialogHeader>
+                        <div className="relative w-full aspect-square">
+                            <Image
+                                src={item.imageUrl || '/placeholder.png'}
+                                alt={`Imagem de ${item.name}`}
+                                layout="fill"
+                                objectFit="contain"
+                                className="rounded-md"
+                            />
+                        </div>
+                    </DialogContent>
+                 </Dialog>
                   <CardTitle className="text-lg font-headline truncate" title={item.name}>{item.name}</CardTitle>
                   <CardDescription className="flex items-center text-xs text-muted-foreground">
                     <DynamicLucideIcon iconName={itemTypeDetails.iconName} className="h-3 w-3 mr-1.5" />
