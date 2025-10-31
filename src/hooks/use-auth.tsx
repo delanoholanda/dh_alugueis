@@ -1,3 +1,4 @@
+
 'use client';
 import {createContext, useContext, useState, ReactNode, useEffect, useCallback} from 'react';
 import { useRouter } from 'next/navigation';
@@ -25,30 +26,27 @@ export function AuthProvider({children}: {children: ReactNode}) {
   const router = useRouter();
 
   useEffect(() => {
-    // This effect now ONLY checks for user data for quick UI rendering,
-    // but it NEVER trusts localStorage to determine authentication status.
-    const storedUser = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
-    if (storedUser) {
-      try {
+    // This effect now ONLY checks for UI data and finishes loading.
+    // It NEVER assumes authentication from localStorage.
+    try {
+      const storedUser = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+      if (storedUser) {
         const parsedUser: UserProfile = JSON.parse(storedUser);
         if (parsedUser && typeof parsedUser.id === 'string') {
-          // We set the user for UI purposes, but isAuthenticated remains false initially.
+          // Set user for UI purposes only, NOT authentication.
           setUser(parsedUser);
-          // We will assume the user is authenticated for a better UX,
-          // but the server-side ProtectedRoute will be the real guard.
-          setIsAuthenticated(true);
-        } else {
-          // If data is invalid, clear it.
-          localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
         }
-      } catch (e) {
-        console.error("Error processing stored user data:", e);
-        localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
       }
+    } catch (e) {
+      console.error("Error processing stored user data:", e);
+      // Ensure localStorage is clean if data is corrupted.
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    } finally {
+      // Finish loading. The ProtectedRoute component will now handle redirection
+      // based on the initial `isAuthenticated` state, which is `false`.
+      setIsLoading(false);
     }
-    // Regardless of localStorage, we finish loading. The real protection is server-side.
-    setIsLoading(false);
-  }, []); 
+  }, []);
 
   const login = useCallback(async (email: string, password?: string, redirectTo?: string) => {
     if (!password) {
