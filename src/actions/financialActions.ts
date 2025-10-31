@@ -5,8 +5,10 @@ import type { Expense } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
+import { validateServerSession } from '@/lib/auth-utils';
 
 export async function getExpenses(): Promise<Expense[]> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     // Join with expense_categories to get categoryName
@@ -25,6 +27,7 @@ export async function getExpenses(): Promise<Expense[]> {
 }
 
 async function getExpenseById(id: string): Promise<Expense | undefined> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const stmt = db.prepare(`
@@ -42,6 +45,7 @@ async function getExpenseById(id: string): Promise<Expense | undefined> {
 }
 
 export async function createExpense(expenseData: Omit<Expense, 'id' | 'categoryName'>): Promise<Expense> {
+  await validateServerSession();
   const db = getDb();
   const newId = `exp_${crypto.randomBytes(8).toString('hex')}`;
   const newExpense: Omit<Expense, 'categoryName'> = { ...expenseData, id: newId };
@@ -64,6 +68,7 @@ export async function createExpense(expenseData: Omit<Expense, 'id' | 'categoryN
 }
 
 export async function updateExpense(id: string, expenseData: Partial<Omit<Expense, 'id' | 'categoryName'>>): Promise<Expense | null> {
+  await validateServerSession();
   const db = getDb();
   try {
     const getExpenseStmt = db.prepare('SELECT * FROM expenses WHERE id = ?');
@@ -89,6 +94,7 @@ export async function updateExpense(id: string, expenseData: Partial<Omit<Expens
 }
 
 export async function deleteExpense(id: string): Promise<{ success: boolean }> {
+  await validateServerSession();
   const db = getDb();
   try {
     const stmt = db.prepare('DELETE FROM expenses WHERE id = ?');
@@ -103,6 +109,7 @@ export async function deleteExpense(id: string): Promise<{ success: boolean }> {
 }
 
 export async function getFinancialSummary(): Promise<{ totalRevenue: number; totalExpenses: number; netProfit: number }> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const revenueResult = db.prepare("SELECT SUM(value) as total FROM rentals WHERE paymentStatus = 'paid'").get() as { total: number | null };

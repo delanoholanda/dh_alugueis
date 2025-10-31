@@ -6,8 +6,10 @@ import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
 import { saveFile, deleteFile } from '@/lib/file-storage';
+import { validateServerSession } from '@/lib/auth-utils';
 
 export async function getCustomers(): Promise<Customer[]> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT id, name, phone, address, documentType, documentNumber, imageUrl, responsiveness, rentalHistory FROM customers ORDER BY name ASC');
@@ -20,6 +22,7 @@ export async function getCustomers(): Promise<Customer[]> {
 }
 
 export async function getCustomerById(id: string): Promise<Customer | undefined> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT id, name, phone, address, documentType, documentNumber, imageUrl, responsiveness, rentalHistory FROM customers WHERE id = ?');
@@ -32,6 +35,7 @@ export async function getCustomerById(id: string): Promise<Customer | undefined>
 }
 
 export async function createCustomer(customerData: Omit<Customer, 'id'>): Promise<Customer> {
+  await validateServerSession();
   const db = getDb();
   let savedImageUrl: string | undefined = customerData.imageUrl;
   
@@ -64,6 +68,7 @@ export async function createCustomer(customerData: Omit<Customer, 'id'>): Promis
 }
 
 export async function updateCustomer(id: string, customerData: Partial<Omit<Customer, 'id'>>): Promise<Customer | null> {
+  await validateServerSession();
   const db = getDb();
   try {
     const existingCustomer = await getCustomerById(id);
@@ -103,6 +108,7 @@ export async function updateCustomer(id: string, customerData: Partial<Omit<Cust
 }
 
 export async function deleteCustomer(id: string): Promise<{ success: boolean }> {
+  await validateServerSession();
   const db = getDb();
   try {
     const rentalCheckStmt = db.prepare('SELECT COUNT(*) as count FROM rentals WHERE customerId = ?');

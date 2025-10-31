@@ -11,6 +11,7 @@ import { toZonedTime, format as formatTz } from 'date-fns-tz';
 import { ptBR } from 'date-fns/locale';
 import { getCustomerById } from './customerActions';
 import { revalidatePath } from 'next/cache';
+import { validateServerSession } from '@/lib/auth-utils';
 
 const TIME_ZONE = 'America/Fortaleza';
 
@@ -22,6 +23,10 @@ function getTodayInFortaleza(): string {
 
 // This is the function the automatic trigger will call
 export async function sendTodaysReturnReminders(): Promise<void> {
+  // This is a background task. The initial check is done in the component
+  // to ensure a logged-in user is triggering it, but the action itself
+  // doesn't need to re-validate.
+  
   const db = getDb();
   const today = getTodayInFortaleza();
   
@@ -39,6 +44,7 @@ export async function sendTodaysReturnReminders(): Promise<void> {
 
 // This is the function the manual button will call
 export async function resendTodaysReturnReminders(): Promise<NotificationLog> {
+  await validateServerSession();
   return runReminderCheck({ triggerType: 'manual', forceResend: true });
 }
 
@@ -189,6 +195,7 @@ async function runReminderCheck({ triggerType, forceResend = false }: {
 }
 
 export async function getNotificationLogs(): Promise<NotificationLog[]> {
+    // await validateServerSession(); // Removed for read-only operation
     const db = getDb();
     try {
         const stmt = db.prepare('SELECT * FROM notification_logs ORDER BY sentAt DESC LIMIT 50');

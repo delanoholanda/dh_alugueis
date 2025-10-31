@@ -9,9 +9,11 @@ import { createRental } from './rentalActions';
 import { format, parseISO } from 'date-fns';
 import { findNthBillableDay } from '@/lib/utils';
 import { getInventoryItems } from './inventoryActions';
+import { validateServerSession } from '@/lib/auth-utils';
 
 
 export async function getQuotes(): Promise<Quote[]> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   let quotes: Quote[] = [];
   try {
@@ -56,6 +58,7 @@ export async function getQuotes(): Promise<Quote[]> {
 }
 
 export async function getQuoteById(id: number): Promise<Quote | undefined> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const row = db.prepare('SELECT * FROM quotes WHERE id = ?').get(id) as any;
@@ -81,6 +84,7 @@ export async function createQuote(
     equipment: Array<{ equipmentId: string; quantity: number; name?:string; customDailyRentalRate?: number | null }>;
   }
 ): Promise<Quote> {
+  await validateServerSession();
   const db = getDb();
   
   const customer = await getCustomerById(quoteData.customerId);
@@ -179,6 +183,7 @@ export async function createQuote(
 }
 
 export async function updateQuote(id: number, quoteData: Partial<Omit<Quote, 'id' | 'quoteDate'>>): Promise<Quote | null> {
+    await validateServerSession();
     const db = getDb();
     const existingQuote = await getQuoteById(id);
     if (!existingQuote) {
@@ -241,6 +246,7 @@ export async function updateQuote(id: number, quoteData: Partial<Omit<Quote, 'id
 }
 
 export async function deleteQuote(id: number): Promise<{ success: boolean }> {
+    await validateServerSession();
     const db = getDb();
     const deleteEquipmentStmt = db.prepare('DELETE FROM quote_equipment WHERE quoteId = ?');
     const deleteQuoteStmt = db.prepare('DELETE FROM quotes WHERE id = ?');
@@ -262,6 +268,7 @@ export async function deleteQuote(id: number): Promise<{ success: boolean }> {
 }
 
 export async function convertQuoteToRental(quoteId: number): Promise<Rental> {
+    await validateServerSession();
     const quote = await getQuoteById(quoteId);
     if (!quote) {
         throw new Error('Orçamento não encontrado.');

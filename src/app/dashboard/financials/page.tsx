@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO, startOfMonth, eachMonthOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
+import { formatToBRL } from '@/lib/utils';
 
 
 const chartConfig = {
@@ -81,25 +82,15 @@ const aggregateFinancialData = (rentals: Rental[], expenses: Expense[]): Monthly
   return Object.entries(monthlyData)
     .map(([name, values]) => ({ name, ...values }))
     .sort((a, b) => {
-      const [aMonthStr, aYearStr] = a.name.split(' ');
-      const [bMonthStr, bYearStr] = b.name.split(' ');
-      
-      const monthToNum = (monthStr: string) => {
-        // Ensure locale consistency if 'MMM' format is strictly ptBR for month names
-        const monthsPt = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-        return monthsPt.indexOf(monthStr.toLowerCase().replace('.','')); // remove dot if present (e.g. 'fev.')
+      const dateA = parseISO(`01 ${a.name.replace('/', ' ')}`);
+      const dateB = parseISO(`01 ${b.name.replace('/', ' ')}`);
+      try {
+        const dateA = parse(a.name, 'MMM yyyy', new Date(), { locale: ptBR });
+        const dateB = parse(b.name, 'MMM yyyy', new Date(), { locale: ptBR });
+        return dateA.getTime() - dateB.getTime();
+      } catch (e) {
+          return 0;
       }
-
-      const aYear = parseInt(aYearStr);
-      const bYear = parseInt(bYearStr);
-      
-      const aMonth = monthToNum(aMonthStr);
-      const bMonth = monthToNum(bMonthStr);
-
-      if (aYear !== bYear) {
-        return aYear - bYear;
-      }
-      return aMonth - bMonth;
     });
 };
 
@@ -239,8 +230,8 @@ export default function FinancialsPage() {
         </div>
         <Card className="mb-8 shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline"><Skeleton className="h-7 w-1/2" /></CardTitle>
-            <CardDescription><Skeleton className="h-4 w-3/4" /></CardDescription>
+             <CardTitle className="font-headline"><Skeleton className="h-7 w-1/2" /></CardTitle>
+            <div className="text-sm text-muted-foreground"><Skeleton className="h-4 w-3/4" /></div>
           </CardHeader>
           <CardContent>
             <Skeleton className="h-[350px] w-full" />
@@ -293,6 +284,11 @@ export default function FinancialsPage() {
         actions={
           <div className="flex gap-2">
              <Button asChild>
+              <Link href="/dashboard/financials/contracts">
+                <Handshake className="mr-2 h-4 w-4" /> Contratos Financeiro
+              </Link>
+            </Button>
+            <Button asChild>
               <Link href="/dashboard/financials/item-performance">
                 <BarChart className="mr-2 h-4 w-4" /> Desempenho por Item
               </Link>
@@ -313,10 +309,10 @@ export default function FinancialsPage() {
             <TrendingUp className="h-5 w-5 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">R$ {summaryData.totalRevenue.toFixed(2).replace('.',',')}</div>
-            <p className={`text-xs ${revenueTrendColor}`}>
+            <div className="text-2xl font-bold text-foreground">{formatToBRL(summaryData.totalRevenue)}</div>
+            <div className={`text-xs ${revenueTrendColor}`}>
               {revenueTrend ? `${revenueTrend} do último mês` : 'dados mensais insuficientes'}
-            </p>
+            </div>
           </CardContent>
         </Card>
         <Card className="shadow-lg">
@@ -325,10 +321,10 @@ export default function FinancialsPage() {
             <TrendingDown className="h-5 w-5 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">R$ {summaryData.totalExpenses.toFixed(2).replace('.',',')}</div>
-            <p className={`text-xs ${expensesTrendColor}`}>
+            <div className="text-2xl font-bold text-foreground">{formatToBRL(summaryData.totalExpenses)}</div>
+            <div className={`text-xs ${expensesTrendColor}`}>
                {expensesTrend ? `${expensesTrend} do último mês` : 'dados mensais insuficientes'}
-            </p>
+            </div>
           </CardContent>
         </Card>
         <Card className="shadow-lg">
@@ -337,10 +333,10 @@ export default function FinancialsPage() {
             <Scale className="h-5 w-5 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">R$ {summaryData.netProfit.toFixed(2).replace('.',',')}</div>
-             <p className={`text-xs ${profitTrendColor}`}>
+            <div className="text-2xl font-bold text-foreground">{formatToBRL(summaryData.netProfit)}</div>
+             <div className={`text-xs ${profitTrendColor}`}>
                 {profitTrend ? `${profitTrend} do último mês` : 'dados mensais insuficientes'}
-            </p>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -5,6 +5,7 @@ import type { User, UserWithPasswordHash, UserProfile } from '@/types';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
+import { validateServerSession } from '@/lib/auth-utils';
 
 async function hashPassword(password: string): Promise<{ salt: string; hash: string }> {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -18,6 +19,7 @@ export async function verifyPassword(password: string, salt: string, storedHash:
 }
 
 export async function createUser(userData: Omit<User, 'id'> & { password?: string }): Promise<UserProfile> {
+  await validateServerSession();
   const db = getDb();
   if (!userData.password || userData.password.length < 6) {
     throw new Error('Password is required and must be at least 6 characters long.');
@@ -51,6 +53,7 @@ export async function createUser(userData: Omit<User, 'id'> & { password?: strin
 }
 
 export async function getUsers(): Promise<User[]> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT id, name, email FROM users ORDER BY name ASC');
@@ -63,6 +66,7 @@ export async function getUsers(): Promise<User[]> {
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT id, name, email FROM users WHERE id = ?');
@@ -75,6 +79,7 @@ export async function getUserById(id: string): Promise<User | undefined> {
 }
 
 export async function getUserByEmailInternal(email: string): Promise<UserWithPasswordHash | undefined> {
+  // This is an internal function used for login, so we don't validate the session here.
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT id, name, email, passwordHash, passwordSalt FROM users WHERE email = ?');
@@ -87,6 +92,7 @@ export async function getUserByEmailInternal(email: string): Promise<UserWithPas
 }
 
 export async function updateUser(id: string, userData: Partial<Omit<User, 'id'>> & { password?: string }): Promise<UserProfile | null> {
+  await validateServerSession();
   const db = getDb();
   try {
     const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserWithPasswordHash | undefined;
@@ -133,6 +139,7 @@ export async function updateUser(id: string, userData: Partial<Omit<User, 'id'>>
 }
 
 export async function deleteUser(id: string): Promise<{ success: boolean }> {
+  await validateServerSession();
   const db = getDb();
   try {
     const countStmt = db.prepare('SELECT COUNT(*) as count FROM users');

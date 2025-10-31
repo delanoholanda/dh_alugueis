@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { format as formatTz, toZonedTime } from 'date-fns-tz';
 import { differenceInDays, parseISO } from 'date-fns';
+import { validateServerSession } from '@/lib/auth-utils';
 
 const dataDirectory = path.join(process.cwd(), 'data');
 const backupsDirectory = path.join(dataDirectory, 'backups');
@@ -28,6 +29,7 @@ async function ensureBackupsDir() {
  * Creates a manual backup of the database.
  */
 export async function backupDatabase(): Promise<{ success: boolean; message: string; filePath?: string }> {
+  await validateServerSession();
   const db = getDb();
   await ensureBackupsDir();
   
@@ -64,6 +66,7 @@ export async function backupDatabase(): Promise<{ success: boolean; message: str
  * Retrieves a list of available backup files.
  */
 export async function getBackupFiles(): Promise<string[]> {
+    await validateServerSession();
     await ensureBackupsDir();
     try {
         const files = await fs.promises.readdir(backupsDirectory);
@@ -82,6 +85,7 @@ export async function getBackupFiles(): Promise<string[]> {
  * This is a destructive operation. The server/container MUST be restarted manually afterwards.
  */
 export async function restoreDatabase(base64DbString: string): Promise<{ success: boolean; message: string }> {
+    await validateServerSession();
     const tempRestorePath = path.join(dataDirectory, `restore-temp-${Date.now()}.db`);
 
     try {
@@ -120,6 +124,7 @@ export async function restoreDatabase(base64DbString: string): Promise<{ success
  * This is a destructive operation. The server/container MUST be restarted manually afterwards.
  */
 export async function restoreDatabaseFromPath(backupFileName: string): Promise<{ success: boolean; message: string }> {
+    await validateServerSession();
     const sourcePath = path.join(backupsDirectory, backupFileName);
 
     try {
@@ -156,18 +161,21 @@ export async function restoreDatabaseFromPath(backupFileName: string): Promise<{
  * that runs on a key page load (e.g., the dashboard).
  */
 export async function runAutomatedBackup(): Promise<void> {
-    const now = toZonedTime(new Date(), TIME_ZONE);
-    const dayOfWeek = Number(formatTz(now, 'i', { timeZone: TIME_ZONE })); // Monday=1, ..., Thursday=4, ..., Sunday=7
-
-    // --- 1. Check if it's Thursday ---
-    if (dayOfWeek !== 4) {
-        // console.log(`[Auto Backup] Not Thursday. Skipping.`);
-        return;
-    }
-
-    await ensureBackupsDir();
-    
     try {
+        // The user must be logged in to trigger this, but the check happens
+        // in the component calling it. We don't need to re-validate here
+        // as it's a background task.
+        const now = toZonedTime(new Date(), TIME_ZONE);
+        const dayOfWeek = Number(formatTz(now, 'i', { timeZone: TIME_ZONE })); // Monday=1, ..., Thursday=4, ..., Sunday=7
+
+        // --- 1. Check if it's Thursday ---
+        if (dayOfWeek !== 4) {
+            // console.log(`[Auto Backup] Not Thursday. Skipping.`);
+            return;
+        }
+
+        await ensureBackupsDir();
+        
         // --- 2. Check if a backup was already made this week ---
         const existingBackups = await fs.promises.readdir(backupsDirectory);
         if (existingBackups.length > 0) {
@@ -198,12 +206,15 @@ export async function runAutomatedBackup(): Promise<void> {
         }
 
         // --- 4. Create the new backup ---
-        const backupResult = await backupDatabase();
-        if (backupResult.success) {
-            console.log(`[Auto Backup] Successfully created new automated backup: ${backupResult.filePath}`);
-        } else {
-            console.error(`[Auto Backup] Failed to create automated backup: ${backupResult.message}`);
-        }
+        const db = getDb();
+        const nowForFilename = toZonedTime(new Date(), TIME_ZONE);
+        const timestampForFilename = formatTz(nowForFilename, 'yyyy-MM-dd_HH-mm-ss', { timeZone: TIME_ZONE });
+        const backupFileName = `backup-${timestampForFilename}.db`;
+        const backupFilePath = path.join(backupsDirectory, backupFileName);
+        
+        console.log(`[Auto Backup] Starting automated backup to ${backupFilePath}`);
+        await db.backup(backupFilePath);
+        console.log(`[Auto Backup] Successfully created new automated backup: ${backupFilePath}`);
 
     } catch (error) {
         console.error('[Auto Backup] An unexpected error occurred during the automated backup process:', error);

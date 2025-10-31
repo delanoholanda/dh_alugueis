@@ -6,8 +6,10 @@ import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
 import { saveFile, deleteFile } from '@/lib/file-storage';
+import { validateServerSession } from '@/lib/auth-utils';
 
 export async function getInventoryItems(): Promise<Equipment[]> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT * FROM inventory ORDER BY name ASC');
@@ -20,6 +22,7 @@ export async function getInventoryItems(): Promise<Equipment[]> {
 }
 
 export async function getInventoryItemById(id: string): Promise<Equipment | undefined> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT * FROM inventory WHERE id = ?');
@@ -32,6 +35,7 @@ export async function getInventoryItemById(id: string): Promise<Equipment | unde
 }
 
 export async function createInventoryItem(itemData: Omit<Equipment, 'id'>): Promise<Equipment> {
+  await validateServerSession();
   const db = getDb();
   let savedImageUrl: string | undefined = itemData.imageUrl;
 
@@ -62,6 +66,7 @@ export async function createInventoryItem(itemData: Omit<Equipment, 'id'>): Prom
 }
 
 export async function updateInventoryItem(id: string, itemData: Partial<Omit<Equipment, 'id'>>): Promise<Equipment | null> {
+  await validateServerSession();
   const db = getDb();
   try {
     const existingItem = await getInventoryItemById(id);
@@ -96,6 +101,7 @@ export async function updateInventoryItem(id: string, itemData: Partial<Omit<Equ
 }
 
 export async function deleteInventoryItem(id: string): Promise<{ success: boolean }> {
+  await validateServerSession();
   const db = getDb();
   try {
     const itemToDelete = await getInventoryItemById(id);

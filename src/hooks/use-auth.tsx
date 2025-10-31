@@ -3,6 +3,7 @@
 import {createContext, useContext, useState, ReactNode, useEffect, useCallback} from 'react';
 import { useRouter } from 'next/navigation';
 import { getUserByEmailInternal, verifyPassword } from '@/actions/userActions';
+import { setAuthCookie, deleteAuthCookie } from '@/actions/authCookieActions';
 import type { UserProfile } from '@/types';
 
 interface AuthContextType {
@@ -16,6 +17,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const LOCAL_STORAGE_USER_KEY = 'user_dh_alugueis_manager';
+
 export function AuthProvider({children}: {children: ReactNode}) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -23,12 +26,15 @@ export function AuthProvider({children}: {children: ReactNode}) {
   const router = useRouter();
 
   useEffect(() => {
-    const storedAuth = localStorage.getItem('isAuthenticated_dh_alugueis_manager');
-    const storedUser = localStorage.getItem('user_dh_alugueis_manager');
-    if (storedAuth === 'true' && storedUser) {
+    // A validação da sessão agora depende principalmente do cookie, mas usamos o localStorage
+    // para uma rápida recuperação dos dados do usuário na interface sem precisar de uma nova chamada ao servidor.
+    const storedUser = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+    if (storedUser) {
       try {
         const parsedUser: UserProfile = JSON.parse(storedUser);
-        if (parsedUser && typeof parsedUser.id === 'string' && typeof parsedUser.name === 'string' && typeof parsedUser.email === 'string') {
+        // Assumimos que, se o usuário está no localStorage, o cookie de sessão HTTP-Only existe.
+        // A validação real acontecerá no servidor.
+        if (parsedUser && typeof parsedUser.id === 'string') {
           setIsAuthenticated(true);
           setUser(parsedUser);
         } else {
@@ -36,10 +42,11 @@ export function AuthProvider({children}: {children: ReactNode}) {
         }
       } catch (e) {
         console.error("Error processing stored user data:", e);
-        localStorage.removeItem('isAuthenticated_dh_alugueis_manager');
-        localStorage.removeItem('user_dh_alugueis_manager');
+        localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
         setIsAuthenticated(false);
         setUser(null);
+        // Também devemos garantir que o cookie seja limpo se os dados locais estiverem corrompidos.
+        deleteAuthCookie();
       }
     }
     setIsLoading(false);
@@ -63,25 +70,33 @@ export function AuthProvider({children}: {children: ReactNode}) {
     }
     
     const userProfile: UserProfile = { id: dbUser.id, name: dbUser.name, email: dbUser.email };
+    
+    // Server action to set the secure, HttpOnly cookie
+    await setAuthCookie(userProfile);
+
     setIsAuthenticated(true);
     setUser(userProfile);
-    localStorage.setItem('isAuthenticated_dh_alugueis_manager', 'true');
-    localStorage.setItem('user_dh_alugueis_manager', JSON.stringify(userProfile));
+    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userProfile));
     
     router.push(redirectTo || '/dashboard');
   }, [router]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Server action to delete the secure cookie
+    await deleteAuthCookie();
+
     setIsAuthenticated(false);
     setUser(null);
-    localStorage.removeItem('isAuthenticated_dh_alugueis_manager');
-    localStorage.removeItem('user_dh_alugueis_manager');
-    router.push('/login');
-  }, [router]);
+    localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    
+    // Usamos window.location para um redirecionamento "hard" que limpa qualquer estado em memória.
+    window.location.href = '/login';
+
+  }, []);
 
   const updateUserContext = useCallback((newUserProfile: UserProfile) => {
     setUser(newUserProfile);
-    localStorage.setItem('user_dh_alugueis_manager', JSON.stringify(newUserProfile));
+    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newUserProfile));
   }, []);
 
   return (

@@ -166,7 +166,7 @@ export default function NotificationsPage() {
                             <PopoverTrigger asChild>
                             <FormControl>
                                 <Button variant={"outline"} className={`w-full pl-3 text-left font-normal bg-muted/50 ${!field.value && "text-muted-foreground"}`} disabled>
-                                {field.value ? format(field.value, "PPP", { locale: ptBR }) : _('Escolha uma data')}
+                                {field.value ? format(field.value, "PPP", { locale: ptBR }) : ("Escolha uma data" as any)}
                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                 </Button>
                             </FormControl>

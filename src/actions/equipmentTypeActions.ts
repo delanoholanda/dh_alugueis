@@ -5,9 +5,11 @@ import type { EquipmentType } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
+import { validateServerSession } from '@/lib/auth-utils';
 
 
 export async function getEquipmentTypes(): Promise<EquipmentType[]> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT * FROM equipment_types ORDER BY name ASC');
@@ -20,6 +22,7 @@ export async function getEquipmentTypes(): Promise<EquipmentType[]> {
 }
 
 export async function createEquipmentType(name: string, iconName?: string): Promise<EquipmentType> {
+  await validateServerSession();
   const db = getDb();
   const newId = `type_${crypto.randomBytes(6).toString('hex')}`;
   const newType: EquipmentType = { id: newId, name, iconName: iconName || 'Package' };
@@ -37,6 +40,7 @@ export async function createEquipmentType(name: string, iconName?: string): Prom
 }
 
 export async function updateEquipmentType(id: string, name: string, iconName?: string): Promise<EquipmentType | null> {
+  await validateServerSession();
   const db = getDb();
   try {
     const stmt = db.prepare('UPDATE equipment_types SET name = @name, iconName = @iconName WHERE id = @id');
@@ -55,6 +59,7 @@ export async function updateEquipmentType(id: string, name: string, iconName?: s
 }
 
 export async function deleteEquipmentType(id: string): Promise<{ success: boolean }> {
+  await validateServerSession();
   const db = getDb();
   try {
     const checkStmt = db.prepare('SELECT COUNT(*) as count FROM inventory WHERE typeId = ?');

@@ -1,3 +1,4 @@
+
 'use server';
 
 import type { Rental, PaymentMethod, Equipment as InventoryEquipment, RentalPhoto, Payment } from '@/types';
@@ -10,9 +11,11 @@ import { saveFile, deleteFile } from '@/lib/file-storage';
 import { addDays, format, parseISO, getDay, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { countBillableDays, findNthBillableDay } from '@/lib/utils';
+import { validateServerSession } from '@/lib/auth-utils';
 
 
 export async function getRentals(): Promise<Rental[]> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const rentalRows = db.prepare(`
@@ -49,6 +52,7 @@ export async function getRentals(): Promise<Rental[]> {
 }
 
 export async function getRentalById(id: number): Promise<Rental | undefined> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const row = db.prepare(`
@@ -90,6 +94,7 @@ export async function createRental(
     equipment: Array<{ equipmentId: string; quantity: number; name?:string; customDailyRentalRate?: number | null }>;
   }
 ): Promise<Rental> {
+  await validateServerSession();
   const db = getDb();
   
   const customer = await getCustomerById(rentalData.customerId);
@@ -227,6 +232,7 @@ export async function updateRental(
     equipment?: Array<{ equipmentId: string; quantity: number; name?:string; customDailyRentalRate?: number | null }>;
   }
 ): Promise<Rental | null> {
+  await validateServerSession();
   const db = getDb();
   
   const existingRental = await getRentalById(id);
@@ -387,6 +393,7 @@ export async function updateRental(
 }
 
 export async function deleteRental(id: number): Promise<{ success: boolean }> { 
+  await validateServerSession();
   const db = getDb();
   
   const getPhotosStmt = db.prepare('SELECT imageUrl FROM rental_photos WHERE rentalId = ?');
@@ -439,6 +446,7 @@ export async function extendRental(
     chargeSundays: boolean;
   }
 ): Promise<Rental | null> {
+  await validateServerSession();
   const existingRental = await getRentalById(rentalId);
 
   if (!existingRental) {
@@ -544,6 +552,7 @@ export async function extendRental(
 
 
 export async function calculateAndCloseOpenEndedRental(id: number): Promise<Rental | null> {
+  await validateServerSession();
   const db = getDb();
   const existingRental = await getRentalById(id);
 
@@ -600,6 +609,7 @@ export async function calculateAndCloseOpenEndedRental(id: number): Promise<Rent
 }
 
 export async function finalizeRental(id: number): Promise<Rental | null> {
+  await validateServerSession();
   const existingRental = await getRentalById(id);
 
   if (!existingRental) {
@@ -634,6 +644,7 @@ export async function finalizeRental(id: number): Promise<Rental | null> {
 }
 
 export async function addRentalPhoto(rentalId: number, imageDataUrl: string, photoType: 'delivery' | 'return'): Promise<RentalPhoto> {
+  await validateServerSession();
   const db = getDb();
 
   // Save the file and get the public URL
@@ -662,6 +673,7 @@ export async function addRentalPhoto(rentalId: number, imageDataUrl: string, pho
 }
 
 export async function deleteRentalPhoto(photoId: string): Promise<{ success: boolean }> {
+  await validateServerSession();
   const db = getDb();
   try {
     const getPhotoStmt = db.prepare('SELECT rentalId, imageUrl FROM rental_photos WHERE id = ?');
@@ -692,6 +704,7 @@ export async function addPayment(
   rentalId: number,
   paymentData: Omit<Payment, 'id' | 'rentalId'>
 ): Promise<Rental | null> {
+  await validateServerSession();
   const db = getDb();
   
   const existingRental = await getRentalById(rentalId);

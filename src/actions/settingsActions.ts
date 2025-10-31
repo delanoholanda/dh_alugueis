@@ -5,6 +5,7 @@ import { getDb } from '@/lib/database';
 import type { CompanyDetails } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { saveFile, deleteFile } from '@/lib/file-storage';
+import { validateServerSession } from '@/lib/auth-utils';
 
 const defaultSettings: CompanyDetails = {
     companyName: 'DH Alugueis',
@@ -28,6 +29,7 @@ const defaultSettings: CompanyDetails = {
 
 
 export async function getCompanySettings(): Promise<CompanyDetails> {
+    // This function can be called publicly (e.g., for metadata in layout), so no session validation here.
     const db = getDb();
     try {
         const stmt = db.prepare('SELECT key, value FROM company_settings');
@@ -47,6 +49,7 @@ export async function getCompanySettings(): Promise<CompanyDetails> {
 }
 
 export async function updateCompanySettings(settings: Partial<CompanyDetails>): Promise<{ success: boolean }> {
+    await validateServerSession();
     const db = getDb();
     try {
         const currentSettings = await getCompanySettings();

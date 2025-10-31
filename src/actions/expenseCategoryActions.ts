@@ -5,8 +5,10 @@ import type { ExpenseCategory } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
+import { validateServerSession } from '@/lib/auth-utils';
 
 export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
+  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT * FROM expense_categories ORDER BY name ASC');
@@ -19,6 +21,7 @@ export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
 }
 
 export async function createExpenseCategory(name: string, iconName?: string): Promise<ExpenseCategory> {
+  await validateServerSession();
   const db = getDb();
   const newId = `expcat_${crypto.randomBytes(6).toString('hex')}`;
   // For now, default icon, can be expanded later

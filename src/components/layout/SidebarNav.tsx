@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -81,8 +80,9 @@ const mainNavItems: NavItem[] = [
     iconName: 'CircleDollarSign',
     subItems: [
         { href: '/dashboard/financials', label: 'Visão Geral', iconName: 'CircleDollarSign' },
-        { href: '/dashboard/financials/item-performance', label: 'Desempenho por Item', iconName: 'BarChart' },
+        { href: '/dashboard/financials/contracts', label: 'Contratos', iconName: 'Handshake' },
         { href: '/dashboard/financials/statement', label: 'Extrato', iconName: 'FileText' },
+        { href: '/dashboard/financials/item-performance', label: 'Desempenho por Item', iconName: 'BarChart' },
     ]
   },
   { 
