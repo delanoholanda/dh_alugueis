@@ -31,3 +31,28 @@ export async function deleteAuthCookie() {
   const cookieStore = cookies();
   cookieStore.delete(AUTH_COOKIE_NAME);
 }
+
+/**
+ * Obtém o perfil do usuário do cookie de sessão.
+ * Esta função apenas lê o cookie e não executa validações no banco de dados.
+ * Retorna null se o cookie não existir ou for inválido.
+ */
+export async function getUserProfileFromCookie(): Promise<UserProfile | null> {
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get(AUTH_COOKIE_NAME);
+
+    if (!sessionCookie?.value) {
+        return null;
+    }
+
+    try {
+        const user = JSON.parse(sessionCookie.value) as UserProfile;
+        if (!user || !user.id || !user.email) {
+            return null;
+        }
+        return user;
+    } catch (error) {
+        console.error('[auth-cookie] Error parsing session cookie:', error);
+        return null;
+    }
+}

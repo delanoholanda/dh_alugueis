@@ -2,8 +2,8 @@
 'use client';
 import {createContext, useContext, useState, ReactNode, useEffect, useCallback} from 'react';
 import { useRouter } from 'next/navigation';
-import { getUserByEmailInternal, verifyPassword } from '@/actions/userActions';
-import { setAuthCookie, deleteAuthCookie } from '@/actions/authCookieActions';
+import { loginAction } from '@/actions/userActions';
+import { deleteAuthCookie, getUserProfileFromCookie } from '@/actions/authCookieActions';
 import type { UserProfile } from '@/types';
 
 interface AuthContextType {
@@ -26,49 +26,42 @@ export function AuthProvider({children}: {children: ReactNode}) {
   const router = useRouter();
 
   useEffect(() => {
-    // This effect now ONLY checks for UI data and finishes loading.
-    // It NEVER assumes authentication from localStorage.
-    try {
-      const storedUser = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
-      if (storedUser) {
-        const parsedUser: UserProfile = JSON.parse(storedUser);
-        if (parsedUser && typeof parsedUser.id === 'string') {
-          // Set user for UI purposes only, NOT authentication.
-          setUser(parsedUser);
+    async function checkUserSession() {
+      try {
+        // A função getUserProfileFromCookie é uma Server Action que lê o cookie HttpOnly
+        const userProfile = await getUserProfileFromCookie();
+
+        if (userProfile) {
+          setUser(userProfile);
+          setIsAuthenticated(true);
+          // Atualiza o localStorage para consistência da UI
+          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userProfile));
+        } else {
+          // Garante que o estado local esteja limpo se não houver sessão válida
+          setIsAuthenticated(false);
+          setUser(null);
+          localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
         }
+      } catch (e) {
+        console.error("Error checking user session:", e);
+        setIsAuthenticated(false);
+        setUser(null);
+        localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (e) {
-      console.error("Error processing stored user data:", e);
-      // Ensure localStorage is clean if data is corrupted.
-      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
-    } finally {
-      // Finish loading. The ProtectedRoute component will now handle redirection
-      // based on the initial `isAuthenticated` state, which is `false`.
-      setIsLoading(false);
     }
+    checkUserSession();
   }, []);
 
   const login = useCallback(async (email: string, password?: string, redirectTo?: string) => {
     if (!password) {
-      throw new Error("Password is required.");
+      throw new Error("Senha é obrigatória.");
     }
 
-    const dbUser = await getUserByEmailInternal(email);
-
-    if (!dbUser) {
-      throw new Error("Invalid email or password.");
-    }
-
-    const passwordIsValid = await verifyPassword(password, dbUser.passwordSalt, dbUser.passwordHash);
-
-    if (!passwordIsValid) {
-      throw new Error("Invalid email or password.");
-    }
+    const userProfile = await loginAction(email, password);
     
-    const userProfile: UserProfile = { id: dbUser.id, name: dbUser.name, email: dbUser.email };
-    
-    // Server action to set the secure, HttpOnly cookie
-    await setAuthCookie(userProfile);
+    // Server action to set the secure, HttpOnly cookie is now inside loginAction
 
     // Set state in memory
     setIsAuthenticated(true);

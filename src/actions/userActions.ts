@@ -6,6 +6,7 @@ import { getDb } from '@/lib/database';
 import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { validateServerSession } from '@/lib/auth-utils';
+import { setAuthCookie } from './authCookieActions';
 
 async function hashPassword(password: string): Promise<{ salt: string; hash: string }> {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -13,10 +14,50 @@ async function hashPassword(password: string): Promise<{ salt: string; hash: str
   return { salt, hash };
 }
 
-export async function verifyPassword(password: string, salt: string, storedHash: string): Promise<boolean> {
+async function verifyPassword(password: string, salt: string, storedHash: string): Promise<boolean> {
   const hashToCompare = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
   return hashToCompare === storedHash;
 }
+
+/**
+ * Handles the entire login flow on the server.
+ * @param email The user's email.
+ * @param password The user's password.
+ * @returns The user profile if successful, otherwise throws an error.
+ */
+export async function loginAction(email: string, password?: string): Promise<UserProfile> {
+  if (!password) {
+    throw new Error("Senha é obrigatória.");
+  }
+
+  const db = getDb();
+  let dbUser: UserWithPasswordHash | undefined;
+  try {
+    const stmt = db.prepare('SELECT id, name, email, passwordHash, passwordSalt FROM users WHERE email = ?');
+    dbUser = stmt.get(email) as UserWithPasswordHash | undefined;
+  } catch (error) {
+    console.error(`[DB] Failed to fetch user with email ${email}:`, error);
+    throw new Error("Erro ao acessar o banco de dados.");
+  }
+
+  if (!dbUser) {
+    throw new Error("Email ou senha inválidos.");
+  }
+
+  const passwordIsValid = await verifyPassword(password, dbUser.passwordSalt, dbUser.passwordHash);
+
+  if (!passwordIsValid) {
+    throw new Error("Email ou senha inválidos.");
+  }
+
+  const userProfile: UserProfile = { id: dbUser.id, name: dbUser.name, email: dbUser.email };
+  
+  // Create the secure, HttpOnly session cookie
+  await setAuthCookie(userProfile);
+
+  return userProfile;
+}
+
 
 export async function createUser(userData: Omit<User, 'id'> & { password?: string }): Promise<UserProfile> {
   await validateServerSession();
@@ -74,19 +115,6 @@ export async function getUserById(id: string): Promise<User | undefined> {
     return user;
   } catch (error) {
     console.error(`Failed to fetch user with id ${id}:`, error);
-    return undefined;
-  }
-}
-
-export async function getUserByEmailInternal(email: string): Promise<UserWithPasswordHash | undefined> {
-  // This is an internal function used for login, so we don't validate the session here.
-  const db = getDb();
-  try {
-    const stmt = db.prepare('SELECT id, name, email, passwordHash, passwordSalt FROM users WHERE email = ?');
-    const user = stmt.get(email) as UserWithPasswordHash | undefined;
-    return user;
-  } catch (error) {
-    console.error(`Failed to fetch user with email ${email}:`, error);
     return undefined;
   }
 }
