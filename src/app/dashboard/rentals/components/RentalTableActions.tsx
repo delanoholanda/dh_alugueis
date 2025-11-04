@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Edit, CalendarPlus, Eye, FileText, Calculator, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Edit, CalendarPlus, Eye, FileText, Calculator, MoreHorizontal, Trash2, DollarSign } from 'lucide-react';
 import type { Rental, Equipment as InventoryEquipment } from '@/types';
 import { ExtendRentalDialog } from './ExtendRentalDialog';
 import { CalculateAndCloseDialog } from './CalculateAndCloseDialog';
@@ -28,6 +28,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import FinalizeRentalButton from './FinalizeRentalButton';
+import { MarkAsPaidDialog } from './MarkAsPaidDialog';
 
 
 interface RentalTableActionsProps {
@@ -41,7 +42,10 @@ export function RentalTableActions({ rental, inventory, onActionSuccess }: Renta
   const [isCalculateDialogOpen, setIsCalculateDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPaidDialogOpen, setIsPaidDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  const isPayable = (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue') && !rental.isOpenEnded;
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -86,6 +90,10 @@ export function RentalTableActions({ rental, inventory, onActionSuccess }: Renta
             </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+           <DropdownMenuItem onSelect={() => setIsPaidDialogOpen(true)} disabled={!isPayable}>
+              <DollarSign className="mr-2 h-4 w-4 text-green-600" />
+              Registrar Pagamento
+            </DropdownMenuItem>
           {!rental.isOpenEnded && (
              <DropdownMenuItem onSelect={() => setIsExtendDialogOpen(true)} disabled={!!rental.actualReturnDate}>
                 <CalendarPlus className="mr-2 h-4 w-4" />
@@ -118,6 +126,14 @@ export function RentalTableActions({ rental, inventory, onActionSuccess }: Renta
       </DropdownMenu>
 
       {/* Dialogs */}
+       {isPayable && (
+        <MarkAsPaidDialog
+            rental={rental}
+            isOpen={isPaidDialogOpen}
+            onOpenChange={setIsPaidDialogOpen}
+            onSuccess={onActionSuccess}
+        />
+       )}
       {isExtendDialogOpen && (
         <ExtendRentalDialog
           rental={rental}
