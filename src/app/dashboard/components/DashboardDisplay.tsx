@@ -3,16 +3,15 @@
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
-import type { Rental, Customer } from '@/types';
-import { format, parseISO, isToday, isPast, isBefore, startOfDay, addDays } from 'date-fns';
+import type { Rental, Customer, Equipment, Expense, EquipmentType } from '@/types';
+import { format, parseISO, isToday, isPast, isBefore, startOfDay, addDays, eachMonthOfInterval, startOfMonth, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatToBRL, cn, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
+import { formatToBRL, cn, getPaymentStatusVariant, paymentStatusMap, countBillableDays } from '@/lib/utils';
 import type { ChartConfig } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -23,7 +22,10 @@ import { MarkAsPaidDialog } from '@/app/dashboard/rentals/components/MarkAsPaidD
 import FinalizeRentalButton from '@/app/dashboard/rentals/components/FinalizeRentalButton';
 import { getRentals } from '@/actions/rentalActions';
 import { getCustomers } from '@/actions/customerActions';
-
+import { getFinancialSummary, getExpenses } from '@/actions/financialActions';
+import { getInventoryItems } from '@/actions/inventoryActions';
+import { getEquipmentTypes } from '@/actions/equipmentTypeActions';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface MonthlyFinancialData {
   month: string;
@@ -61,14 +63,122 @@ export interface GroupedPendingPayment {
   rentals: Rental[];
 }
 
-interface DashboardDisplayProps {
-  overviewCards: OverviewCardData[];
-  initialRentals: Rental[];
-  initialCustomers: Customer[];
-  monthlyLineChartData: MonthlyFinancialData[];
-  equipmentActivityChartData: EquipmentItemActivityData[];
-  mostRentedTypesData: MostRentedTypeData[];
+
+// --- Helper Functions for Data Aggregation (moved inside or kept local) ---
+
+const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
+  const monthlyData: { [key: string]: { revenue: number, expenses: number, profit: number } } = {};
+
+  const getMonthYearKey = (dateStr: string) => {
+    try {
+        const date = parseISO(dateStr); 
+        return format(date, 'MMM/yy', { locale: ptBR });
+    } catch (e) {
+        return 'invalid_date'; 
+    }
+  };
+
+  if (rentals.length === 0 && expenses.length === 0) {
+    const today = new Date();
+    const lastSixMonths = eachMonthOfInterval({
+      start: startOfMonth(new Date(today.getFullYear(), today.getMonth() - 5, 1)),
+      end: startOfMonth(today)
+    });
+    lastSixMonths.forEach(monthDate => {
+      const monthYear = format(monthDate, 'MMM/yy', { locale: ptBR });
+      monthlyData[monthYear] = { revenue: 0, expenses: 0, profit: 0 };
+    });
+  } else {
+      rentals.filter(r => r.paymentStatus === 'paid' && r.paymentDate).forEach(rental => {
+        const paymentMonthYear = getMonthYearKey(rental.paymentDate!);
+        if (paymentMonthYear === 'invalid_date') return;
+        if (!monthlyData[paymentMonthYear]) monthlyData[paymentMonthYear] = { revenue: 0, expenses: 0, profit: 0 };
+        monthlyData[paymentMonthYear].revenue += rental.value;
+      });
+
+      expenses.forEach(expense => {
+        const expenseMonthYear = getMonthYearKey(expense.date);
+        if (expenseMonthYear === 'invalid_date') return;
+        if (!monthlyData[expenseMonthYear]) monthlyData[expenseMonthYear] = { revenue: 0, expenses: 0, profit: 0 };
+        monthlyData[expenseMonthYear].expenses += expense.amount;
+      });
+  }
+  
+  Object.keys(monthlyData).forEach(key => {
+    monthlyData[key].profit = monthlyData[key].revenue - monthlyData[key].expenses;
+  });
+
+  return Object.entries(monthlyData)
+    .map(([month, values]) => ({ month, ...values }))
+    .sort((a, b) => parse(a.month, 'MMM/yy', new Date(), { locale: ptBR }).getTime() - parse(b.month, 'MMM/yy', new Date(), { locale: ptBR }).getTime())
+    .slice(-12); 
+};
+
+const aggregateEquipmentItemActivity = (inventory: Equipment[], rentals: Rental[]) => {
+  const rentedQuantitiesMap: Record<string, number> = {};
+
+  rentals.filter(r => !r.actualReturnDate).forEach(rental => {
+    rental.equipment.forEach(eqEntry => {
+      rentedQuantitiesMap[eqEntry.equipmentId] = (rentedQuantitiesMap[eqEntry.equipmentId] || 0) + eqEntry.quantity;
+    });
+  });
+
+  return inventory
+    .map(item => ({
+      name: item.name,
+      total: item.quantity,
+      rented: rentedQuantitiesMap[item.id] || 0,
+      available: Math.max(0, item.quantity - (rentedQuantitiesMap[item.id] || 0)),
+    }))
+    .filter(d => d.total > 0);
+};
+
+const PIE_CHART_COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))', 'hsl(var(--chart-1) / 0.7)', 'hsl(var(--chart-2) / 0.7)'];
+const aggregateMostRentedTypes = (rentals: Rental[], inventory: Equipment[], types: EquipmentType[]) => {
+    const typeCounts: Record<string, number> = {};
+    const inventoryMap = new Map(inventory.map(item => [item.id, item.typeId]));
+    const typeNameMap = new Map(types.map(type => [type.id, type.name]));
+
+    rentals.forEach(rental => {
+      rental.equipment.forEach(eq => {
+        const typeId = inventoryMap.get(eq.equipmentId);
+        if (typeId) {
+          typeCounts[typeId] = (typeCounts[typeId] || 0) + eq.quantity;
+        }
+      });
+    });
+
+    return Object.entries(typeCounts)
+        .map(([typeId, count], index) => ({
+            name: typeNameMap.get(typeId) || 'Desconhecido',
+            value: count,
+            fill: PIE_CHART_COLORS[index % PIE_CHART_COLORS.length],
+        }))
+        .sort((a, b) => b.value - a.value);
+};
+
+function calculateTrendPercentage(current?: number, previous?: number): string | null {
+  if (current === undefined || previous === undefined) return null;
+  if (previous === 0) return current > 0 ? '+∞%' : current === 0 ? '0.0%' : '-∞%';
+  
+  if (current === 0 && previous !== 0) {
+    const percentageChangeSpecial = ((current - previous) / previous) * 100;
+    return `${percentageChangeSpecial.toFixed(1)}%`;
+  }
+  
+  const percentageChange = ((current - previous) / previous) * 100;
+  if (Math.abs(percentageChange) < 0.01 && percentageChange !== 0) return "≈0.0%";
+  if (percentageChange === 0) return "0.0%";
+  return `${percentageChange > 0 ? '+' : ''}${percentageChange.toFixed(1)}%`;
 }
+
+
+function determineTrendColor(trend: string | null, type: 'revenue' | 'expense'): string {
+  if (!trend || trend.includes('∞') || trend.includes('≈') || trend === "0.0%") return 'text-muted-foreground';
+  const value = parseFloat(trend.replace('%', ''));
+  return type === 'expense' ? (value < 0 ? 'text-green-500' : 'text-red-500') : (value > 0 ? 'text-green-500' : 'text-red-500');
+}
+
 
 const chartConfigLine = {
   revenue: { label: "Receita", color: "hsl(var(--chart-1))" },
@@ -81,52 +191,92 @@ const chartConfigBar = {
   available: {label: "Disponível", color: "hsl(var(--chart-2))"}
 } satisfies import("@/components/ui/chart").ChartConfig;
 
-const CustomTooltipContentFormatter = (value: any, name: any, props: any) => {
-  const numericValue = Number(value);
-  if (isNaN(numericValue)) {
-    return null;
-  }
-  const color = props.color || props.payload?.fill || props.stroke || 'hsl(var(--muted-foreground))';
-  const formattedValue = `R$ ${numericValue.toFixed(2).replace('.', ',')}`;
-  const displayName = String(name);
-  
-  return (
-    <div
-      key={displayName}
-      className="flex w-full items-center gap-2"
-    >
-      <div
-        className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-        style={{ backgroundColor: color }}
-      />
-      <div className="flex flex-1 justify-between">
-        <span className="text-muted-foreground">{displayName}</span>
-        <span className="font-mono font-medium tabular-nums text-foreground">
-          {formattedValue}
-        </span>
-      </div>
-    </div>
-  );
-};
 
-export default function DashboardDisplay({
-  overviewCards,
-  initialRentals,
-  initialCustomers,
-  monthlyLineChartData,
-  equipmentActivityChartData,
-  mostRentedTypesData
-}: DashboardDisplayProps) {
-
-  const [rentals, setRentals] = useState<Rental[]>(initialRentals);
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+export default function DashboardDisplay() {
+  const [rentals, setRentals] = useState<Rental[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [overviewCards, setOverviewCards] = useState<OverviewCardData[]>([]);
+  const [monthlyLineChartData, setMonthlyLineChartData] = useState<MonthlyFinancialData[]>([]);
+  const [equipmentActivityChartData, setEquipmentActivityChartData] = useState<EquipmentItemActivityData[]>([]);
+  const [mostRentedTypesData, setMostRentedTypesData] = useState<MostRentedTypeData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedRentalForPayment, setSelectedRentalForPayment] = useState<Rental | null>(null);
 
-  const handleActionSuccess = useCallback(async () => {
-    const [refreshedRentals, refreshedCustomers] = await Promise.all([getRentals(), getCustomers()]);
-    setRentals(refreshedRentals);
-    setCustomers(refreshedCustomers);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const [
+            rentalsData,
+            summaryData,
+            expensesData,
+            inventoryItemsData,
+            customersData,
+            equipmentTypesData,
+        ] = await Promise.all([
+            getRentals(),
+            getFinancialSummary(),
+            getExpenses(),
+            getInventoryItems(),
+            getCustomers(),
+            getEquipmentTypes(),
+        ]);
+
+        setRentals(rentalsData);
+        setCustomers(customersData);
+
+        // Process data for charts and cards
+        const aggregatedMonthly = aggregateMonthlyFinancials(rentalsData, expensesData);
+        setMonthlyLineChartData(aggregatedMonthly);
+        
+        const equipmentActivity = aggregateEquipmentItemActivity(inventoryItemsData, rentalsData);
+        setEquipmentActivityChartData(equipmentActivity);
+
+        const rentedTypes = aggregateMostRentedTypes(rentalsData, inventoryItemsData, equipmentTypesData);
+        setMostRentedTypesData(rentedTypes);
+
+        let totalContractValue = 0;
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        rentalsData.forEach(rental => {
+            if (rental.isOpenEnded && !rental.actualReturnDate) {
+                totalContractValue += countBillableDays(rental.rentalStartDate, todayStr, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true) * rental.value;
+            } else {
+                totalContractValue += rental.value;
+            }
+        });
+        
+        const activeRentalsCount = rentalsData.filter(r => !r.actualReturnDate).length;
+        const pendingPaymentCount = rentalsData.filter(r => !!r.actualReturnDate && r.paymentStatus !== 'paid').length;
+        let expensesTrendText: string | null = null;
+        let expensesTrendColor = 'text-muted-foreground';
+        if (aggregatedMonthly.length >= 2) {
+            const et = calculateTrendPercentage(aggregatedMonthly[aggregatedMonthly.length - 1].expenses, aggregatedMonthly[aggregatedMonthly.length - 2].expenses);
+            expensesTrendText = et ? `${et} vs. último mês` : 'dados insuficientes';
+            expensesTrendColor = determineTrendColor(et, 'expense');
+        } else {
+            expensesTrendText = 'dados mensais insuficientes';
+        }
+        
+        setOverviewCards([
+            { title: 'Receita (Paga / Contratos)', value: `${formatToBRL(summaryData.totalRevenue)} / ${formatToBRL(totalContractValue)}`, iconName: 'TrendingUp', trendText: 'Total pago vs. valor de todos os contratos.', trendColorClass: 'text-muted-foreground' },
+            { title: 'Despesas Totais', value: formatToBRL(summaryData.totalExpenses), iconName: 'TrendingDown', trendText: expensesTrendText, trendColorClass: expensesTrendColor },
+            { title: 'Ativos / Pendentes', value: `${activeRentalsCount} / ${pendingPaymentCount}`, iconName: 'Package', trendText: null },
+            { title: 'Total de Clientes', value: customersData.length.toString(), iconName: 'Users', trendText: null },
+        ]);
+
+    } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleActionSuccess = useCallback(async () => {
+    await fetchData();
+  }, [fetchData]);
 
   const { upcomingReturns, groupedPendingPayments } = useMemo(() => {
     const today = startOfDay(new Date());
@@ -166,7 +316,6 @@ export default function DashboardDisplay({
 
   }, [rentals, customers]);
 
-
   const pieChartConfig = useMemo(() => {
     return mostRentedTypesData.reduce((acc, entry) => {
         acc[entry.name] = { label: entry.name, color: entry.fill };
@@ -174,15 +323,49 @@ export default function DashboardDisplay({
     }, {} as ChartConfig);
   }, [mostRentedTypesData]);
 
+  const totalPendingSum = useMemo(() => {
+    return groupedPendingPayments.reduce((sum, group) => sum + group.totalPendingValue, 0);
+  }, [groupedPendingPayments]);
+
+  if (isLoading) {
+    return (
+        <div className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+                {[1,2,3,4].map(i => <Skeleton key={i} className="h-[120px] w-full" />)}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <Skeleton className="h-[300px] w-full" />
+                <Skeleton className="h-[300px] w-full" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Skeleton className="h-[400px] w-full" />
+                <Skeleton className="h-[400px] w-full" />
+                <Skeleton className="h-[400px] w-full lg:col-span-2" />
+            </div>
+        </div>
+    );
+  }
+
   const getFirstName = (fullName?: string) => {
     if (!fullName) return '';
     return fullName.split(' ')[0];
   };
 
-  const totalPendingSum = useMemo(() => {
-    return groupedPendingPayments.reduce((sum, group) => sum + group.totalPendingValue, 0);
-  }, [groupedPendingPayments]);
-
+  const CustomTooltipContentFormatter = (value: any, name: any, props: any) => {
+    const numericValue = Number(value);
+    if (isNaN(numericValue)) return null;
+    const color = props.color || props.payload?.fill || props.stroke || 'hsl(var(--muted-foreground))';
+    const formattedValue = `R$ ${numericValue.toFixed(2).replace('.', ',')}`;
+    return (
+        <div key={name} className="flex w-full items-center gap-2">
+            <div className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: color }} />
+            <div className="flex flex-1 justify-between">
+                <span className="text-muted-foreground">{name}</span>
+                <span className="font-mono font-medium tabular-nums text-foreground">{formattedValue}</span>
+            </div>
+        </div>
+    );
+  };
 
   return (
     <>
@@ -195,9 +378,7 @@ export default function DashboardDisplay({
             </CardHeader>
             <CardContent>
                 <div className="text-xl font-bold text-foreground">{item.value}</div>
-                {item.trendText && (
-                   <p className={`text-xs ${item.trendColorClass || 'text-muted-foreground'} mt-1`}>{item.trendText}</p>
-                )}
+                {item.trendText && <p className={`text-xs ${item.trendColorClass || 'text-muted-foreground'} mt-1`}>{item.trendText}</p>}
             </CardContent>
           </Card>
         ))}
@@ -206,10 +387,7 @@ export default function DashboardDisplay({
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle className="font-headline flex items-center">
-                        <CalendarClock className="h-6 w-6 mr-2 text-primary" />
-                        Próximas Devoluções (Atrasadas e Futuras)
-                    </CardTitle>
+                    <CardTitle className="font-headline flex items-center"><CalendarClock className="h-6 w-6 mr-2 text-primary" /> Próximas Devoluções (Atrasadas e Futuras)</CardTitle>
                     <CardDescription>Aluguéis que ainda não foram devolvidos e estão atrasados ou com devolução nos próximos 7 dias.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -226,10 +404,7 @@ export default function DashboardDisplay({
                                     <AccordionItem value={`item-${rental.id}`} key={rental.id} className="border rounded-md hover:bg-muted/50 transition-colors">
                                         <AccordionTrigger className="p-3 w-full hover:no-underline [&[data-state=open]]:border-b">
                                            <div className="flex items-center gap-3 w-full text-left">
-                                                <Avatar className="h-10 w-10">
-                                                    <AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name || 'Avatar'} />
-                                                    <AvatarFallback>{customer ? getFirstName(customer.name).charAt(0).toUpperCase() : 'C'}</AvatarFallback>
-                                                </Avatar>
+                                                <Avatar className="h-10 w-10"><AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name || 'Avatar'} /><AvatarFallback>{customer ? getFirstName(customer.name).charAt(0).toUpperCase() : 'C'}</AvatarFallback></Avatar>
                                                 <div className="flex-grow">
                                                     <p className="font-semibold">{getFirstName(rental.customerName)}</p>
                                                     <div className={cn("text-sm font-medium", isOverdue && "text-destructive", isDueToday && "text-orange-500")}>
@@ -246,38 +421,14 @@ export default function DashboardDisplay({
                                                   <h4 className="font-semibold mb-2">Itens a serem devolvidos:</h4>
                                                   {rental.equipment.length > 0 ? (
                                                       <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                                                          {rental.equipment.map((eq, index) => (
-                                                              <li key={index}>
-                                                                  {eq.quantity}x {eq.name || 'Equipamento desconhecido'}
-                                                              </li>
-                                                          ))}
+                                                          {rental.equipment.map((eq, index) => <li key={index}>{eq.quantity}x {eq.name || 'Equipamento desconhecido'}</li>)}
                                                       </ul>
-                                                  ) : (
-                                                      <p className="text-muted-foreground italic">Nenhum item listado neste aluguel.</p>
-                                                  )}
+                                                  ) : <p className="text-muted-foreground italic">Nenhum item listado.</p>}
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-                                                    <FinalizeRentalButton
-                                                        rental={rental}
-                                                        isFinalized={!!rental.actualReturnDate}
-                                                        onFinalized={handleActionSuccess}
-                                                        buttonProps={{
-                                                          variant: "outline",
-                                                          size: "sm",
-                                                          className: "text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700"
-                                                        }}
-                                                    />
-                                                    {isPayable && (
-                                                      <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}>
-                                                          <DollarSign className="mr-2 h-4 w-4 text-green-600" />
-                                                          Registrar Pagamento
-                                                      </Button>
-                                                    )}
-                                                    <Button asChild variant="outline" size="sm">
-                                                      <Link href={`/dashboard/rentals/${rental.id}/details`}>
-                                                        <Eye className="mr-2 h-4 w-4" /> Ver detalhes
-                                                      </Link>
-                                                    </Button>
+                                                    <FinalizeRentalButton rental={rental} isFinalized={!!rental.actualReturnDate} onFinalized={handleActionSuccess} buttonProps={{ variant: "outline", size: "sm", className: "text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700" }} />
+                                                    {isPayable && <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}><DollarSign className="mr-2 h-4 w-4 text-green-600" />Registrar Pagamento</Button>}
+                                                    <Button asChild variant="outline" size="sm"><Link href={`/dashboard/rentals/${rental.id}/details`}><Eye className="mr-2 h-4 w-4" /> Ver detalhes</Link></Button>
                                                 </div>
                                             </div>
                                         </AccordionContent>
@@ -285,18 +436,13 @@ export default function DashboardDisplay({
                                 );
                             })}
                         </Accordion>
-                    ) : (
-                        <p className="text-sm text-muted-foreground text-center py-4">Nenhuma devolução prevista para os próximos 7 dias.</p>
-                    )}
+                    ) : <p className="text-sm text-muted-foreground text-center py-4">Nenhuma devolução prevista para os próximos 7 dias.</p>}
                 </CardContent>
             </Card>
 
             <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle className="font-headline flex items-center">
-                        <HandCoins className="h-6 w-6 mr-2 text-primary" />
-                        Pagamentos Pendentes (Itens Devolvidos)
-                    </CardTitle>
+                    <CardTitle className="font-headline flex items-center"><HandCoins className="h-6 w-6 mr-2 text-primary" />Pagamentos Pendentes (Itens Devolvidos)</CardTitle>
                     <CardDescription>
                         Aluguéis finalizados que aguardam pagamento. 
                         {totalPendingSum > 0 && <span className="font-bold"> Total: {formatToBRL(totalPendingSum)}</span>}
@@ -309,15 +455,10 @@ export default function DashboardDisplay({
                                 <AccordionItem value={`group-${group.customerId}`} key={group.customerId} className="border rounded-md hover:bg-muted/50 transition-colors">
                                     <AccordionTrigger className="p-3 w-full hover:no-underline [&[data-state=open]]:border-b">
                                         <div className="flex items-center gap-3 w-full text-left">
-                                            <Avatar className="h-10 w-10">
-                                                <AvatarImage src={group.customerImageUrl || undefined} alt={group.customerName} />
-                                                <AvatarFallback>{group.customerName.charAt(0).toUpperCase()}</AvatarFallback>
-                                            </Avatar>
+                                            <Avatar className="h-10 w-10"><AvatarImage src={group.customerImageUrl || undefined} alt={group.customerName} /><AvatarFallback>{group.customerName.charAt(0).toUpperCase()}</AvatarFallback></Avatar>
                                             <div className="flex-grow">
                                                 <p className="font-semibold">{group.customerName}</p>
-                                                <div className="text-sm font-bold text-destructive">
-                                                    Dívida Total: {formatToBRL(group.totalPendingValue)}
-                                                </div>
+                                                <div className="text-sm font-bold text-destructive">Dívida Total: {formatToBRL(group.totalPendingValue)}</div>
                                             </div>
                                         </div>
                                     </AccordionTrigger>
@@ -333,35 +474,22 @@ export default function DashboardDisplay({
                                                                 <p className="font-semibold text-destructive">Pendente: {formatToBRL(pendingValue)}</p>
                                                             </div>
                                                             <div className="flex items-center gap-2">
-                                                                <Button asChild variant="outline" size="sm">
-                                                                    <Link href={`/dashboard/rentals/${rental.id}/details`}>
-                                                                        <Eye className="mr-2 h-4 w-4" /> Ver
-                                                                    </Link>
-                                                                </Button>
-                                                                <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}>
-                                                                    Registrar Pagamento
-                                                                </Button>
+                                                                <Button asChild variant="outline" size="sm"><Link href={`/dashboard/rentals/${rental.id}/details`}><Eye className="mr-2 h-4 w-4" /> Ver</Link></Button>
+                                                                <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}>Registrar Pagamento</Button>
                                                             </div>
                                                         </div>
                                                     )
                                                 })}
                                             </div>
                                             <div className="flex justify-end pt-2">
-                                                <Button asChild>
-                                                    <Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}>
-                                                        <FileText className="h-4 w-4 mr-2" />
-                                                        Gerar Recibo Consolidado
-                                                    </Link>
-                                                </Button>
+                                                <Button asChild><Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}><FileText className="h-4 w-4 mr-2" />Gerar Recibo Consolidado</Link></Button>
                                             </div>
                                         </div>
                                     </AccordionContent>
                                 </AccordionItem>
                             ))}
                         </Accordion>
-                    ) : (
-                        <p className="text-sm text-muted-foreground text-center py-4">Nenhum pagamento pendente para itens já devolvidos.</p>
-                    )}
+                    ) : <p className="text-sm text-muted-foreground text-center py-4">Nenhum pagamento pendente para itens já devolvidos.</p>}
                 </CardContent>
             </Card>
         </div>
@@ -369,10 +497,7 @@ export default function DashboardDisplay({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline flex items-center">
-              <BarChartIcon className="h-6 w-6 mr-2 text-primary" />
-              Atividade por Item de Equipamento
-            </CardTitle>
+            <CardTitle className="font-headline flex items-center"><BarChartIcon className="h-6 w-6 mr-2 text-primary" />Atividade por Item de Equipamento</CardTitle>
             <CardDescription>Quantidade total, alugada e disponível para cada item individual no inventário.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -380,20 +505,7 @@ export default function DashboardDisplay({
                 <RechartsBarChart data={equipmentActivityChartData} layout="vertical" margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false}/>
                   <XAxis type="number" dataKey="total" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(value) => `${value} un.`} />
-                  <YAxis 
-                    type="category" 
-                    dataKey="name" 
-                    tickLine={false} 
-                    axisLine={false} 
-                    tickMargin={8} 
-                    width={180} 
-                    interval={0}
-                    tickFormatter={(value, index) => {
-                        const dataPoint = equipmentActivityChartData[index];
-                        if (!dataPoint) return value;
-                        return `${value} (${dataPoint.rented}/${dataPoint.total})`;
-                    }}
-                   />
+                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tickMargin={8} width={180} interval={0} tickFormatter={(value, index) => `${equipmentActivityChartData[index]?.name} (${equipmentActivityChartData[index]?.rented}/${equipmentActivityChartData[index]?.total})`}/>
                   <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
                   <ChartLegend content={<ChartLegendContent />} />
                   <Bar dataKey="rented" stackId="a" fill="var(--color-rented)" radius={[0, 4, 4, 0]} name="Alugado" />
@@ -405,21 +517,14 @@ export default function DashboardDisplay({
 
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline flex items-center">
-              <PieChartIcon className="h-6 w-6 mr-2 text-primary" />
-              Tipos de Equipamento Mais Alugados
-            </CardTitle>
+            <CardTitle className="font-headline flex items-center"><PieChartIcon className="h-6 w-6 mr-2 text-primary" />Tipos de Equipamento Mais Alugados</CardTitle>
             <CardDescription>Distribuição dos tipos de equipamentos mais populares em aluguéis (baseado na quantidade de itens).</CardDescription>
           </CardHeader>
           <CardContent>
                 <ChartContainer config={pieChartConfig} className="h-[350px] w-full">
                     <RechartsPieChart>
                         <ChartTooltip content={<ChartTooltipContent nameKey="name" hideIndicator />} />
-                        <Pie data={mostRentedTypesData} dataKey="value" nameKey="name" innerRadius={60}>
-                             {mostRentedTypesData.map((entry) => (
-                                <Cell key={`cell-${entry.name}`} fill={entry.fill} />
-                            ))}
-                        </Pie>
+                        <Pie data={mostRentedTypesData} dataKey="value" nameKey="name" innerRadius={60}>{mostRentedTypesData.map(entry => <Cell key={`cell-${entry.name}`} fill={entry.fill} />)}</Pie>
                         <ChartLegend content={<ChartLegendContent nameKey="name" />} />
                     </RechartsPieChart>
                 </ChartContainer>
@@ -428,10 +533,7 @@ export default function DashboardDisplay({
         
         <Card className="shadow-lg lg:col-span-2">
           <CardHeader>
-            <CardTitle className="font-headline flex items-center">
-              <LucideLineChart className="h-6 w-6 mr-2 text-primary" />
-              Finanças Mensais
-            </CardTitle>
+            <CardTitle className="font-headline flex items-center"><LucideLineChart className="h-6 w-6 mr-2 text-primary" />Finanças Mensais</CardTitle>
              <CardDescription>Receita (de aluguéis com pagamento registrado no mês), Despesas e Lucro nos últimos meses.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -451,17 +553,8 @@ export default function DashboardDisplay({
         </Card>
       </div>
       {selectedRentalForPayment && (
-        <MarkAsPaidDialog
-            rental={selectedRentalForPayment}
-            isOpen={!!selectedRentalForPayment}
-            onOpenChange={(open) => {
-                if (!open) setSelectedRentalForPayment(null);
-            }}
-            onSuccess={handleActionSuccess}
-        />
+        <MarkAsPaidDialog rental={selectedRentalForPayment} isOpen={!!selectedRentalForPayment} onOpenChange={(open) => !open && setSelectedRentalForPayment(null)} onSuccess={handleActionSuccess} />
       )}
     </>
   );
 }
-
-    
