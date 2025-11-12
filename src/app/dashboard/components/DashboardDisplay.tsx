@@ -123,7 +123,6 @@ export default function DashboardDisplay({
   const [selectedRentalForPayment, setSelectedRentalForPayment] = useState<Rental | null>(null);
 
   const handleActionSuccess = useCallback(async () => {
-    // This function re-fetches the necessary data from the server and updates local state
     const [refreshedRentals, refreshedCustomers] = await Promise.all([getRentals(), getCustomers()]);
     setRentals(refreshedRentals);
     setCustomers(refreshedCustomers);
@@ -464,3 +463,5 @@ export default function DashboardDisplay({
     </>
   );
 }
+
+    
