@@ -1,16 +1,16 @@
 
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import type { Rental, Customer } from '@/types';
-import { format, parseISO, isToday, isPast } from 'date-fns';
+import { format, parseISO, isToday, isPast, isBefore, startOfDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
 import type { ChartConfig } from "@/components/ui/chart";
@@ -63,8 +63,7 @@ export interface GroupedPendingPayment {
 
 interface DashboardDisplayProps {
   overviewCards: OverviewCardData[];
-  initialUpcomingReturns: Rental[];
-  initialGroupedPendingPayments: GroupedPendingPayment[];
+  initialRentals: Rental[];
   initialCustomers: Customer[];
   monthlyLineChartData: MonthlyFinancialData[];
   equipmentActivityChartData: EquipmentItemActivityData[];
@@ -112,26 +111,61 @@ const CustomTooltipContentFormatter = (value: any, name: any, props: any) => {
 
 export default function DashboardDisplay({
   overviewCards,
-  initialUpcomingReturns,
-  initialGroupedPendingPayments,
+  initialRentals,
   initialCustomers,
   monthlyLineChartData,
   equipmentActivityChartData,
   mostRentedTypesData
 }: DashboardDisplayProps) {
 
-  const router = useRouter();
+  const [rentals, setRentals] = useState<Rental[]>(initialRentals);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [selectedRentalForPayment, setSelectedRentalForPayment] = useState<Rental | null>(null);
 
-  const [customers, setCustomers] = useState(initialCustomers);
-  const [upcomingReturns, setUpcomingReturns] = useState(initialUpcomingReturns);
-  const [groupedPendingPayments, setGroupedPendingPayments] = useState(initialGroupedPendingPayments);
-
   const handleActionSuccess = useCallback(async () => {
-    // This function re-fetches the necessary data from the server
-    router.refresh();
+    // This function re-fetches the necessary data from the server and updates local state
+    const [refreshedRentals, refreshedCustomers] = await Promise.all([getRentals(), getCustomers()]);
+    setRentals(refreshedRentals);
+    setCustomers(refreshedCustomers);
+  }, []);
 
-  }, [router]);
+  const { upcomingReturns, groupedPendingPayments } = useMemo(() => {
+    const today = startOfDay(new Date());
+    const upcomingCutoff = addDays(today, 8);
+
+    const returns = rentals
+      .filter(rental => !rental.actualReturnDate && !rental.isOpenEnded && isBefore(parseISO(rental.expectedReturnDate), upcomingCutoff))
+      .sort((a, b) => parseISO(a.expectedReturnDate).getTime() - parseISO(b.expectedReturnDate).getTime());
+
+    const customerMap: { [key: string]: GroupedPendingPayment } = {};
+    const pending: GroupedPendingPayment[] = [];
+
+    rentals
+      .filter(rental => !!rental.actualReturnDate && (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue'))
+      .forEach(rental => {
+          if (!customerMap[rental.customerId]) {
+              const customer = customers.find(c => c.id === rental.customerId);
+              customerMap[rental.customerId] = {
+                  customerId: rental.customerId,
+                  customerName: rental.customerName || 'Cliente Desconhecido',
+                  customerImageUrl: customer?.imageUrl,
+                  totalPendingValue: 0,
+                  rentals: []
+              };
+              pending.push(customerMap[rental.customerId]);
+          }
+          const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
+          const pendingValue = rental.value - totalPaid;
+          
+          customerMap[rental.customerId].totalPendingValue += pendingValue;
+          customerMap[rental.customerId].rentals.push(rental);
+      });
+
+    pending.sort((a,b) => b.totalPendingValue - a.totalPendingValue);
+
+    return { upcomingReturns: returns, groupedPendingPayments: pending };
+
+  }, [rentals, customers]);
 
 
   const pieChartConfig = useMemo(() => {
@@ -187,6 +221,8 @@ export default function DashboardDisplay({
                                 const returnDate = parseISO(rental.expectedReturnDate);
                                 const isOverdue = isPast(returnDate) && !isToday(returnDate);
                                 const isDueToday = isToday(returnDate);
+                                const isPayable = rental.paymentStatus !== 'paid' && !rental.isOpenEnded;
+
                                 return (
                                     <AccordionItem value={`item-${rental.id}`} key={rental.id} className="border rounded-md hover:bg-muted/50 transition-colors">
                                         <AccordionTrigger className="p-3 w-full hover:no-underline [&[data-state=open]]:border-b">
@@ -232,6 +268,12 @@ export default function DashboardDisplay({
                                                           className: "text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700"
                                                         }}
                                                     />
+                                                    {isPayable && (
+                                                      <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}>
+                                                          <DollarSign className="mr-2 h-4 w-4 text-green-600" />
+                                                          Registrar Pagamento
+                                                      </Button>
+                                                    )}
                                                     <Button asChild variant="outline" size="sm">
                                                       <Link href={`/dashboard/rentals/${rental.id}/details`}>
                                                         <Eye className="mr-2 h-4 w-4" /> Ver detalhes
