@@ -235,17 +235,30 @@ export default function DashboardDisplay() {
         setMostRentedTypesData(rentedTypes);
 
         let totalContractValue = 0;
+        let dailyActiveRevenue = 0;
         const todayStr = format(new Date(), 'yyyy-MM-dd');
+
         rentalsData.forEach(rental => {
+            let currentRentalValue: number;
             if (rental.isOpenEnded && !rental.actualReturnDate) {
-                totalContractValue += countBillableDays(rental.rentalStartDate, todayStr, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true) * rental.value;
+                const billableDays = countBillableDays(rental.rentalStartDate, todayStr, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
+                currentRentalValue = billableDays * rental.value; // For open-ended, rental.value is the daily rate.
             } else {
-                totalContractValue += rental.value;
+                currentRentalValue = rental.value;
+            }
+            totalContractValue += currentRentalValue;
+
+            if (!rental.actualReturnDate) {
+              rental.equipment.forEach(eq => {
+                const itemDetails = inventoryItemsData.find(inv => inv.id === eq.equipmentId);
+                const rate = eq.customDailyRentalRate ?? itemDetails?.dailyRentalRate ?? 0;
+                dailyActiveRevenue += eq.quantity * rate;
+              });
             }
         });
         
         const activeRentalsCount = rentalsData.filter(r => !r.actualReturnDate).length;
-        const pendingPaymentCount = rentalsData.filter(r => !!r.actualReturnDate && r.paymentStatus !== 'paid').length;
+        
         let expensesTrendText: string | null = null;
         let expensesTrendColor = 'text-muted-foreground';
         if (aggregatedMonthly.length >= 2) {
@@ -259,7 +272,7 @@ export default function DashboardDisplay() {
         setOverviewCards([
             { title: 'Receita (Paga / Contratos)', value: `${formatToBRL(summaryData.totalRevenue)} / ${formatToBRL(totalContractValue)}`, iconName: 'TrendingUp', trendText: 'Total pago vs. valor de todos os contratos.', trendColorClass: 'text-muted-foreground' },
             { title: 'Despesas Totais', value: formatToBRL(summaryData.totalExpenses), iconName: 'TrendingDown', trendText: expensesTrendText, trendColorClass: expensesTrendColor },
-            { title: 'Ativos / Pendentes', value: `${activeRentalsCount} / ${pendingPaymentCount}`, iconName: 'Package', trendText: null },
+            { title: 'Aluguéis Ativos', value: `${activeRentalsCount} contrato(s)`, iconName: 'Package', trendText: `Gerando ${formatToBRL(dailyActiveRevenue)} / dia`, trendColorClass: 'text-green-500' },
             { title: 'Total de Clientes', value: customersData.length.toString(), iconName: 'Users', trendText: null },
         ]);
 
