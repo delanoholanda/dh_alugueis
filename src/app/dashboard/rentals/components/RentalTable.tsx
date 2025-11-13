@@ -112,6 +112,25 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
       }
       return <span className="font-mono">{formatToBRL(rental.value)}</span>;
   }
+  
+  const getDaysDisplay = (rental: Rental) => {
+    if (rental.isOpenEnded) {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const billableDays = countBillableDays(
+            rental.rentalStartDate,
+            todayStr,
+            rental.chargeSaturdays ?? true,
+            rental.chargeSundays ?? true
+        );
+        return (
+            <div className="text-center">
+                <span className="font-semibold">{billableDays}</span>
+                <p className="text-[10px] text-muted-foreground -mt-1">(Corridos)</p>
+            </div>
+        );
+    }
+    return <span className="font-semibold">{rental.rentalDays}</span>
+  }
 
   return (
     <Card>
@@ -124,6 +143,7 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
                 <TableHead>Cliente</TableHead>
                 <TableHead>Início</TableHead>
                 <TableHead>Retorno Prev.</TableHead>
+                <TableHead className="text-center">Duração</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead className="text-right">Renda/Dia</TableHead>
                 <TableHead className="text-center">Itens</TableHead>
@@ -161,6 +181,7 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
                           {rental.isOpenEnded ? <span className="text-blue-500">Em Aberto</span> : format(parseISO(rental.expectedReturnDate), 'dd/MM/yy')}
                           {suffix}
                       </TableCell>
+                      <TableCell className="text-center">{getDaysDisplay(rental)}</TableCell>
                       <TableCell className="text-right">{getValueDisplay(rental)}</TableCell>
                       <TableCell className="text-right font-mono text-green-600">{formatToBRL(getDailyIncome(rental))}</TableCell>
                       <TableCell className="text-center">{rental.equipment.reduce((acc, eq) => acc + eq.quantity, 0)}</TableCell>
@@ -175,7 +196,7 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
                     </TableRow>
                     {isExpanded && (
                         <TableRow>
-                            <TableCell colSpan={9} className="p-0">
+                            <TableCell colSpan={10} className="p-0">
                                 <div className="bg-muted/50 p-4">
                                     <h4 className="font-semibold text-sm mb-2 flex items-center"><Package className="h-4 w-4 mr-2" /> Itens do Aluguel</h4>
                                     <ul className="list-disc list-inside space-y-1 pl-4 text-sm text-muted-foreground">
