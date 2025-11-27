@@ -112,7 +112,8 @@ export async function getFinancialSummary(): Promise<{ totalRevenue: number; tot
   // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
-    const revenueResult = db.prepare("SELECT SUM(value) as total FROM rentals WHERE paymentStatus = 'paid'").get() as { total: number | null };
+    // Corrected: Sum all individual payments from the payments table for accurate revenue
+    const revenueResult = db.prepare("SELECT SUM(amount) as total FROM payments").get() as { total: number | null };
     const totalRevenue = revenueResult.total || 0;
 
     const expensesResult = db.prepare('SELECT SUM(amount) as total FROM expenses').get() as { total: number | null };

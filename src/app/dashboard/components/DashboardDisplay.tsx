@@ -5,10 +5,10 @@ import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
-import type { Rental, Customer, Equipment, Expense, EquipmentType } from '@/types';
+import type { Rental, Customer, Equipment, Expense, EquipmentType, Payment } from '@/types';
 import { format, parseISO, isToday, isPast, isBefore, startOfDay, addDays, eachMonthOfInterval, startOfMonth, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn, getPaymentStatusVariant, paymentStatusMap, countBillableDays } from '@/lib/utils';
@@ -77,8 +77,10 @@ const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
         return 'invalid_date'; 
     }
   };
+  
+  const allPayments: Payment[] = rentals.flatMap(r => r.payments || []);
 
-  if (rentals.length === 0 && expenses.length === 0) {
+  if (allPayments.length === 0 && expenses.length === 0) {
     const today = new Date();
     const lastSixMonths = eachMonthOfInterval({
       start: startOfMonth(new Date(today.getFullYear(), today.getMonth() - 5, 1)),
@@ -89,11 +91,11 @@ const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
       monthlyData[monthYear] = { revenue: 0, expenses: 0, profit: 0 };
     });
   } else {
-      rentals.filter(r => r.paymentStatus === 'paid' && r.paymentDate).forEach(rental => {
-        const paymentMonthYear = getMonthYearKey(rental.paymentDate!);
+      allPayments.forEach(payment => {
+        const paymentMonthYear = getMonthYearKey(payment.paymentDate);
         if (paymentMonthYear === 'invalid_date') return;
         if (!monthlyData[paymentMonthYear]) monthlyData[paymentMonthYear] = { revenue: 0, expenses: 0, profit: 0 };
-        monthlyData[paymentMonthYear].revenue += rental.value;
+        monthlyData[paymentMonthYear].revenue += payment.amount;
       });
 
       expenses.forEach(expense => {
@@ -272,7 +274,7 @@ export default function DashboardDisplay() {
         setOverviewCards([
             { title: 'Receita (Paga / Contratos)', value: `${formatToBRL(summaryData.totalRevenue)} / ${formatToBRL(totalContractValue)}`, iconName: 'TrendingUp', trendText: 'Total pago vs. valor de todos os contratos.', trendColorClass: 'text-muted-foreground' },
             { title: 'Despesas Totais', value: formatToBRL(summaryData.totalExpenses), iconName: 'TrendingDown', trendText: expensesTrendText, trendColorClass: expensesTrendColor },
-            { title: 'Aluguéis Ativos', value: `${activeRentalsCount} contrato(s)`, iconName: 'Package', trendText: `Gerando ${formatToBRL(dailyActiveRevenue)} / dia`, trendColorClass: 'text-green-500' },
+            { title: 'Aluguéis Ativos', value: `${activeRentalsCount} contrato(s)`, iconName: 'Warehouse', trendText: `Gerando ${formatToBRL(dailyActiveRevenue)} / dia`, trendColorClass: 'text-green-500' },
             { title: 'Total de Clientes', value: customersData.length.toString(), iconName: 'Users', trendText: null },
         ]);
 

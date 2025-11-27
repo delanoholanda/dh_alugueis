@@ -9,13 +9,13 @@ import { getExpenses, getFinancialSummary } from '@/actions/financialActions';
 import { getExpenseCategories } 
 from '@/actions/expenseCategoryActions';
 import { getRentals } from '@/actions/rentalActions';
-import type { Expense, Rental, ExpenseCategory } from '@/types'; 
+import type { Expense, Rental, ExpenseCategory, Payment } from '@/types'; 
 import { CircleDollarSign, TrendingUp, TrendingDown, Scale, FileText, Handshake, BarChart } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Line, LineChart as RechartsLineChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import FinancialsClientPart from './components/FinancialsClientPart';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, parseISO, startOfMonth, eachMonthOfInterval } from 'date-fns';
+import { format, parseISO, startOfMonth, eachMonthOfInterval, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { formatToBRL } from '@/lib/utils';
@@ -43,8 +43,10 @@ const aggregateFinancialData = (rentals: Rental[], expenses: Expense[]): Monthly
         return "Data Inválida";
     }
   };
+  
+  const allPayments: Payment[] = rentals.flatMap(r => r.payments || []);
 
-  if (rentals.length === 0 && expenses.length === 0) {
+  if (allPayments.length === 0 && expenses.length === 0) {
     const today = new Date();
     // Generate for the last 6 months including the current one
     const lastSixMonthsInterval = {
@@ -59,12 +61,12 @@ const aggregateFinancialData = (rentals: Rental[], expenses: Expense[]): Monthly
     });
 
   } else {
-    rentals.filter(r => r.paymentStatus === 'paid' && r.paymentDate).forEach(rental => {
-      const dateToUse = rental.paymentDate!; // Already filtered for paymentDate presence
+    allPayments.forEach(payment => {
+      const dateToUse = payment.paymentDate;
       const monthYear = getMonthYear(dateToUse);
       if (monthYear === "Data Inválida") return;
       if (!monthlyData[monthYear]) monthlyData[monthYear] = { revenue: 0, expenses: 0, profit: 0 };
-      monthlyData[monthYear].revenue += rental.value;
+      monthlyData[monthYear].revenue += payment.amount;
     });
 
     expenses.forEach(expense => {
@@ -82,8 +84,6 @@ const aggregateFinancialData = (rentals: Rental[], expenses: Expense[]): Monthly
   return Object.entries(monthlyData)
     .map(([name, values]) => ({ name, ...values }))
     .sort((a, b) => {
-      const dateA = parseISO(`01 ${a.name.replace('/', ' ')}`);
-      const dateB = parseISO(`01 ${b.name.replace('/', ' ')}`);
       try {
         const dateA = parse(a.name, 'MMM yyyy', new Date(), { locale: ptBR });
         const dateB = parse(b.name, 'MMM yyyy', new Date(), { locale: ptBR });

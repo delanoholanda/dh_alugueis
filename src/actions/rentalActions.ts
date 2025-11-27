@@ -610,6 +610,7 @@ export async function calculateAndCloseOpenEndedRental(id: number): Promise<Rent
 
 export async function finalizeRental(id: number): Promise<Rental | null> {
   await validateServerSession();
+  const db = getDb();
   const existingRental = await getRentalById(id);
 
   if (!existingRental) {
@@ -629,13 +630,15 @@ export async function finalizeRental(id: number): Promise<Rental | null> {
   const formattedActualReturnDate = format(today, 'yyyy-MM-dd');
   
   try {
-    // This action now only marks the physical return of items.
-    const updatedRental = await updateRental(id, { actualReturnDate: formattedActualReturnDate });
-    if (updatedRental) {
-      revalidatePath('/dashboard/rentals');
-      revalidatePath('/dashboard', 'layout'); 
-      console.log(`Rental ${id} marked as returned with date ${formattedActualReturnDate}.`);
-    }
+    const updateStmt = db.prepare('UPDATE rentals SET actualReturnDate = ? WHERE id = ?');
+    updateStmt.run(formattedActualReturnDate, id);
+    
+    revalidatePath('/dashboard/rentals');
+    revalidatePath('/dashboard', 'layout'); 
+    revalidatePath(`/dashboard/rentals/${id}/details`);
+    console.log(`Rental ${id} marked as returned with date ${formattedActualReturnDate}.`);
+    
+    const updatedRental = await getRentalById(id);
     return updatedRental;
   } catch (error) {
     console.error(`Failed to mark rental as returned with id ${id}:`, error);
@@ -707,11 +710,6 @@ export async function addPayment(
   await validateServerSession();
   const db = getDb();
   
-  const existingRental = await getRentalById(rentalId);
-  if (!existingRental) {
-    throw new Error(`Aluguel com ID ${rentalId} não encontrado.`);
-  }
-
   const paymentId = `pay_${crypto.randomBytes(8).toString('hex')}`;
   const newPayment: Payment = {
     id: paymentId,
@@ -719,48 +717,60 @@ export async function addPayment(
     ...paymentData,
   };
 
-  const insertPaymentStmt = db.prepare(
-    'INSERT INTO payments (id, rentalId, amount, paymentDate, paymentMethod, isPartial) VALUES (@id, @rentalId, @amount, @paymentDate, @paymentMethod, @isPartial)'
-  );
-  
-  const updateRentalStmt = db.prepare(
-    'UPDATE rentals SET paymentStatus = @paymentStatus, paymentDate = @paymentDate, paymentMethod = @paymentMethod WHERE id = @id'
-  );
+  const transaction = db.transaction(() => {
+    // 1. Get current rental and payments inside the transaction for consistency
+    const rentalRow = db.prepare('SELECT * FROM rentals WHERE id = ?').get(rentalId) as (Rental | undefined);
+    if (!rentalRow) {
+      throw new Error(`Aluguel com ID ${rentalId} não encontrado.`);
+    }
+
+    const existingPayments = db.prepare('SELECT * FROM payments WHERE rentalId = ?').all(rentalId) as Payment[];
+
+    // 2. Insert the new payment record
+    const insertPaymentStmt = db.prepare(
+      'INSERT INTO payments (id, rentalId, amount, paymentDate, paymentMethod, isPartial) VALUES (@id, @rentalId, @amount, @paymentDate, @paymentMethod, @isPartial)'
+    );
+    insertPaymentStmt.run({ ...newPayment, isPartial: newPayment.isPartial ? 1 : 0 });
+
+    // 3. Calculate new payment totals
+    const totalPaid = existingPayments.reduce((sum, p) => sum + p.amount, 0) + newPayment.amount;
+    const remainingValue = rentalRow.value - totalPaid;
+    
+    // 4. Determine the new payment status for the rental
+    const isNowFullyPaid = remainingValue < 0.01;
+    let newPaymentStatus: Rental['paymentStatus'] = rentalRow.paymentStatus;
+    
+    if (isNowFullyPaid) {
+        newPaymentStatus = 'paid';
+    } else if (totalPaid > 0) {
+        newPaymentStatus = 'pending';
+    }
+    
+    // 5. Determine the main paymentDate for the rental (usually the date of the final payment)
+    const newPaymentDateForRental = isNowFullyPaid ? newPayment.paymentDate : rentalRow.paymentDate;
+
+    // 6. Update the main rental table
+    const updateRentalStmt = db.prepare(
+      'UPDATE rentals SET paymentStatus = @paymentStatus, paymentDate = @paymentDate, paymentMethod = @paymentMethod WHERE id = @id'
+    );
+    updateRentalStmt.run({
+      id: rentalId,
+      paymentStatus: newPaymentStatus,
+      paymentDate: newPaymentDateForRental,
+      paymentMethod: paymentData.paymentMethod, // Update to the latest payment method used
+    });
+  });
 
   try {
-    db.transaction(() => {
-      // Correctly convert boolean to integer for SQLite
-      const paymentToInsert = {
-        ...newPayment,
-        isPartial: newPayment.isPartial ? 1 : 0
-      };
-      insertPaymentStmt.run(paymentToInsert);
-
-      const totalPaid = (existingRental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0) + newPayment.amount;
-      const remainingValue = existingRental.value - totalPaid;
-      const isNowFullyPaid = remainingValue < 0.01;
-
-      let newPaymentStatus: Rental['paymentStatus'] = 'pending';
-      let newPaymentDateForRental: string | null | undefined = existingRental.paymentDate;
-      
-      if (isNowFullyPaid) {
-          newPaymentStatus = 'paid';
-          newPaymentDateForRental = newPayment.paymentDate;
-      }
-
-      updateRentalStmt.run({
-        id: rentalId,
-        paymentStatus: newPaymentStatus,
-        paymentDate: newPaymentDateForRental,
-        paymentMethod: paymentData.paymentMethod, // Update main method to the latest one used
-      });
-    })();
-
+    transaction();
+    
     revalidatePath(`/dashboard/rentals/${rentalId}/details`);
     revalidatePath('/dashboard/rentals');
     revalidatePath('/dashboard');
-    const updatedRental = await getRentalById(rentalId);
-    return updatedRental || null;
+    
+    // We fetch the data again after the transaction to return the most up-to-date state.
+    const finalUpdatedRental = await getRentalById(rentalId);
+    return finalUpdatedRental;
 
   } catch (error) {
     console.error(`Falha ao adicionar pagamento para o aluguel ${rentalId}:`, error);
