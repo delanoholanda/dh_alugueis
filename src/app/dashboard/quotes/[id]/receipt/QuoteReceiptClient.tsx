@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo } from 'react';
@@ -256,6 +257,12 @@ export default function QuoteReceiptClient({ quote, customer, companySettings, i
             <table className="contract-table w-auto ml-auto"><tbody>
               <tr><td>Soma dos itens/serviços:</td><td className="text-right">{formatToBRL(itemsSubtotal)}</td></tr>
               {typeof quote.freightValue === 'number' && quote.freightValue > 0 && (<tr><td>Frete:</td><td className="text-right">{formatToBRL(quote.freightValue)}</td></tr>)}
+              {typeof quote.discountValue === 'number' && quote.discountValue > 0 && (
+                <tr className="text-orange-600">
+                  <td>Desconto Concedido:</td>
+                  <td className="text-right">-{formatToBRL(quote.discountValue)}</td>
+                </tr>
+              )}
               <tr className="total-line"><td>Total Geral do Orçamento:</td><td className="text-right">{formatToBRL(quote.value)}</td></tr>
             </tbody></table>
           </div>
@@ -269,3 +276,4 @@ export default function QuoteReceiptClient({ quote, customer, companySettings, i
     </div>
   );
 }
+
