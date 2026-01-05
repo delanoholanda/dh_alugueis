@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -26,6 +25,7 @@ import { getFinancialSummary, getExpenses } from '@/actions/financialActions';
 import { getInventoryItems } from '@/actions/inventoryActions';
 import { getEquipmentTypes } from '@/actions/equipmentTypeActions';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RentalTableActions } from '@/app/dashboard/rentals/components/RentalTableActions';
 
 interface MonthlyFinancialData {
   month: string;
@@ -197,6 +197,7 @@ const chartConfigBar = {
 export default function DashboardDisplay() {
   const [rentals, setRentals] = useState<Rental[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [inventory, setInventory] = useState<Equipment[]>([]);
   const [overviewCards, setOverviewCards] = useState<OverviewCardData[]>([]);
   const [monthlyLineChartData, setMonthlyLineChartData] = useState<MonthlyFinancialData[]>([]);
   const [equipmentActivityChartData, setEquipmentActivityChartData] = useState<EquipmentItemActivityData[]>([]);
@@ -225,6 +226,7 @@ export default function DashboardDisplay() {
 
         setRentals(rentalsData);
         setCustomers(customersData);
+        setInventory(inventoryItemsData);
 
         // Process data for charts and cards
         const aggregatedMonthly = aggregateMonthlyFinancials(rentalsData, expensesData);
@@ -489,8 +491,7 @@ export default function DashboardDisplay() {
                                                                 <p className="font-semibold text-destructive">Pendente: {formatToBRL(pendingValue)}</p>
                                                             </div>
                                                             <div className="flex items-center gap-2">
-                                                                <Button asChild variant="outline" size="sm"><Link href={`/dashboard/rentals/${rental.id}/details`}><Eye className="mr-2 h-4 w-4" /> Ver</Link></Button>
-                                                                <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}>Registrar Pagamento</Button>
+                                                                <RentalTableActions rental={rental} inventory={inventory} onActionSuccess={handleActionSuccess} />
                                                             </div>
                                                         </div>
                                                     )
