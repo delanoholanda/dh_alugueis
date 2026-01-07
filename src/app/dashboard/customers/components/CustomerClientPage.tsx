@@ -77,28 +77,12 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
   const [selectedRentals, setSelectedRentals] = useState<Record<string, number[]>>({});
   const [closingDates, setClosingDates] = useState<Record<string, Date | undefined>>({});
 
-  const payableRentalsByCustomer = useMemo(() => {
+  const activeRentalsByCustomer = useMemo(() => {
     const map: Record<string, Rental[]> = {};
-    const today = new Date();
-
     for (const customer of customers) {
       map[customer.id] = initialRentals.filter(rental => {
-        if (rental.customerId !== customer.id) return false;
-
-        // Critério 1: Status do pagamento deve ser 'pending' ou 'overdue'
-        if (rental.paymentStatus !== 'pending' && rental.paymentStatus !== 'overdue') return false;
-
-        // Critério 2: O valor pendente deve ser maior que zero.
-        const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
-        const pendingValue = rental.value - totalPaid;
-        if (pendingValue <= 0.005) return false;
-
-        // Critério 3: O contrato está finalizado OU (o contrato está ativo E a data de retorno esperada já passou)
-        const isFinishedAndUnpaid = !!rental.actualReturnDate;
-        const isOverdueAndActive = !rental.actualReturnDate && isPast(parseISO(rental.expectedReturnDate));
-        
-        return isFinishedAndUnpaid || isOverdueAndActive;
-
+        // Condition: rental belongs to the customer AND is not finalized (actualReturnDate is null/undefined)
+        return rental.customerId === customer.id && !rental.actualReturnDate;
       }).sort((a,b) => parseISO(a.rentalStartDate).getTime() - parseISO(b.rentalStartDate).getTime());
     }
     return map;
@@ -111,7 +95,6 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
         ? currentSelection.filter(id => id !== rentalId)
         : [...currentSelection, rentalId];
       
-      // If the selection for a customer becomes empty, also remove their closing date
       if (newSelection.length === 0) {
         setClosingDates(currentDates => {
           const newDates = {...currentDates};
@@ -124,8 +107,11 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
     });
   };
 
-  const handleSelectAll = (customerId: string) => {
-    const payableIds = (payableRentalsByCustomer[customerId] || []).map(r => r.id);
+  const handleSelectAllPayable = (customerId: string) => {
+    // Selects only rentals that have a pending payment status from the active ones
+    const payableIds = (activeRentalsByCustomer[customerId] || [])
+      .filter(r => (r.paymentStatus === 'pending' || r.paymentStatus === 'overdue'))
+      .map(r => r.id);
     setSelectedRentals(prev => ({ ...prev, [customerId]: payableIds }));
   };
 
@@ -215,10 +201,10 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
       {customers.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {customers.map((customer) => {
-            const customerPayableRentals = payableRentalsByCustomer[customer.id] || [];
+            const customerActiveRentals = activeRentalsByCustomer[customer.id] || [];
             const customerSelectedRentals = selectedRentals[customer.id] || [];
             const hasOpenEndedSelected = customerSelectedRentals.some(id => 
-                payableRentalsByCustomer[customer.id]?.find(r => r.id === id)?.isOpenEnded
+                activeRentalsByCustomer[customer.id]?.find(r => r.id === id)?.isOpenEnded
             );
             const closeUntilDate = closingDates[customer.id];
             
@@ -262,7 +248,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-md">
                             <DialogHeader>
-                                <DialogTitle className="sr-only">Foto de ${customer.name}</DialogTitle>
+                                <DialogTitle className="sr-only">Foto de ${'customer.name'}</DialogTitle>
                             </DialogHeader>
                             <div className="relative w-full aspect-square">
                                  <Image
@@ -295,25 +281,25 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                     </Badge>
                 </div>
                 
-                {customerPayableRentals.length > 0 && (
+                {customerActiveRentals.length > 0 && (
                     <div className="pt-2">
                         <Accordion type="single" collapsible className="w-full">
                             <AccordionItem value="rentals" className="border-t">
                                 <AccordionTrigger className="text-sm font-semibold hover:no-underline py-2">
-                                    {customerPayableRentals.length} Aluguéis com Pagamento Pendente
+                                    {customerActiveRentals.length} Aluguel(eis) Ativo(s)
                                 </AccordionTrigger>
                                 <AccordionContent className="pt-2 space-y-2">
                                     <div className="flex gap-2 mb-2">
-                                        <Button variant="outline" size="sm" onClick={() => handleSelectAll(customer.id)} disabled={customerPayableRentals.length === 0}>
+                                        <Button variant="outline" size="sm" onClick={() => handleSelectAllPayable(customer.id)} disabled={customerActiveRentals.filter(r => r.paymentStatus !== 'paid').length === 0}>
                                             <ListChecks className="mr-2 h-4 w-4"/>
-                                            Selecionar Todos
+                                            Sel. Pendentes
                                         </Button>
                                         <Button variant="outline" size="sm" onClick={() => handleClearSelection(customer.id)} disabled={customerSelectedRentals.length === 0}>
                                              <Eraser className="mr-2 h-4 w-4"/>
                                             Limpar
                                         </Button>
                                     </div>
-                                    {customerPayableRentals.map(rental => (
+                                    {customerActiveRentals.map(rental => (
                                         <div key={rental.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50">
                                             <Checkbox
                                                 id={`rental-${customer.id}-${rental.id}`}
@@ -418,3 +404,4 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
     </>
   );
 }
+
