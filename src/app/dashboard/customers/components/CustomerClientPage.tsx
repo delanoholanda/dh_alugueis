@@ -27,7 +27,7 @@ import {
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn, formatToBRL, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -79,23 +79,25 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
 
   const payableRentalsByCustomer = useMemo(() => {
     const map: Record<string, Rental[]> = {};
+    const today = new Date();
+
     for (const customer of customers) {
       map[customer.id] = initialRentals.filter(rental => {
         if (rental.customerId !== customer.id) return false;
-        
-        // Critério 1: Contrato deve estar com os itens devolvidos
-        if (!rental.actualReturnDate) return false;
 
-        // Critério 2: Status do pagamento deve ser 'pending' ou 'overdue'
+        // Critério 1: Status do pagamento deve ser 'pending' ou 'overdue'
         if (rental.paymentStatus !== 'pending' && rental.paymentStatus !== 'overdue') return false;
 
-        // Critério 3: O valor pendente deve ser maior que zero (ou o contrato está em aberto)
+        // Critério 2: O valor pendente deve ser maior que zero.
         const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
         const pendingValue = rental.value - totalPaid;
+        if (pendingValue <= 0.005) return false;
+
+        // Critério 3: O contrato está finalizado OU (o contrato está ativo E a data de retorno esperada já passou)
+        const isFinishedAndUnpaid = !!rental.actualReturnDate;
+        const isOverdueAndActive = !rental.actualReturnDate && isPast(parseISO(rental.expectedReturnDate));
         
-        // Um contrato de 0 reais pendente não deve aparecer aqui.
-        // Ele só aparece se o valor pendente for estritamente maior que 0.005 (margem de segurança).
-        return pendingValue > 0.005;
+        return isFinishedAndUnpaid || isOverdueAndActive;
 
       }).sort((a,b) => parseISO(a.rentalStartDate).getTime() - parseISO(b.rentalStartDate).getTime());
     }
@@ -260,7 +262,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-md">
                             <DialogHeader>
-                                <DialogTitle className="sr-only">Foto de {customer.name}</DialogTitle>
+                                <DialogTitle className="sr-only">Foto de ${customer.name}</DialogTitle>
                             </DialogHeader>
                             <div className="relative w-full aspect-square">
                                  <Image
@@ -366,7 +368,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                         </AlertDialogContent>
                     </AlertDialog>
                 </div>
-                 {customerSelectedRentals.length > 0 && (
+                {customerSelectedRentals.length > 0 && (
                     <div className="pt-2 border-t space-y-2">
                         {hasOpenEndedSelected && (
                              <Popover>
@@ -416,5 +418,3 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
     </>
   );
 }
-
-    
