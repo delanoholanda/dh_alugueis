@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -209,10 +208,8 @@ export default function RentalDetailsPage() {
             icon={Info}
             description="O aluguel que você está procurando não existe ou foi removido."
             actions={
-            <Button variant="outline" asChild>
-                <Link href="/dashboard/rentals">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Voltar para Aluguéis
-                </Link>
+            <Button variant="outline" onClick={() => router.back()}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
             </Button>
             }
         />
@@ -260,10 +257,8 @@ export default function RentalDetailsPage() {
               isFinalized={!!rental.actualReturnDate}
               onFinalized={handleActionSuccess}
             />
-            <Button variant="outline" asChild>
-              <Link href="/dashboard/rentals">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Voltar para Aluguéis
-              </Link>
+            <Button variant="outline" onClick={() => router.back()}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
             </Button>
           </div>
         }

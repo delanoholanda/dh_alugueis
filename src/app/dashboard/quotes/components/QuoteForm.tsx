@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
-import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, UserPlus, PackagePlus, MapPin, Info, ChevronsUpDown, Check, Package } from 'lucide-react';
+import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, UserPlus, PackagePlus, MapPin, Info, ChevronsUpDown, Check, Package, ArrowLeft } from 'lucide-react';
 import { format, parseISO, isSameDay, isWithinInterval, startOfDay, endOfDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
@@ -559,7 +559,7 @@ export function QuoteForm({
 
             <CardFooter className="px-0 pt-6">
               <Button type="submit" className="w-full md:w-auto" disabled={isLoading}>{isLoading ? 'Salvando...' : <><Save className="mr-2 h-4 w-4" /> {submitButtonText}</>}</Button>
-              <Button type="button" variant="outline" onClick={() => router.back()} className="ml-2" disabled={isLoading}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => router.back()} className="ml-2" disabled={isLoading}><ArrowLeft className="mr-2 h-4 w-4" />Cancelar</Button>
             </CardFooter>
           </form>
         </Form>

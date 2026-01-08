@@ -35,7 +35,7 @@ function numberToWords(num: number): string {
   const b = ['', '', 'vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
   const c = ['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
 
-  if (num === 0) return 'Zero reais';
+  if (num < 0.01) return 'Zero reais';
   if (isNaN(num) || !isFinite(num)) return 'Valor inválido';
 
   let nStr = Math.floor(Math.abs(num)).toString();
@@ -184,7 +184,7 @@ export default function RentalContractClient({ rental, customer, companySettings
         quantity: eq.quantity,
         equipmentId: eq.equipmentId,
         customDailyRentalRate: eq.customDailyRentalRate,
-        dailyRentalRateUsed: dailyRateToUse,
+        dailyRateUsed: dailyRateToUse,
         lineTotal: itemSubtotal,
       } as DetailedEquipmentItem;
     });
@@ -212,11 +212,11 @@ export default function RentalContractClient({ rental, customer, companySettings
   const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
   
-  const grandTotal = itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0);
-  const pendingValue = grandTotal - (rental.discountValue ?? 0) - totalPaid;
+  const grandTotal = rental.value;
+  const pendingValue = grandTotal - totalPaid;
 
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
-  const valorPorExtenso = numberToWords(rental.value);
+  const valorPorExtenso = numberToWords(pendingValue > 0 ? pendingValue : grandTotal);
   const displayContractLogo = companySettings.contractLogoUrl || companySettings.companyLogoUrl || DEFAULT_COMPANY_LOGO;
   const contractTitle = "Contrato de Aluguel";
   const rentalPeriod = rental.isOpenEnded
@@ -414,7 +414,7 @@ export default function RentalContractClient({ rental, customer, companySettings
                       <td>Combustível:</td>
                       <td className="text-right">{formatToBRL(rental.fuelValue)}</td>
                     </tr>
-                  )}
+                   )}
                    {typeof rental.discountValue === 'number' && rental.discountValue > 0 && (
                     <tr className="text-orange-600">
                         <td>Desconto Concedido:</td>
@@ -429,12 +429,18 @@ export default function RentalContractClient({ rental, customer, companySettings
                    )}
                   <tr className="total-line">
                     <td>Total Geral:</td>
-                    <td className="text-right">{formatToBRL(rental.value)}</td>
+                    <td className="text-right">{formatToBRL(grandTotal)}</td>
                   </tr>
                   {pendingValue > 0 && !rental.isOpenEnded && (
                     <tr className="total-line text-destructive">
                         <td>Valor Pendente:</td>
                         <td className="text-right">{formatToBRL(pendingValue)}</td>
+                    </tr>
+                  )}
+                  {pendingValue <= 0 && rental.paymentStatus === 'paid' && !rental.isOpenEnded && (
+                    <tr className="total-line text-green-600">
+                        <td>Valor Pendente:</td>
+                        <td className="text-right">R$ 0,00</td>
                     </tr>
                   )}
                 </tbody></table>
@@ -509,3 +515,4 @@ export default function RentalContractClient({ rental, customer, companySettings
     </div>
   );
 }
+
