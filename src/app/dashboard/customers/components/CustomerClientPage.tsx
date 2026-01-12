@@ -81,8 +81,10 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
     const map: Record<string, Rental[]> = {};
     for (const customer of customers) {
       map[customer.id] = initialRentals.filter(rental => {
-        // Condition: rental belongs to the customer AND is not finalized (actualReturnDate is null/undefined)
-        return rental.customerId === customer.id && !rental.actualReturnDate;
+        // A rental is considered "active" for this view if it belongs to the customer AND
+        // it's not fully finalized (either items not returned OR payment is not 'paid').
+        const isNotFinalized = !rental.actualReturnDate || rental.paymentStatus !== 'paid';
+        return rental.customerId === customer.id && isNotFinalized;
       }).sort((a,b) => parseISO(a.rentalStartDate).getTime() - parseISO(b.rentalStartDate).getTime());
     }
     return map;
@@ -405,3 +407,4 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
   );
 }
 
+    
