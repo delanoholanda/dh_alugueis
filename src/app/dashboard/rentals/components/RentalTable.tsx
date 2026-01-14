@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { format, parseISO, isToday, isPast, startOfDay } from 'date-fns';
+import { format, parseISO, isToday, isPast, startOfDay, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, getPaymentStatusVariant, paymentStatusMap, cn, countBillableDays } from '@/lib/utils';
 import { RentalTableActions } from './RentalTableActions';
@@ -115,21 +115,19 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
   
   const getDaysDisplay = (rental: Rental) => {
     if (rental.isOpenEnded) {
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        const billableDays = countBillableDays(
-            rental.rentalStartDate,
-            todayStr,
-            rental.chargeSaturdays ?? true,
-            rental.chargeSundays ?? true
-        );
-        return (
-            <div className="text-center">
-                <span className="font-semibold">{billableDays}</span>
-                <p className="text-[10px] text-muted-foreground -mt-1">(Corridos)</p>
-            </div>
-        );
+      if (rental.actualReturnDate) {
+         const billableDays = countBillableDays(rental.rentalStartDate, rental.actualReturnDate, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
+         return <span className="font-semibold">{billableDays}</span>;
+      }
+      const daysSoFar = differenceInDays(new Date(), parseISO(rental.rentalStartDate));
+      return (
+        <div className="text-center">
+            <span className="font-semibold">{daysSoFar}</span>
+            <p className="text-[10px] text-muted-foreground -mt-1">(Corridos)</p>
+        </div>
+      );
     }
-    return <span className="font-semibold">{rental.rentalDays}</span>
+    return <span className="font-semibold">{rental.rentalDays}</span>;
   }
 
   return (
