@@ -26,6 +26,7 @@ interface DetailedEquipmentItem extends InventoryItem {
     quantity: number;
     equipmentId: string;
     dailyRentalRateUsed: number;
+    dailyTotal: number; // New field for daily cost per item line
     lineTotal: number;
     customDailyRentalRate?: number;
 }
@@ -176,7 +177,9 @@ export default function RentalContractClient({ rental, customer, companySettings
     return rental.equipment.map((eq) => {
       const inventoryItem = inventoryMap.get(eq.equipmentId);
       const dailyRateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
-      const itemSubtotal = dailyRateToUse * (rental.isOpenEnded ? 1 : (rental.rentalDays || 0)) * eq.quantity;
+      const dailyTotal = dailyRateToUse * eq.quantity;
+      const itemSubtotal = dailyTotal * (rental.isOpenEnded ? 1 : (rental.rentalDays || 0));
+
       return {
         ...inventoryItem,
         id: eq.equipmentId,
@@ -184,7 +187,8 @@ export default function RentalContractClient({ rental, customer, companySettings
         quantity: eq.quantity,
         equipmentId: eq.equipmentId,
         customDailyRentalRate: eq.customDailyRentalRate,
-        dailyRateUsed: dailyRateToUse,
+        dailyRentalRateUsed: dailyRateToUse,
+        dailyTotal: dailyTotal,
         lineTotal: itemSubtotal,
       } as DetailedEquipmentItem;
     });
@@ -209,14 +213,17 @@ export default function RentalContractClient({ rental, customer, companySettings
     return pixKey;
   };
 
-  const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
+  const itemsSubtotal = detailedEquipment.reduce((sum, eq) => rental.isOpenEnded ? sum + eq.dailyTotal : sum + eq.lineTotal, 0);
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
   
   const grandTotal = rental.value;
   const pendingValue = grandTotal - totalPaid;
 
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
-  const valorPorExtenso = numberToWords(pendingValue > 0 ? pendingValue : grandTotal);
+  
+  const valorExtensoValue = rental.isOpenEnded ? itemsSubtotal : (pendingValue > 0 ? pendingValue : grandTotal);
+  const valorPorExtenso = numberToWords(valorExtensoValue);
+
   const displayContractLogo = companySettings.contractLogoUrl || companySettings.companyLogoUrl || DEFAULT_COMPANY_LOGO;
   const contractTitle = "Contrato de Aluguel";
   const rentalPeriod = rental.isOpenEnded
@@ -347,7 +354,7 @@ export default function RentalContractClient({ rental, customer, companySettings
                   <td className="text-right">{eq.quantity}</td>
                   <td className="text-right">{formatToBRL(eq.dailyRentalRateUsed)}</td>
                   <td className="text-right">{rental.isOpenEnded ? 'N/A' : rental.rentalDays}</td>
-                  <td className="text-right">{formatToBRL(eq.quantity * eq.dailyRentalRateUsed)}</td>
+                  <td className="text-right">{formatToBRL(eq.dailyTotal)}</td>
                   <td className="text-right">{rental.isOpenEnded ? '-' : formatToBRL(eq.lineTotal)}</td>
                 </tr>
               ))}
@@ -440,7 +447,7 @@ export default function RentalContractClient({ rental, customer, companySettings
                   {pendingValue <= 0 && rental.paymentStatus === 'paid' && !rental.isOpenEnded && (
                     <tr className="total-line text-green-600">
                         <td>Valor Pendente:</td>
-                        <td className="text-right">R$ 0,00</td>
+                        <td className="text-right">{formatToBRL(0)}</td>
                     </tr>
                   )}
                 </tbody></table>
@@ -515,4 +522,3 @@ export default function RentalContractClient({ rental, customer, companySettings
     </div>
   );
 }
-

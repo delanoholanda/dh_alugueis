@@ -46,8 +46,9 @@ export default async function RentalContractPage({ params }: { params: { id: str
           initialRental.chargeSaturdays ?? true,
           initialRental.chargeSundays ?? true
       );
-      // For open-ended, rental.value is the daily rate.
-      const calculatedValue = (billableDays * initialRental.value);
+      // For open-ended, rental.value is the daily rate. We need to calculate the ACCUMULATED value for display.
+      const dailyRate = finalRentalForDisplay.value;
+      const calculatedValue = (billableDays * dailyRate) + (finalRentalForDisplay.freightValue ?? 0) + (finalRentalForDisplay.fuelValue ?? 0) - (finalRentalForDisplay.discountValue ?? 0);
       finalRentalForDisplay.value = calculatedValue;
       finalRentalForDisplay.rentalDays = billableDays;
   }
@@ -62,17 +63,8 @@ export default async function RentalContractPage({ params }: { params: { id: str
 
   let pixPayload: string | null = null;
 
-  // Calculate totals based on the final, possibly calculated, rental value
   const totalPaid = finalRentalForDisplay.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
-  const itemsSubtotal = finalRentalForDisplay.equipment.reduce((sum, eq) => {
-      const inventoryItem = inventory.find(i => i.id === eq.equipmentId);
-      const dailyRate = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
-      const days = finalRentalForDisplay.isOpenEnded ? 1 : (finalRentalForDisplay.rentalDays || 0);
-      return sum + (dailyRate * eq.quantity * days);
-  }, 0);
-  
-  const grandTotal = itemsSubtotal + (finalRentalForDisplay.freightValue ?? 0);
-  const pendingValue = grandTotal - (finalRentalForDisplay.discountValue ?? 0) - totalPaid;
+  const pendingValue = finalRentalForDisplay.value - totalPaid;
 
   if (finalRentalForDisplay.paymentMethod === 'pix' && companySettings.pixKey && pendingValue > 0 && !finalRentalForDisplay.isOpenEnded) {
     const city = extractCityFromAddress(companySettings.address);
