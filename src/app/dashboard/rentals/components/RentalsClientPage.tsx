@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -198,14 +197,22 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
         const group = customerMap.get(customer.id)!;
         group.rentals.push(rental);
 
+        // Calculate the pending value for this specific rental
+        let currentRentalPendingValue = 0;
+        const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+
         if (rental.isOpenEnded && !rental.actualReturnDate) {
             const todayStr = format(new Date(), 'yyyy-MM-dd');
             const billableDays = countBillableDays(rental.rentalStartDate, todayStr, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
             const dailyRate = rental.value; // For open-ended, value is daily rate
-            group.totalValue += (billableDays * dailyRate) + (rental.freightValue ?? 0) - (rental.discountValue ?? 0);
+            const accumulatedValue = (billableDays * dailyRate) + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0) - (rental.discountValue ?? 0);
+            currentRentalPendingValue = accumulatedValue - totalPaid;
         } else {
-            group.totalValue += rental.value;
+            currentRentalPendingValue = rental.value - totalPaid;
         }
+        
+        // Add the pending value to the customer's total
+        group.totalValue += Math.max(0, currentRentalPendingValue);
     }
     
     return Array.from(customerMap.values()).sort((a, b) => a.customer.name.localeCompare(b.customer.name));
@@ -292,7 +299,7 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
                     return (
                         <AccordionItem value={`customer-${customer.id}`} key={customer.id} className="border-none">
                         <AccordionTrigger className="p-3 w-full hover:no-underline border rounded-lg bg-card shadow-md data-[state=open]:rounded-b-none data-[state=open]:border-b-0 data-[state=open]:shadow-lg">
-                            <div className="flex justify-between items-center w-full">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full gap-2">
                                 <div className="flex items-center gap-3">
                                 <Avatar className="h-10 w-10">
                                     <AvatarImage src={customer.imageUrl || undefined} alt={customer.name} />
@@ -303,9 +310,9 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
                                     <p className="text-xs text-muted-foreground text-left">{customerRentals.length} contrato(s) filtrado(s)</p>
                                 </div>
                                 </div>
-                                <div className="hidden sm:block text-right">
-                                    <p className="text-xs text-muted-foreground">Valor Total em Aberto</p>
-                                    <p className="font-bold text-primary text-lg">{formatToBRL(totalValue)}</p>
+                                <div className="w-full sm:w-auto mt-2 sm:mt-0">
+                                    <p className="text-xs text-muted-foreground sm:text-right">Valor Total em Aberto</p>
+                                    <p className="font-bold text-primary text-lg text-left sm:text-right">{formatToBRL(totalValue)}</p>
                                 </div>
                             </div>
                         </AccordionTrigger>
