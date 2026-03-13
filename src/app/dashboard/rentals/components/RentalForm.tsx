@@ -1,9 +1,11 @@
+
 'use client';
 
 import type { Rental, Customer, Equipment as InventoryEquipment, PaymentMethod, EquipmentType } from '@/types';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -177,7 +179,7 @@ export function RentalForm({
       customerId: '',
       equipment: [{ equipmentId: '', quantity: 1, customDailyRentalRate: undefined }],
       rentalStartDate: new Date(),
-      expectedReturnDate: addDays(new Date(), 4), // This will be auto-calculated, but good to have a default
+      expectedReturnDate: addDays(new Date(), 4), 
       isOpenEnded: false,
       chargeSaturdays: true,
       chargeSundays: true,
@@ -252,23 +254,20 @@ export function RentalForm({
 
   }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate]);
 
-  // Effect to handle isOpenEnded toggling
   useEffect(() => {
     if (watchedIsOpenEnded) {
         form.setValue('rentalDays', 0);
-        form.setValue('expectedReturnDate', undefined); // Clear the date for open-ended
+        form.setValue('expectedReturnDate', undefined); 
         form.clearErrors(['rentalDays', 'expectedReturnDate']);
     } else {
-        // When switching back from open-ended, re-calculate a default
         const currentDays = form.getValues('rentalDays');
         if (currentDays === 0) {
-            form.setValue('rentalDays', 5); // Default to 5 days
+            form.setValue('rentalDays', 5); 
         }
     }
   }, [watchedIsOpenEnded, form]);
 
 
-  // Calculate expectedReturnDate automatically based on other fields
   useEffect(() => {
     if (watchedIsOpenEnded) {
       form.setValue('expectedReturnDate', undefined);
@@ -280,7 +279,6 @@ export function RentalForm({
 
     if (startDate && !isNaN(days) && days > 0) {
         const newEndDate = findNthBillableDay(startDate, days, watchedChargeSaturdays, watchedChargeSundays);
-        // Only update if the date is different to avoid re-renders
         const currentEndDate = form.getValues('expectedReturnDate');
         if (!currentEndDate || !isSameDay(currentEndDate, newEndDate)) {
           form.setValue('expectedReturnDate', newEndDate, { shouldValidate: true });
@@ -288,10 +286,7 @@ export function RentalForm({
     }
   }, [watchedRentalDays, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, watchedIsOpenEnded, form]);
   
-  // Effect to calculate final value
   useEffect(() => {
-    let subTotalBasedOnCustomRates = 0;
-
     const daysInput = watchedRentalDays;
     const days = (!watchedIsOpenEnded && daysInput && !isNaN(Number(daysInput)) && Number(daysInput) > 0) ? Number(daysInput) : 0;
 
@@ -333,7 +328,6 @@ export function RentalForm({
     const discountInput = watchedDiscountValue;
     const discount = (typeof discountInput === 'number' && !isNaN(discountInput)) ? discountInput : 0;
 
-    // For open-ended, the contract value is just the daily rate.
     let finalContractValue = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight + fuel - discount;
     
     form.setValue('value', isNaN(finalContractValue) ? 0 : Math.max(0, finalContractValue), { shouldValidate: true });
@@ -721,7 +715,7 @@ export function RentalForm({
                                 <Input
                                 type={focusedCurrencyField === `customRate-${index}` ? 'number' : 'text'}
                                 placeholder="Padrão se vazio"
-                                value={focusedCurrencyField === `customRate-${index}` ? field.value || '' : formatToBRL(field.value)}
+                                value={focusedCurrencyField === `customRate-${index}` ? (field.value ?? '') : formatToBRL(field.value)}
                                 onFocus={() => setFocusedCurrencyField(`customRate-${index}`)}
                                 onBlur={() => setFocusedCurrencyField(null)}
                                 onChange={(e) => {
@@ -947,12 +941,12 @@ export function RentalForm({
                             <Input
                                 type={focusedCurrencyField === 'fuel' ? 'number' : 'text'}
                                 placeholder="R$ 0,00"
-                                value={focusedCurrencyField === 'fuel' ? field.value || '' : formatToBRL(field.value)}
+                                value={focusedCurrencyField === 'fuel' ? (field.value ?? '') : formatToBRL(field.value)}
                                 onFocus={() => setFocusedCurrencyField('fuel')}
                                 onBlur={() => setFocusedCurrencyField(null)}
                                 onChange={(e) => {
                                     const value = e.target.value;
-                                    field.onChange(value === '' ? undefined : parseFloat(value));
+                                    field.onChange(value === '' ? 0 : parseFloat(value));
                                 }}
                                 step="0.01"
                             />
@@ -992,12 +986,12 @@ export function RentalForm({
                   <Input
                       type={focusedCurrencyField === 'freight' ? 'number' : 'text'}
                       placeholder="R$ 0,00"
-                      value={focusedCurrencyField === 'freight' ? field.value || '' : formatToBRL(field.value)}
+                      value={focusedCurrencyField === 'freight' ? (field.value ?? '') : formatToBRL(field.value)}
                       onFocus={() => setFocusedCurrencyField('freight')}
                       onBlur={() => setFocusedCurrencyField(null)}
                       onChange={(e) => {
                           const value = e.target.value;
-                          field.onChange(value === '' ? undefined : parseFloat(value));
+                          field.onChange(value === '' ? 0 : parseFloat(value));
                       }}
                       step="0.01"
                   />
@@ -1017,12 +1011,12 @@ export function RentalForm({
                   <Input
                       type={focusedCurrencyField === 'discount' ? 'number' : 'text'}
                       placeholder="R$ 0,00"
-                      value={focusedCurrencyField === 'discount' ? field.value || '' : formatToBRL(field.value)}
+                      value={focusedCurrencyField === 'discount' ? (field.value ?? '') : formatToBRL(field.value)}
                       onFocus={() => setFocusedCurrencyField('discount')}
                       onBlur={() => setFocusedCurrencyField(null)}
                       onChange={(e) => {
                           const value = e.target.value;
-                          field.onChange(value === '' ? undefined : parseFloat(value));
+                          field.onChange(value === '' ? 0 : parseFloat(value));
                       }}
                       step="0.01"
                   />

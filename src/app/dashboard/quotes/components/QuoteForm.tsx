@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Quote, Customer, Equipment as InventoryEquipment, EquipmentType, Rental } from '@/types';
@@ -171,12 +172,6 @@ export function QuoteForm({
     const rentedQuantities = new Map<string, number>();
 
     for (const rental of allRentals) {
-      if (initialData?.status === 'converted') { // This logic is specific to quotes -> rentals
-          // If editing a converted quote, we don't check against its corresponding rental.
-          // This assumes a more complex check might be needed if you could edit a quote *after* conversion
-          // and want to see availability excluding the rental it became.
-          // For now, we assume converted quotes are not edited or we check all rentals.
-      }
       if (rental.actualReturnDate) continue;
 
       const existingInterval = {
@@ -238,13 +233,12 @@ export function QuoteForm({
     const discount = watchedDiscountValue || 0;
     const finalContractValue = itemsTotalValue + freight - discount;
     
-    // Only update if the value is different, to avoid infinite loops
     if (form.getValues('value') !== finalContractValue) {
         form.setValue('value', finalContractValue < 0 ? 0 : finalContractValue, { shouldValidate: true });
     }
 
   }, [
-    JSON.stringify(watchedEquipment), // Stringify to detect deep changes
+    JSON.stringify(watchedEquipment), 
     watchedRentalDays, 
     watchedFreightValue, 
     watchedDiscountValue, 
@@ -426,7 +420,7 @@ export function QuoteForm({
                                 <Input
                                 type={focusedCurrencyField === `customRate-${index}` ? 'number' : 'text'}
                                 placeholder="Padrão se vazio"
-                                value={focusedCurrencyField === `customRate-${index}` ? field.value || '' : formatToBRL(field.value)}
+                                value={focusedCurrencyField === `customRate-${index}` ? (field.value ?? '') : formatToBRL(field.value)}
                                 onFocus={() => setFocusedCurrencyField(`customRate-${index}`)}
                                 onBlur={() => setFocusedCurrencyField(null)}
                                 onChange={(e) => {
@@ -507,12 +501,12 @@ export function QuoteForm({
                 <FormControl><Input 
                     type={focusedCurrencyField === 'freight' ? 'number' : 'text'}
                     placeholder="R$ 0,00"
-                    value={focusedCurrencyField === 'freight' ? field.value || '' : formatToBRL(field.value)}
+                    value={focusedCurrencyField === 'freight' ? (field.value ?? '') : formatToBRL(field.value)}
                     onFocus={() => setFocusedCurrencyField('freight')}
                     onBlur={() => setFocusedCurrencyField(null)}
                     onChange={(e) => {
                         const value = e.target.value;
-                        field.onChange(value === '' ? undefined : parseFloat(value));
+                        field.onChange(value === '' ? 0 : parseFloat(value));
                     }}
                     step="0.01"
                 /></FormControl>
@@ -530,12 +524,12 @@ export function QuoteForm({
                     <Input
                       type={focusedCurrencyField === 'discount' ? 'number' : 'text'}
                       placeholder="R$ 0,00"
-                      value={focusedCurrencyField === 'discount' ? field.value || '' : formatToBRL(field.value)}
+                      value={focusedCurrencyField === 'discount' ? (field.value ?? '') : formatToBRL(field.value)}
                       onFocus={() => setFocusedCurrencyField('discount')}
                       onBlur={() => setFocusedCurrencyField(null)}
                       onChange={(e) => {
                           const value = e.target.value;
-                          field.onChange(value === '' ? undefined : parseFloat(value));
+                          field.onChange(value === '' ? 0 : parseFloat(value));
                       }}
                       step="0.01"
                     />

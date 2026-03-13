@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Equipment, EquipmentType } from '@/types';
@@ -76,12 +77,11 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
   });
 
   const watchedImageUrl = form.watch("imageUrl");
-  const watchedRate = form.watch("dailyRentalRate");
 
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+      if (file.size > 2 * 1024 * 1024) { 
         toast({
           title: 'Arquivo Muito Grande',
           description: 'Por favor, selecione uma imagem menor que 2MB.',
@@ -110,7 +110,7 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
           event.preventDefault();
           const file = item.getAsFile();
           if (file) {
-            if (file.size > 2 * 1024 * 1024) { // 2MB limit
+            if (file.size > 2 * 1024 * 1024) { 
               toast({
                 title: "Arquivo Muito Grande",
                 description: "A imagem colada é maior que 2MB.",
@@ -343,7 +343,7 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
                      <Input
                       type={isRateFocused ? 'number' : 'text'}
                       placeholder="R$ 0,00"
-                      value={isRateFocused ? field.value : formatToBRL(field.value)}
+                      value={isRateFocused ? (field.value ?? '') : formatToBRL(field.value)}
                       onFocus={() => setIsRateFocused(true)}
                       onBlur={() => setIsRateFocused(false)}
                       onChange={(e) => {

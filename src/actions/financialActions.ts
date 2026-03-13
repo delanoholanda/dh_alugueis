@@ -1,7 +1,7 @@
 
 'use server';
 
-import type { Expense } from '@/types';
+import type { Expense, Rental, Payment } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
@@ -109,12 +109,22 @@ export async function deleteExpense(id: string): Promise<{ success: boolean }> {
 }
 
 export async function getFinancialSummary(): Promise<{ totalRevenue: number; totalExpenses: number; netProfit: number }> {
-  // await validateServerSession(); // Removed for read-only operation
   const db = getDb();
   try {
-    // Corrected: Sum all individual payments from the payments table for accurate revenue
-    const revenueResult = db.prepare("SELECT SUM(amount) as total FROM payments").get() as { total: number | null };
-    const totalRevenue = revenueResult.total || 0;
+    // Fetch all payments and their associated rental fuel values
+    const paymentsWithFuel = db.prepare(`
+      SELECT p.amount, r.fuelValue, r.value as totalContractValue
+      FROM payments p
+      JOIN rentals r ON p.rentalId = r.id
+    `).all() as Array<{ amount: number; fuelValue: number; totalContractValue: number }>;
+
+    // Calculate revenue excluding the fuel component proportionally
+    const totalRevenue = paymentsWithFuel.reduce((acc, p) => {
+        if (!p.totalContractValue || p.totalContractValue <= 0) return acc + p.amount;
+        const fuelRatio = (p.fuelValue || 0) / p.totalContractValue;
+        const revenueAmount = p.amount * (1 - fuelRatio);
+        return acc + revenueAmount;
+    }, 0);
 
     const expensesResult = db.prepare('SELECT SUM(amount) as total FROM expenses').get() as { total: number | null };
     const totalExpenses = expensesResult.total || 0;

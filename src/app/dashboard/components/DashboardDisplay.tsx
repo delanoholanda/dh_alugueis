@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -64,7 +65,7 @@ export interface GroupedPendingPayment {
 }
 
 
-// --- Helper Functions for Data Aggregation (moved inside or kept local) ---
+// --- Helper Functions for Data Aggregation ---
 
 const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
   const monthlyData: { [key: string]: { revenue: number, expenses: number, profit: number } } = {};
@@ -78,7 +79,15 @@ const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
     }
   };
   
-  const allPayments: Payment[] = rentals.flatMap(r => r.payments || []);
+  const allPayments = rentals.flatMap(r => 
+    (r.payments || []).map(p => {
+        // Calculate fuel ratio for this specific payment based on the parent rental
+        const fuelValue = r.fuelValue || 0;
+        const totalContractValue = r.value || 1; // Avoid division by zero
+        const fuelRatio = fuelValue / totalContractValue;
+        return { ...p, adjustedAmount: p.amount * (1 - fuelRatio) };
+    })
+  );
 
   if (allPayments.length === 0 && expenses.length === 0) {
     const today = new Date();
@@ -95,7 +104,8 @@ const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
         const paymentMonthYear = getMonthYearKey(payment.paymentDate);
         if (paymentMonthYear === 'invalid_date') return;
         if (!monthlyData[paymentMonthYear]) monthlyData[paymentMonthYear] = { revenue: 0, expenses: 0, profit: 0 };
-        monthlyData[paymentMonthYear].revenue += payment.amount;
+        // Use adjustedAmount which excludes fuel
+        monthlyData[paymentMonthYear].revenue += payment.adjustedAmount;
       });
 
       expenses.forEach(expense => {
@@ -238,7 +248,7 @@ export default function DashboardDisplay() {
         const rentedTypes = aggregateMostRentedTypes(rentalsData, inventoryItemsData, equipmentTypesData);
         setMostRentedTypesData(rentedTypes);
 
-        let totalContractValue = 0;
+        let totalContractValueExcludingFuel = 0;
         let dailyActiveRevenue = 0;
         const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -250,7 +260,10 @@ export default function DashboardDisplay() {
             } else {
                 currentRentalValue = rental.value;
             }
-            totalContractValue += currentRentalValue;
+            
+            // Subtract fuel from contract value for overview purposes
+            const contractExcludingFuel = currentRentalValue - (rental.fuelValue || 0);
+            totalContractValueExcludingFuel += contractExcludingFuel;
 
             if (!rental.actualReturnDate) {
               rental.equipment.forEach(eq => {
@@ -274,7 +287,7 @@ export default function DashboardDisplay() {
         }
         
         setOverviewCards([
-            { title: 'Receita (Paga / Contratos)', value: `${formatToBRL(summaryData.totalRevenue)} / ${formatToBRL(totalContractValue)}`, iconName: 'TrendingUp', trendText: 'Total pago vs. valor de todos os contratos.', trendColorClass: 'text-muted-foreground' },
+            { title: 'Receita (Paga / Contratos)', value: `${formatToBRL(summaryData.totalRevenue)} / ${formatToBRL(totalContractValueExcludingFuel)}`, iconName: 'TrendingUp', trendText: 'Exclui valor de combustível.', trendColorClass: 'text-muted-foreground' },
             { title: 'Despesas Totais', value: formatToBRL(summaryData.totalExpenses), iconName: 'TrendingDown', trendText: expensesTrendText, trendColorClass: expensesTrendColor },
             { title: 'Aluguéis Ativos', value: `${activeRentalsCount} contrato(s)`, iconName: 'Warehouse', trendText: `Gerando ${formatToBRL(dailyActiveRevenue)} / dia`, trendColorClass: 'text-green-500' },
             { title: 'Total de Clientes', value: customersData.length.toString(), iconName: 'Users', trendText: null },
@@ -550,7 +563,7 @@ export default function DashboardDisplay() {
         <Card className="shadow-lg lg:col-span-2">
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><LucideLineChart className="h-6 w-6 mr-2 text-primary" />Finanças Mensais</CardTitle>
-             <CardDescription>Receita (de aluguéis com pagamento registrado no mês), Despesas e Lucro nos últimos meses.</CardDescription>
+             <CardDescription>Receita (exclui combustível), Despesas e Lucro nos últimos meses.</CardDescription>
           </CardHeader>
           <CardContent>
               <ChartContainer config={chartConfigLine} className="h-[350px] w-full">

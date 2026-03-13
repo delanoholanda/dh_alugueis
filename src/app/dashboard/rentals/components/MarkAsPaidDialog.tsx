@@ -59,7 +59,6 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
   useEffect(() => {
     if (isOpen) {
         const newRemainingValue = rental.value - (rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0);
-        // Use a small tolerance for floating point comparisons
         const initialAmount = newRemainingValue > 0.005 ? newRemainingValue : 0;
         form.reset({
             paymentDate: new Date(),
@@ -74,7 +73,6 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
   const watchedAmount = form.watch("amount");
 
   useEffect(() => {
-    // Automatically check/uncheck "isPartial" based on the amount
     if (watchedAmount < remainingValue) {
       form.setValue('isPartial', true);
     } else {
@@ -86,8 +84,6 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
   const handleSubmit = async (data: PaymentFormValues) => {
     setIsLoading(true);
     try {
-      // Se o valor a ser pago for 0 (ou muito próximo de zero), não registramos um pagamento,
-      // apenas atualizamos o status do aluguel para "pago".
       if (data.amount < 0.01) {
           await updateRental(rental.id, { 
               paymentStatus: 'paid',
@@ -99,7 +95,6 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
               variant: 'success',
           });
       } else {
-          // Se houver um valor a ser pago, registramos o pagamento normalmente.
           const result = await addPayment(rental.id, {
             amount: data.amount,
             paymentDate: format(data.paymentDate, 'yyyy-MM-dd'),
@@ -156,7 +151,7 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
                             <Input
                                 type={isAmountFocused ? 'number' : 'text'}
                                 placeholder="R$ 0,00"
-                                value={isAmountFocused ? field.value : formatToBRL(field.value)}
+                                value={isAmountFocused ? (field.value ?? '') : formatToBRL(field.value)}
                                 onFocus={() => setIsAmountFocused(true)}
                                 onBlur={() => setIsAmountFocused(false)}
                                 onChange={(e) => {
@@ -187,7 +182,7 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
                                 <Checkbox
                                     checked={field.value}
                                     onCheckedChange={field.onChange}
-                                    disabled={watchedAmount >= remainingValue} // Auto-check if amount is less
+                                    disabled={watchedAmount >= remainingValue} 
                                 />
                             </FormControl>
                             <div className="space-y-1 leading-none">
@@ -209,10 +204,10 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
                             <Popover>
                             <PopoverTrigger asChild>
                                 <FormControl>
-                                <Button variant={"outline"} className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}>
-                                    {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
+                                    <Button variant={"outline"} className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}>
+                                        {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
                                 </FormControl>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
@@ -278,5 +273,3 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
     </Dialog>
   );
 }
-
-    

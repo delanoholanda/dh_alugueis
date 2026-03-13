@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Expense, ExpenseCategory } from '@/types';
@@ -61,8 +62,6 @@ export function ExpenseForm({ initialData, onSubmit, onClose, initialExpenseCate
       categoryId: currentExpenseCategories.find(cat => cat.name.toLowerCase() === 'outro')?.id || currentExpenseCategories[0]?.id || '',
     },
   });
-
-  const watchedAmount = form.watch('amount');
 
   const handleNewCategoryCreated = async (data: Pick<ExpenseCategory, 'name' | 'iconName'>) => {
     try {
@@ -160,12 +159,11 @@ export function ExpenseForm({ initialData, onSubmit, onClose, initialExpenseCate
                    <Input 
                     type={isAmountFocused ? 'number' : 'text'}
                     placeholder="R$ 0,00"
-                    value={isAmountFocused ? field.value : formatToBRL(field.value)}
+                    value={isAmountFocused ? (field.value ?? '') : formatToBRL(field.value)}
                     onFocus={() => setIsAmountFocused(true)}
                     onBlur={() => setIsAmountFocused(false)}
                     onChange={(e) => {
                       const value = e.target.value;
-                      // Allow clearing the field or typing numbers/decimals
                       if (value === '') {
                         field.onChange(0);
                       } else {

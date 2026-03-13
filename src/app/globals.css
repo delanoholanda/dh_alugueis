@@ -1,99 +1,131 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 98%; /* Off-white (derived from #ffffff) */
-    --foreground: 0 0% 10%; /* Near-black (derived from #000000) */
+    /* Velvet Editorial - Light Mode (Warm, Paper-like, Elegant) */
+    --background: 40 10% 98%;
+    /* #FAF9F6 - Alabaster */
+    --foreground: 220 5% 20%;
+    /* #303338 - Soft Charcoal */
 
-    --card: 0 0% 100%; /* White */
-    --card-foreground: 0 0% 10%; /* Near-black */
+    --card: 0 0% 100%;
+    /* #FFFFFF - Pure white cards on off-white bg */
+    --card-foreground: 220 5% 20%;
 
-    --popover: 0 0% 100%; /* White */
-    --popover-foreground: 0 0% 10%; /* Near-black */
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 5% 20%;
 
-    --primary: 46 98% 51%; /* Amarelo #fdc309 */
-    --primary-foreground: 0 0% 0%; /* Preto (text on yellow) */
+    /* Primary: Deep Teal / Forest (Trustworthy, Premium) */
+    --primary: 180 50% 25%;
+    /* #206060 - Deep Teal */
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 0 0% 92%; /* Light gray */
-    --secondary-foreground: 0 0% 20%; /* Dark gray */
+    /* Secondary: Warm Sand (Subtle support) */
+    --secondary: 40 20% 92%;
+    /* #F2EFEC */
+    --secondary-foreground: 180 50% 25%;
 
-    --muted: 0 0% 95%; /* Lighter gray */
-    --muted-foreground: 0 0% 40%; /* Medium Gray */
+    /* Muted: Soft text */
+    --muted: 40 20% 92%;
+    --muted-foreground: 30 10% 50%;
 
-    --accent: 46 98% 51%; /* Amarelo #fdc309 (can be same as primary or a variation) */
-    --accent-foreground: 0 0% 0%; /* Preto (text on yellow accent) */
+    /* Accent: Burnished Gold (Highlights) */
+    --accent: 45 90% 55%;
+    /* #F4D35E - Muted Gold */
+    --accent-foreground: 0 0% 10%;
 
-    --destructive: 0 84.2% 60.2%; /* Existing red */
-    --destructive-foreground: 0 0% 98%; /* Existing light text for red */
+    /* Destructive: Muted Rose/Red */
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 98%;
 
-    --success: 134 61% 41%; /* Verde (Forest Green like) */
-    --success-foreground: 0 0% 98%; /* Off-white/Light text for success */
+    /* Success: Olive */
+    --success: 100 40% 45%;
+    --success-foreground: 0 0% 98%;
 
-    --border: 0 0% 88%; /* Light gray border */
-    --input: 0 0% 94%; /* Slightly darker than background for inputs */
-    --ring: 46 98% 51%; /* Amarelo for focus rings */
-    
-    /* Chart Colors */
-    --chart-1: 46 98% 51%;  /* Amarelo (usado para Receita, Alugado) */
-    --chart-2: 210 40% 50%; /* Azul Suave (usado para Despesas, Disponível) */
-    --chart-3: 120 60% 45%; /* Verde (usado para Lucro) */
-    --chart-4: 25 80% 60%;  /* Laranja */
-    --chart-5: 280 70% 65%; /* Roxo */
+    /* Borders: Soft, not harsh */
+    --border: 40 10% 90%;
+    /* #E8E6E1 */
+    --input: 40 10% 90%;
 
-    --radius: 0.5rem;
+    /* Ring: Gold focus for elegance */
+    --ring: 45 90% 55%;
 
-    /* Sidebar specific theme variables (assuming a dark sidebar) */
-    --sidebar-background: 0 0% 0%; /* Preto */
-    --sidebar-foreground: 0 0% 95%; /* Off-white */
-    --sidebar-primary: 46 98% 51%; /* Amarelo for active items */
-    --sidebar-primary-foreground: 0 0% 0%; /* Preto for text on active yellow */
-    --sidebar-accent: 0 0% 10%; /* Dark gray for hover */
-    --sidebar-accent-foreground: 0 0% 98%; /* Off-white for hover text */
-    --sidebar-border: 0 0% 12%; /* Border for dark sidebar */
-    --sidebar-ring: 46 98% 51%; /* Amarelo for ring */
+    /* Charts: Editorial Palette */
+    --chart-1: 180 50% 25%;
+    /* Deep Teal */
+    --chart-2: 45 90% 55%;
+    /* Gold */
+    --chart-3: 100 40% 45%;
+    /* Olive */
+    --chart-4: 25 30% 50%;
+    /* Terracotta */
+    --chart-5: 220 5% 30%;
+    /* Charcoal */
+
+    /* Radius: Soft, friendly, refined */
+    --radius: 0.75rem;
+    /* 12px / rounded-xl */
+
+    /* Sidebar: Paper-like, matching background but distinct */
+    --sidebar-background: 40 10% 98%;
+    --sidebar-foreground: 220 5% 30%;
+    --sidebar-primary: 180 50% 25%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 40 20% 90%;
+    --sidebar-accent-foreground: 180 50% 25%;
+    --sidebar-border: 40 10% 90%;
+    --sidebar-ring: 45 90% 55%;
   }
 
   .dark {
-    --background: 0 0% 4%; /* Very dark gray / Near black */
-    --foreground: 0 0% 96%; /* Off-white */
+    /* Velvet Editorial - Dark Mode (Deep Navy/Green, Luxurious) */
+    --background: 190 40% 8%;
+    /* #0C1C1F - Very Deep Teal/Navy */
+    --foreground: 40 10% 95%;
+    /* Off-white text */
 
-    --card: 0 0% 8%; /* Darker gray for cards */
-    --card-foreground: 0 0% 96%; /* Off-white */
+    --card: 190 35% 12%;
+    /* #14282D */
+    --card-foreground: 40 10% 95%;
 
-    --popover: 0 0% 8%; /* Darker gray */
-    --popover-foreground: 0 0% 96%; /* Off-white */
+    --popover: 190 35% 12%;
+    --popover-foreground: 40 10% 95%;
 
-    --primary: 46 98% 51%; /* Amarelo #fdc309 */
-    --primary-foreground: 0 0% 0%; /* Preto (text on yellow) */
+    --primary: 45 90% 55%;
+    /* Gold becomes primary in dark mode for contrast */
+    --primary-foreground: 0 0% 10%;
 
-    --secondary: 0 0% 12%; /* Dark gray */
-    --secondary-foreground: 0 0% 80%; /* Light gray */
+    --secondary: 190 30% 18%;
+    --secondary-foreground: 40 10% 95%;
 
-    --muted: 0 0% 10%; /* Darker gray */
-    --muted-foreground: 0 0% 60%; /* Medium gray */
+    --muted: 190 30% 18%;
+    --muted-foreground: 190 10% 70%;
 
-    --accent: 46 98% 51%; /* Amarelo #fdc309 */
-    --accent-foreground: 0 0% 0%; /* Preto */
+    --accent: 190 30% 20%;
+    --accent-foreground: 45 90% 55%;
 
-    --destructive: 0 70% 45%; /* Adjusted red for dark mode */
+    --destructive: 0 60% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --success: 134 50% 48%; /* Verde (ajustado para dark mode) */
-    --success-foreground: 0 0% 98%; /* Off-white/Light text for success */
+    --success: 100 40% 50%;
+    --success-foreground: 0 0% 98%;
 
-    --border: 0 0% 15%; /* Dark gray border */
-    --input: 0 0% 12%; /* Slightly lighter than background for inputs */
-    --ring: 46 98% 51%; /* Amarelo */
-    
-    /* Chart Colors - Dark Mode */
-    --chart-1: 46 90% 55%;  /* Amarelo (ajustado para dark mode) */
-    --chart-2: 210 50% 60%; /* Azul Suave (ajustado para dark mode) */
-    --chart-3: 120 50% 55%; /* Verde (ajustado para dark mode) */
-    --chart-4: 25 70% 65%;  /* Laranja (ajustado para dark mode) */
-    --chart-5: 280 60% 70%; /* Roxo (ajustado para dark mode) */
+    --border: 190 30% 18%;
+    --input: 190 30% 18%;
+    --ring: 45 90% 55%;
+
+    --chart-1: 45 90% 55%;
+    /* Gold */
+    --chart-2: 170 40% 50%;
+    /* Soft Teal */
+    --chart-3: 100 40% 50%;
+    /* Olive */
+    --chart-4: 25 50% 60%;
+    /* Terracotta */
+    --chart-5: 240 10% 60%;
+    /* Slate */
   }
 }
 
@@ -101,9 +133,32 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Typography Scale for Editorial Feel */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-headline text-foreground tracking-tight;
+  }
 }
 
-    
+@layer utilities {
+  .shadow-soft {
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -2px rgba(0, 0, 0, 0.02);
+  }
+
+  .shadow-soft-lg {
+    box-shadow: 0 10px 40px -4px rgba(0, 0, 0, 0.08), 0 6px 12px -2px rgba(0, 0, 0, 0.04);
+  }
+
+  .text-balance-editorial {
+    text-wrap: balance;
+  }
+}

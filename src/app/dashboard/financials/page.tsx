@@ -44,7 +44,15 @@ const aggregateFinancialData = (rentals: Rental[], expenses: Expense[]): Monthly
     }
   };
   
-  const allPayments: Payment[] = rentals.flatMap(r => r.payments || []);
+  const allPayments = rentals.flatMap(r => 
+    (r.payments || []).map(p => {
+        // Calculate fuel ratio for this specific payment based on the parent rental
+        const fuelValue = r.fuelValue || 0;
+        const totalContractValue = r.value || 1; // Avoid division by zero
+        const fuelRatio = fuelValue / totalContractValue;
+        return { ...p, adjustedAmount: p.amount * (1 - fuelRatio) };
+    })
+  );
 
   if (allPayments.length === 0 && expenses.length === 0) {
     const today = new Date();
@@ -66,7 +74,8 @@ const aggregateFinancialData = (rentals: Rental[], expenses: Expense[]): Monthly
       const monthYear = getMonthYear(dateToUse);
       if (monthYear === "Data Inválida") return;
       if (!monthlyData[monthYear]) monthlyData[monthYear] = { revenue: 0, expenses: 0, profit: 0 };
-      monthlyData[monthYear].revenue += payment.amount;
+      // Use adjustedAmount which excludes fuel proportionally
+      monthlyData[monthYear].revenue += payment.adjustedAmount;
     });
 
     expenses.forEach(expense => {
@@ -280,7 +289,7 @@ export default function FinancialsPage() {
       <PageHeader 
         title="Controle Financeiro" 
         icon={CircleDollarSign}
-        description="Acompanhe suas receitas, despesas e lucratividade geral."
+        description="Acompanhe suas receitas, despesas e lucratividade geral. Os valores de combustível não são contados como receita."
         actions={
           <div className="flex gap-2">
              <Button asChild>
@@ -344,7 +353,7 @@ export default function FinancialsPage() {
       <Card className="mb-8 shadow-lg">
         <CardHeader>
           <CardTitle className="font-headline">Visão Geral Financeira Mensal</CardTitle>
-          <CardDescription>Receita, Despesas e Lucro ao longo do tempo. Receita é contabilizada no mês do pagamento.</CardDescription>
+          <CardDescription>Receita (exclui combustível), Despesas e Lucro ao longo do tempo. Receita é contabilizada no mês do pagamento.</CardDescription>
         </CardHeader>
         <CardContent>
           <ChartContainer config={chartConfig} className="h-[350px] w-full">
@@ -365,7 +374,7 @@ export default function FinancialsPage() {
       <FinancialsClientPart 
         initialExpenses={expensesData} 
         initialExpenseCategories={expenseCategories} 
-        onDataShouldRefresh={fetchAllFinancialData} // Pass the refresh function
+        onDataShouldRefresh={fetchAllFinancialData} 
       />
 
     </div>

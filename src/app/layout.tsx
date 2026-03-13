@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { getCompanySettings } from '@/actions/settingsActions';
 
 export async function generateMetadata(
-  {},
+  { },
   parent: ResolvingMetadata
 ): Promise<Metadata> {
   try {
@@ -15,8 +15,8 @@ export async function generateMetadata(
     const previousIcons = (await parent).icons || {}
 
     // Use company logo for favicon if available and it's a real URL, otherwise keep existing/default
-    const faviconUrl = settings.companyLogoUrl && !settings.companyLogoUrl.startsWith('data:') 
-      ? settings.companyLogoUrl 
+    const faviconUrl = settings.companyLogoUrl && !settings.companyLogoUrl.startsWith('data:')
+      ? settings.companyLogoUrl
       : '/icon.png';
 
     return {
@@ -51,10 +51,9 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
-        <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,200..0,900;1,200..1,900&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet" />
       </head>
-      <body className="font-body antialiased">
+      <body className="font-body antialiased bg-background text-foreground">
         <AuthProvider>
           {children}
           <Toaster />

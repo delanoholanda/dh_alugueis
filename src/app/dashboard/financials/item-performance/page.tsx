@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { getRentals } from '@/actions/rentalActions';
@@ -27,8 +26,6 @@ export default async function ItemPerformancePage() {
   
   let totalFreightRevenue = 0;
   let freightChargeCount = 0;
-  let totalFuelRevenue = 0;
-  let fuelChargeCount = 0;
 
   for (const rental of paidRentals) {
     const rentalBillableDays = rental.isOpenEnded 
@@ -41,19 +38,17 @@ export default async function ItemPerformancePage() {
         freightChargeCount++;
     }
 
-    // Handle fuel revenue
-    if (rental.fuelValue && rental.fuelValue > 0) {
-        totalFuelRevenue += rental.fuelValue;
-        fuelChargeCount++;
-    }
+    // Fuel value is now ignored for performance tracking as requested
+    const fuelValue = rental.fuelValue ?? 0;
 
-    const valueFromItemsAndDiscount = rental.value - (rental.freightValue ?? 0) - (rental.fuelValue ?? 0);
+    // The base value for calculating proportions should exclude fuel
+    const valueFromItemsAndFreight = rental.value - fuelValue;
     
     // Calculate total base value from items in the rental for proportion calculation
     const totalItemsValueForPeriod = rental.equipment.reduce((sum, eq) => {
         const inventoryItem = inventory.find(i => i.id === eq.equipmentId);
         const rate = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
-        const days = rentalBillableDays; // Use the same billable days for this calculation
+        const days = rentalBillableDays; 
         return sum + (rate * eq.quantity * days);
     }, 0);
     
@@ -69,7 +64,9 @@ export default async function ItemPerformancePage() {
       const days = rentalBillableDays;
       
       const itemProportionalValue = (rate * eq.quantity * days);
-      const itemRevenueContribution = (itemProportionalValue / totalItemsValueForPeriod) * valueFromItemsAndDiscount;
+      
+      // Calculate contribution based on value excluding fuel
+      const itemRevenueContribution = (itemProportionalValue / totalItemsValueForPeriod) * (valueFromItemsAndFreight - (rental.freightValue ?? 0));
       
       const entry = performanceMap.get(eq.equipmentId)!;
       entry.totalPaidDays += (days * eq.quantity);
@@ -91,18 +88,9 @@ export default async function ItemPerformancePage() {
   // Add Freight as a virtual item if it generated revenue
   if (totalFreightRevenue > 0) {
     performanceData.push({
-      item: { id: 'virtual_freight', name: 'Frete', imageUrl: '' }, // Treat as a virtual item
-      totalPaidDays: freightChargeCount, // Represents "times charged"
+      item: { id: 'virtual_freight', name: 'Frete', imageUrl: '' },
+      totalPaidDays: freightChargeCount, 
       totalRevenue: totalFreightRevenue,
-    });
-  }
-  
-  // Add Fuel as a virtual item if it generated revenue
-  if (totalFuelRevenue > 0) {
-    performanceData.push({
-      item: { id: 'virtual_fuel', name: 'Combustível', imageUrl: '' },
-      totalPaidDays: fuelChargeCount,
-      totalRevenue: totalFuelRevenue,
     });
   }
 
@@ -114,11 +102,9 @@ export default async function ItemPerformancePage() {
       <PageHeader
         title="Desempenho Financeiro por Item"
         icon={BarChart}
-        description="Analise a receita e as diárias pagas geradas por cada item, frete e outros serviços do seu inventário."
+        description="Analise a receita e as diárias pagas geradas por cada item e frete. O combustível é tratado apenas como reembolso e não conta aqui."
       />
       <ItemPerformanceClientPage initialData={performanceData} />
     </div>
   );
 }
-
-
