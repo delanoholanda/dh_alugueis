@@ -357,6 +357,7 @@ export function QuoteForm({
                             <PopoverTrigger asChild>
                               <FormControl>
                                 <Button
+                                  type="button"
                                   variant="outline"
                                   role="combobox"
                                   className={cn("w-full justify-between", !field.value && "text-muted-foreground")}
@@ -465,8 +466,8 @@ export function QuoteForm({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <FormField control={form.control} name="rentalStartDate" render={({ field }) => (
                 <FormItem className="flex flex-col"><FormLabel>Data de Início</FormLabel>
-                  <Popover><PopoverTrigger asChild><FormControl>
-                    <Button variant={"outline"} className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}>
+                  <Popover modal={true}><PopoverTrigger asChild><FormControl>
+                    <Button type="button" variant={"outline"} className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}>
                       {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                     </Button>
@@ -480,8 +481,8 @@ export function QuoteForm({
               )} />
               <FormField control={form.control} name="expectedReturnDate" render={({ field }) => (
                 <FormItem className="flex flex-col"><FormLabel>Data de Retorno (Calculada)</FormLabel>
-                  <Popover><PopoverTrigger asChild disabled>
-                    <FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground", "bg-muted/50 disabled:opacity-100 disabled:cursor-default")} disabled>
+                  <Popover modal={true}><PopoverTrigger asChild disabled>
+                    <FormControl><Button type="button" variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground", "bg-muted/50 disabled:opacity-100 disabled:cursor-default")} disabled>
                       {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>-</span>}
                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                     </Button></FormControl>

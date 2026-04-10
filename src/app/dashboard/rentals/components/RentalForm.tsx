@@ -786,10 +786,11 @@ export function RentalForm({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Data de Início do Aluguel</FormLabel>
-                    <Popover>
+                    <Popover modal={true}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
+                            type="button"
                             variant={"outline"}
                             className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}
                           >
@@ -842,10 +843,11 @@ export function RentalForm({
                   render={({ field }) => (
                   <FormItem className="flex flex-col">
                       <FormLabel>Data de Retorno Esperada (Calculada)</FormLabel>
-                      <Popover>
+                      <Popover modal={true}>
                       <PopoverTrigger asChild disabled>
                           <FormControl>
                           <Button
+                              type="button"
                               variant={"outline"}
                               className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground", "bg-muted/50 disabled:opacity-100 disabled:cursor-default")}
                               disabled
@@ -1113,10 +1115,11 @@ export function RentalForm({
                     render={({ field }) => (
                     <FormItem className="flex flex-col">
                         <FormLabel>Data do Pagamento</FormLabel>
-                        <Popover>
+                        <Popover modal={true}>
                         <PopoverTrigger asChild>
                             <FormControl>
                             <Button
+                                type="button"
                                 variant={"outline"}
                                 className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}
                             >

@@ -5,7 +5,7 @@ import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse, CheckCircle2 } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import type { Rental, Customer, Equipment, Expense, EquipmentType, Payment } from '@/types';
@@ -27,6 +27,7 @@ import { getInventoryItems } from '@/actions/inventoryActions';
 import { getEquipmentTypes } from '@/actions/equipmentTypeActions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RentalTableActions } from '@/app/dashboard/rentals/components/RentalTableActions';
+import { BulkPaymentDialog } from './BulkPaymentDialog';
 
 interface MonthlyFinancialData {
   month: string;
@@ -214,6 +215,7 @@ export default function DashboardDisplay() {
   const [mostRentedTypesData, setMostRentedTypesData] = useState<MostRentedTypeData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRentalForPayment, setSelectedRentalForPayment] = useState<Rental | null>(null);
+  const [selectedGroupForBulkPayment, setSelectedGroupForBulkPayment] = useState<GroupedPendingPayment | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -322,6 +324,12 @@ export default function DashboardDisplay() {
     rentals
       .filter(rental => !!rental.actualReturnDate && (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue'))
       .forEach(rental => {
+          const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
+          const pendingValue = rental.value - totalPaid;
+          
+          // Skip if effectively paid (avoids precision issues showing R$ 0,00)
+          if (pendingValue < 0.005) return;
+
           if (!customerMap[rental.customerId]) {
               const customer = customers.find(c => c.id === rental.customerId);
               customerMap[rental.customerId] = {
@@ -333,8 +341,6 @@ export default function DashboardDisplay() {
               };
               pending.push(customerMap[rental.customerId]);
           }
-          const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
-          const pendingValue = rental.value - totalPaid;
           
           customerMap[rental.customerId].totalPendingValue += pendingValue;
           customerMap[rental.customerId].rentals.push(rental);
@@ -475,7 +481,7 @@ export default function DashboardDisplay() {
                     <CardTitle className="font-headline flex items-center"><HandCoins className="h-6 w-6 mr-2 text-primary" />Pagamentos Pendentes (Itens Devolvidos)</CardTitle>
                     <CardDescription>
                         Aluguéis finalizados que aguardam pagamento. 
-                        {totalPendingSum > 0 && <span className="font-bold"> Total: {formatToBRL(totalPendingSum)}</span>}
+                        {totalPendingSum > 0 && <span className="font-bold text-foreground"> Total: {formatToBRL(totalPendingSum)}</span>}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -496,11 +502,11 @@ export default function DashboardDisplay() {
                                         <div className="pl-4 pr-4 pb-3 pt-2 text-sm space-y-3">
                                             <div className="space-y-2">
                                                 {group.rentals.map(rental => {
-                                                    const pendingValue = rental.value - (rental.payments?.reduce((acc,p)=>acc+p.amount,0) ?? 0);
+                                                    const pendingValue = Math.max(0, rental.value - (rental.payments?.reduce((acc,p)=>acc+p.amount,0) ?? 0));
                                                     return(
                                                         <div key={rental.id} className="flex flex-wrap items-center justify-between gap-2 p-2 border-b last:border-b-0">
                                                             <div>
-                                                                <p className="text-muted-foreground">Contrato ID: {rental.id}</p>
+                                                                <p className="text-muted-foreground text-xs">Contrato ID: {rental.id}</p>
                                                                 <p className="font-semibold text-destructive">Pendente: {formatToBRL(pendingValue)}</p>
                                                             </div>
                                                             <div className="flex items-center gap-2">
@@ -510,8 +516,11 @@ export default function DashboardDisplay() {
                                                     )
                                                 })}
                                             </div>
-                                            <div className="flex justify-end pt-2">
-                                                <Button asChild><Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}><FileText className="h-4 w-4 mr-2" />Gerar Recibo Consolidado</Link></Button>
+                                            <div className="flex justify-end pt-2 gap-2 flex-wrap">
+                                                <Button variant="outline" size="sm" onClick={() => setSelectedGroupForBulkPayment(group)}>
+                                                    <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" /> Quitar Tudo
+                                                </Button>
+                                                <Button asChild size="sm"><Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}><FileText className="h-4 w-4 mr-2" />Gerar Recibo Consolidado</Link></Button>
                                             </div>
                                         </div>
                                     </AccordionContent>
@@ -583,6 +592,16 @@ export default function DashboardDisplay() {
       </div>
       {selectedRentalForPayment && (
         <MarkAsPaidDialog rental={selectedRentalForPayment} isOpen={!!selectedRentalForPayment} onOpenChange={(open) => !open && setSelectedRentalForPayment(null)} onSuccess={handleActionSuccess} />
+      )}
+      {selectedGroupForBulkPayment && (
+        <BulkPaymentDialog
+            customerName={selectedGroupForBulkPayment.customerName}
+            totalPendingValue={selectedGroupForBulkPayment.totalPendingValue}
+            rentals={selectedGroupForBulkPayment.rentals}
+            isOpen={!!selectedGroupForBulkPayment}
+            onOpenChange={(open) => !open && setSelectedGroupForBulkPayment(null)}
+            onSuccess={handleActionSuccess}
+        />
       )}
     </>
   );
