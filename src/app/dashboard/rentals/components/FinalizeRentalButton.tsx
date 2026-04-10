@@ -14,9 +14,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { CheckSquare, Loader2 } from 'lucide-react';
+import { CheckSquare, Loader2, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { finalizeRental as finalizeRentalAction } from '@/actions/rentalActions';
+import { finalizeRental as finalizeRentalAction, unfinalizeRental as unfinalizeRentalAction } from '@/actions/rentalActions';
 import type { Rental } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -32,21 +32,30 @@ export default function FinalizeRentalButton({ rental, isFinalized, onFinalized,
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const handleFinalize = async () => {
+  const handleAction = async () => {
     setIsLoading(true);
     try {
-      await finalizeRentalAction(rental.id);
-      toast({
-        title: 'Aluguel Finalizado',
-        description: `O aluguel ID ${rental.id} foi marcado como devolvido.`,
-        variant: 'success',
-      });
+      if (isFinalized) {
+        await unfinalizeRentalAction(rental.id);
+        toast({
+          title: 'Status Revertido',
+          description: 'O aluguel foi marcado como ativo novamente.',
+          variant: 'success',
+        });
+      } else {
+        await finalizeRentalAction(rental.id);
+        toast({
+          title: 'Aluguel Finalizado',
+          description: `O aluguel ID ${rental.id} foi marcado como devolvido.`,
+          variant: 'success',
+        });
+      }
       setIsDialogOpen(false);
       await onFinalized(); 
     } catch (error) {
       toast({
-        title: 'Erro ao Finalizar',
-        description: (error as Error).message || 'Não foi possível finalizar o aluguel.',
+        title: 'Erro na Ação',
+        description: (error as Error).message || 'Não foi possível completar a ação.',
         variant: 'destructive',
       });
     } finally {
@@ -56,24 +65,17 @@ export default function FinalizeRentalButton({ rental, isFinalized, onFinalized,
 
   const defaultButtonProps: ButtonProps = {
     variant: "outline",
-    title: isFinalized ? "Aluguel já finalizado (devolvido)" : "Finalizar Aluguel (Marcar como Devolvido)",
-    disabled: isFinalized,
-    className: isFinalized ? "" : "text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700",
-    ...buttonProps, // User props override defaults
+    title: isFinalized ? "Reverter devolução (voltar para Ativo)" : "Finalizar Aluguel (Marcar como Devolvido)",
+    className: isFinalized 
+        ? "text-orange-600 border-orange-600/50 hover:bg-orange-600/10" 
+        : "text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700",
+    ...buttonProps, 
   };
 
-  if (isFinalized) {
-    return (
-      <Button {...defaultButtonProps}>
-        <CheckSquare className="h-4 w-4 mr-2 text-green-500" /> Itens Devolvidos
-      </Button>
-    );
-  }
-
-  const isDisabled = !!rental.isOpenEnded;
-  const getTitle = () => {
-    if (rental.isOpenEnded) return "Calcule e feche o contrato primeiro";
-    return "Finalizar Aluguel (Marcar como Devolvido)";
+  const isDisabled = !isFinalized && !!rental.isOpenEnded;
+  const getButtonTitle = () => {
+    if (isDisabled) return "Calcule e feche o contrato primeiro";
+    return defaultButtonProps.title;
   }
 
   return (
@@ -81,25 +83,37 @@ export default function FinalizeRentalButton({ rental, isFinalized, onFinalized,
       <AlertDialogTrigger asChild>
         <Button 
           {...defaultButtonProps}
-          title={getTitle()} 
+          title={getButtonTitle()} 
           disabled={isDisabled}
           className={cn(defaultButtonProps.className, isDisabled && "opacity-50 cursor-not-allowed")}
         >
-          <CheckSquare className="h-4 w-4 mr-2" /> Marcar como Devolvido
+          {isFinalized ? (
+              <><RotateCcw className="h-4 w-4 mr-2" /> Reverter Devolução</>
+          ) : (
+              <><CheckSquare className="h-4 w-4 mr-2" /> Marcar como Devolvido</>
+          )}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Finalizar Aluguel ID: {rental.id}?</AlertDialogTitle>
+          <AlertDialogTitle>
+              {isFinalized ? 'Reverter Devolução?' : `Finalizar Aluguel ID: ${rental.id}?`}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Esta ação definirá a data de devolução efetiva como hoje. Isso indica que os itens foram retornados fisicamente. O status de pagamento não será alterado. Deseja continuar?
+            {isFinalized 
+                ? 'Deseja remover a data de retorno efetiva? O aluguel voltará para a lista de contratos "Ativos".'
+                : 'Esta ação definirá a data de devolução efetiva como hoje. Isso indica que os itens foram retornados fisicamente. Deseja continuar?'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isLoading}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={handleFinalize} disabled={isLoading} className="bg-green-600 hover:bg-green-700">
+          <AlertDialogAction 
+            onClick={handleAction} 
+            disabled={isLoading} 
+            className={isFinalized ? "bg-orange-600 hover:bg-orange-700" : "bg-green-600 hover:bg-green-700"}
+          >
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Confirmar Devolução
+            {isFinalized ? 'Confirmar Reversão' : 'Confirmar Devolução'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

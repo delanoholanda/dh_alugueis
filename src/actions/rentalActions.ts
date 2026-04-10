@@ -639,10 +639,29 @@ export async function finalizeRental(id: number): Promise<Rental | null> {
     console.log(`Rental ${id} marked as returned with date ${formattedActualReturnDate}.`);
     
     const updatedRental = await getRentalById(id);
-    return updatedRental;
+    return updatedRental || null;
   } catch (error) {
     console.error(`Failed to mark rental as returned with id ${id}:`, error);
     throw new Error(`Falha ao marcar o aluguel ${id} como devolvido.`);
+  }
+}
+
+export async function unfinalizeRental(id: number): Promise<Rental | null> {
+  await validateServerSession();
+  const db = getDb();
+  try {
+    const updateStmt = db.prepare('UPDATE rentals SET actualReturnDate = NULL WHERE id = ?');
+    updateStmt.run(id);
+    
+    revalidatePath('/dashboard/rentals');
+    revalidatePath('/dashboard', 'layout'); 
+    revalidatePath(`/dashboard/rentals/${id}/details`);
+    
+    const updatedRental = await getRentalById(id);
+    return updatedRental || null;
+  } catch (error) {
+    console.error(`Failed to unfinalize rental with id ${id}:`, error);
+    throw new Error('Falha ao reverter status de devolução.');
   }
 }
 
@@ -770,7 +789,7 @@ export async function addPayment(
     
     // We fetch the data again after the transaction to return the most up-to-date state.
     const finalUpdatedRental = await getRentalById(rentalId);
-    return finalUpdatedRental;
+    return finalUpdatedRental || null;
 
   } catch (error) {
     console.error(`Falha ao adicionar pagamento para o aluguel ${rentalId}:`, error);
