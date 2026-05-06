@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { getDb } from '@/lib/database';
@@ -8,20 +9,21 @@ import { saveFile, deleteFile } from '@/lib/file-storage';
 import { validateServerSession } from '@/lib/auth-utils';
 
 const defaultSettings: CompanyDetails = {
-    companyName: 'DH Alugueis',
+    companyName: 'DH Alugueis V2', // Nome alterado para a nova versão
     responsibleName: 'Delano Holanda',
     phone: '88982248384',
     address: 'Rua Ana Ventura de Oliveira, 189, Ipu, CE',
     email: 'dhalugueis@gmail.com',
     pixKey: '+5588982248384',
     pixHolderName: 'Delano José Holanda Maia',
+    pixBankName: '',
     pixBankIconUrl: '',
     contractTermsAndConditions: `1. O locatário é responsável por quaisquer danos, perda ou roubo do equipamento alugado.
 2. O equipamento deve ser devolvido na data e hora especificadas no contrato. Atrasos podem incorrer em taxas adicionais.
 3. O pagamento deve ser efetuado conforme acordado. Em caso de inadimplência, medidas legais poderão ser tomadas.
 4. A DH Aluguéis não se responsabiliza por acidentes ou danos causados pelo uso inadequado do equipamento.
 5. Este documento não tem valor fiscal. Solicite sua nota fiscal, se necessário.`,
-    contractFooterText: 'Obrigado por escolher a DH Aluguéis!',
+    contractFooterText: 'Obrigado por escolher a DH Aluguéis V2!',
     companyLogoUrl: '',
     contractLogoUrl: '',
     signatureImageUrl: '',

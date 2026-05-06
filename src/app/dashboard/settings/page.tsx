@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -46,6 +47,7 @@ export default function SettingsPage() {
     email: '',
     pixKey: '',
     pixHolderName: '',
+    pixBankName: '',
     pixBankIconUrl: '',
     contractTermsAndConditions: '',
     contractFooterText: '',
@@ -419,16 +421,19 @@ export default function SettingsPage() {
                       <Input id="address" name="address" value={companyDetails.address} onChange={handleCompanyDetailsInputChange} placeholder="Rua, Número, Bairro, Cidade, Estado" />
                       <p className="text-sm text-muted-foreground">Ex: Rua Exemplo, 123, Centro, Sua Cidade, SC</p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="space-y-1.5">
                           <Label htmlFor="pixKey">Chave PIX</Label>
                           <Input id="pixKey" name="pixKey" value={companyDetails.pixKey} onChange={handleCompanyDetailsInputChange} placeholder="Sua chave PIX" />
-                          <p className="text-sm text-muted-foreground">CPF/CNPJ, Telefone, Email ou Chave Aleatória.</p>
+                          <p className="text-sm text-muted-foreground">CPF/CNPJ, Telefone, Email ou Chave.</p>
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="pixHolderName">Nome do Titular do PIX</Label>
-                          <Input id="pixHolderName" name="pixHolderName" value={companyDetails.pixHolderName} onChange={handleCompanyDetailsInputChange} placeholder="Nome que aparece no PIX" />
-                          <p className="text-sm text-muted-foreground">Nome completo do titular da chave.</p>
+                          <Label htmlFor="pixHolderName">Titular do PIX</Label>
+                          <Input id="pixHolderName" name="pixHolderName" value={companyDetails.pixHolderName} onChange={handleCompanyDetailsInputChange} placeholder="Nome do titular" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pixBankName">Nome do Banco</Label>
+                          <Input id="pixBankName" name="pixBankName" value={companyDetails.pixBankName} onChange={handleCompanyDetailsInputChange} placeholder="Ex: NuBank, Bradesco" />
                         </div>
                     </div>
                     <div className="space-y-2">

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useMemo } from 'react';
@@ -485,6 +486,7 @@ export default function RentalContractClient({ rental, customer, companySettings
                     </div>
                     <p className="font-mono font-bold text-base tracking-wider">{formattedPixKey}</p>
                     {companySettings.pixHolderName && <p className="text-xs text-muted-foreground mt-1">Titular: {companySettings.pixHolderName}</p>}
+                    {companySettings.pixBankName && <p className="text-xs text-muted-foreground">Banco: {companySettings.pixBankName}</p>}
                 </div>
               </div>
             )}
@@ -502,6 +504,7 @@ export default function RentalContractClient({ rental, customer, companySettings
                         </div>
                         <p className="font-mono font-bold text-base tracking-wider">{formattedPixKey}</p>
                         {companySettings.pixHolderName && <p className="text-xs text-muted-foreground mt-1">Titular: {companySettings.pixHolderName}</p>}
+                        {companySettings.pixBankName && <p className="text-xs text-muted-foreground">Banco: {companySettings.pixBankName}</p>}
                     </div>
                 </div>
              )}

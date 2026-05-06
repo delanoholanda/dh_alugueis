@@ -135,6 +135,7 @@ export interface CompanyDetails {
   email: string;
   pixKey: string;
   pixHolderName?: string;
+  pixBankName?: string;
   pixBankIconUrl?: string;
   contractTermsAndConditions?: string;
   contractFooterText?: string;
