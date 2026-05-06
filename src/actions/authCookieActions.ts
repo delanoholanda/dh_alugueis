@@ -13,7 +13,7 @@ const ONE_WEEK_IN_SECONDS = 60 * 60 * 24 * 7;
  * Este cookie será usado para validar o usuário em Server Actions.
  */
 export async function setAuthCookie(user: UserProfile) {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   
   cookieStore.set(AUTH_COOKIE_NAME, JSON.stringify(user), {
     httpOnly: true, // Impede o acesso via JavaScript no cliente
@@ -28,7 +28,7 @@ export async function setAuthCookie(user: UserProfile) {
  * Deleta o cookie de sessão do usuário, efetivamente fazendo o logout.
  */
 export async function deleteAuthCookie() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.delete(AUTH_COOKIE_NAME);
 }
 
@@ -38,7 +38,7 @@ export async function deleteAuthCookie() {
  * Retorna null se o cookie não existir ou for inválido.
  */
 export async function getUserProfileFromCookie(): Promise<UserProfile | null> {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const sessionCookie = cookieStore.get(AUTH_COOKIE_NAME);
 
     if (!sessionCookie?.value) {

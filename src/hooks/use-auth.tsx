@@ -28,25 +28,34 @@ export function AuthProvider({children}: {children: ReactNode}) {
   useEffect(() => {
     async function checkUserSession() {
       try {
-        // A função getUserProfileFromCookie é uma Server Action que lê o cookie HttpOnly
         const userProfile = await getUserProfileFromCookie();
 
         if (userProfile) {
           setUser(userProfile);
           setIsAuthenticated(true);
-          // Atualiza o localStorage para consistência da UI
           localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userProfile));
         } else {
-          // Garante que o estado local esteja limpo se não houver sessão válida
-          setIsAuthenticated(false);
-          setUser(null);
-          localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+          // Se estiver em desenvolvimento e não houver cookie, 
+          // usamos um usuário fictício para facilitar a visualização
+          if (process.env.NODE_ENV !== 'production') {
+            const devUser: UserProfile = { id: 'dev_user', name: 'Desenvolvedor', email: 'dev@dhalugueis.com' };
+            setUser(devUser);
+            setIsAuthenticated(true);
+          } else {
+            setIsAuthenticated(false);
+            setUser(null);
+            localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+          }
         }
       } catch (e) {
         console.error("Error checking user session:", e);
-        setIsAuthenticated(false);
-        setUser(null);
-        localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+        if (process.env.NODE_ENV !== 'production') {
+          setIsAuthenticated(true);
+          setUser({ id: 'dev_user', name: 'Desenvolvedor', email: 'dev@dhalugueis.com' });
+        } else {
+          setIsAuthenticated(false);
+          setUser(null);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -61,29 +70,19 @@ export function AuthProvider({children}: {children: ReactNode}) {
 
     const userProfile = await loginAction(email, password);
     
-    // Server action to set the secure, HttpOnly cookie is now inside loginAction
-
-    // Set state in memory
     setIsAuthenticated(true);
     setUser(userProfile);
-
-    // Store ONLY non-sensitive user profile for UI speed, not for auth status
     localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userProfile));
     
     router.push(redirectTo || '/dashboard');
   }, [router]);
 
   const logout = useCallback(async () => {
-    // Server action to delete the secure cookie
     await deleteAuthCookie();
-
     setIsAuthenticated(false);
     setUser(null);
     localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
-    
-    // Use window.location for a "hard" redirect to clear any in-memory state.
     window.location.href = '/login';
-
   }, []);
 
   const updateUserContext = useCallback((newUserProfile: UserProfile) => {

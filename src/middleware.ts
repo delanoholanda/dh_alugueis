@@ -4,17 +4,17 @@ import type { NextRequest } from 'next/server';
 
 /**
  * Middleware para proteger as rotas do dashboard.
- * Verifica a existência do cookie de sessão antes de permitir o acesso.
+ * Em produção, verifica a existência do cookie de sessão.
+ * Em desenvolvimento, permite o acesso para facilitar a prototipagem.
  */
 export function middleware(request: NextRequest) {
+  const isProduction = process.env.NODE_ENV === 'production';
   const session = request.cookies.get('user_session_dhalugueis');
   const { pathname } = request.nextUrl;
 
-  // Se o usuário tenta acessar o dashboard sem um cookie de sessão, redireciona para login
-  if (pathname.startsWith('/dashboard') && !session) {
+  // Em produção, se o usuário tenta acessar o dashboard sem um cookie de sessão, redireciona para login
+  if (isProduction && pathname.startsWith('/dashboard') && !session) {
     const loginUrl = new URL('/login', request.url);
-    // Opcional: Salvar a URL que ele tentou acessar para redirecionar de volta depois
-    // loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
