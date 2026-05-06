@@ -15,7 +15,7 @@ import { validateServerSession } from '@/lib/auth-utils';
 
 
 export async function getRentals(): Promise<Rental[]> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   try {
     const rentalRows = db.prepare(`
@@ -52,7 +52,7 @@ export async function getRentals(): Promise<Rental[]> {
 }
 
 export async function getRentalById(id: number): Promise<Rental | undefined> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   try {
     const row = db.prepare(`

@@ -9,7 +9,7 @@ import { saveFile, deleteFile } from '@/lib/file-storage';
 import { validateServerSession } from '@/lib/auth-utils';
 
 export async function getCustomers(): Promise<Customer[]> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession(); 
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT id, name, phone, address, documentType, documentNumber, imageUrl, responsiveness, rentalHistory FROM customers ORDER BY name ASC');
@@ -22,7 +22,7 @@ export async function getCustomers(): Promise<Customer[]> {
 }
 
 export async function getCustomerById(id: string): Promise<Customer | undefined> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT id, name, phone, address, documentType, documentNumber, imageUrl, responsiveness, rentalHistory FROM customers WHERE id = ?');

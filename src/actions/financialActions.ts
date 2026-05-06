@@ -8,7 +8,7 @@ import crypto from 'crypto';
 import { validateServerSession } from '@/lib/auth-utils';
 
 export async function getExpenses(): Promise<Expense[]> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   try {
     // Join with expense_categories to get categoryName
@@ -27,7 +27,7 @@ export async function getExpenses(): Promise<Expense[]> {
 }
 
 async function getExpenseById(id: string): Promise<Expense | undefined> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   try {
     const stmt = db.prepare(`
@@ -109,6 +109,7 @@ export async function deleteExpense(id: string): Promise<{ success: boolean }> {
 }
 
 export async function getFinancialSummary(): Promise<{ totalRevenue: number; totalExpenses: number; netProfit: number }> {
+  await validateServerSession();
   const db = getDb();
   try {
     // Fetch all payments and their associated rental fuel values

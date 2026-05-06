@@ -9,7 +9,7 @@ import { validateServerSession } from '@/lib/auth-utils';
 
 
 export async function getEquipmentTypes(): Promise<EquipmentType[]> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT * FROM equipment_types ORDER BY name ASC');

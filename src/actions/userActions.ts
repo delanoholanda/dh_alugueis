@@ -94,7 +94,7 @@ export async function createUser(userData: Omit<User, 'id'> & { password?: strin
 }
 
 export async function getUsers(): Promise<User[]> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT id, name, email FROM users ORDER BY name ASC');
@@ -107,7 +107,7 @@ export async function getUsers(): Promise<User[]> {
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT id, name, email FROM users WHERE id = ?');

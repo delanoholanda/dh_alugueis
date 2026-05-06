@@ -13,7 +13,7 @@ import { validateServerSession } from '@/lib/auth-utils';
 
 
 export async function getQuotes(): Promise<Quote[]> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   let quotes: Quote[] = [];
   try {
@@ -58,7 +58,7 @@ export async function getQuotes(): Promise<Quote[]> {
 }
 
 export async function getQuoteById(id: number): Promise<Quote | undefined> {
-  // await validateServerSession(); // Removed for read-only operation
+  await validateServerSession();
   const db = getDb();
   try {
     const row = db.prepare('SELECT * FROM quotes WHERE id = ?').get(id) as any;
