@@ -20,11 +20,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const LOCAL_STORAGE_USER_KEY = 'user_dh_alugueis_manager';
 
 export function AuthProvider({children}: {children: ReactNode}) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const router = useRouter();
 
+  // Robust initialization of auth state to avoid SSR / Hydration issues
   useEffect(() => {
     async function checkUserSession() {
       try {
@@ -33,10 +34,11 @@ export function AuthProvider({children}: {children: ReactNode}) {
         if (userProfile) {
           setUser(userProfile);
           setIsAuthenticated(true);
-          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userProfile));
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userProfile));
+          }
         } else {
-          // Se estiver em desenvolvimento e não houver cookie, 
-          // usamos um usuário fictício para facilitar a visualização
+          // If in dev mode and no cookie, use fallback
           if (process.env.NODE_ENV !== 'production') {
             const devUser: UserProfile = { id: 'dev_user', name: 'Desenvolvedor', email: 'dev@dhalugueis.com' };
             setUser(devUser);
@@ -44,7 +46,9 @@ export function AuthProvider({children}: {children: ReactNode}) {
           } else {
             setIsAuthenticated(false);
             setUser(null);
-            localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+            }
           }
         }
       } catch (e) {
@@ -60,6 +64,7 @@ export function AuthProvider({children}: {children: ReactNode}) {
         setIsLoading(false);
       }
     }
+    
     checkUserSession();
   }, []);
 
@@ -72,7 +77,9 @@ export function AuthProvider({children}: {children: ReactNode}) {
     
     setIsAuthenticated(true);
     setUser(userProfile);
-    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userProfile));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(userProfile));
+    }
     
     router.push(redirectTo || '/dashboard');
   }, [router]);
@@ -81,13 +88,17 @@ export function AuthProvider({children}: {children: ReactNode}) {
     await deleteAuthCookie();
     setIsAuthenticated(false);
     setUser(null);
-    localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    }
     window.location.href = '/login';
   }, []);
 
   const updateUserContext = useCallback((newUserProfile: UserProfile) => {
     setUser(newUserProfile);
-    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newUserProfile));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newUserProfile));
+    }
   }, []);
 
   return (

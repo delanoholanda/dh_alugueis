@@ -108,8 +108,9 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
   
   const remainingItemsCount = rental.equipment.length > 2 ? rental.equipment.length - 2 : 0;
 
+  // Corrigido: adicionado +1 para que o dia de início já conte como dia 1
   const daysDisplay = rental.isOpenEnded 
-    ? `${differenceInDays(new Date(), parseISO(rental.rentalStartDate))} dias corridos` 
+    ? `${differenceInDays(new Date(), parseISO(rental.rentalStartDate)) + 1} dias corridos` 
     : `${rental.rentalDays} dias contratados`;
 
   return (

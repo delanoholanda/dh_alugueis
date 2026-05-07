@@ -119,7 +119,8 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
          const billableDays = countBillableDays(rental.rentalStartDate, rental.actualReturnDate, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
          return <span className="font-semibold">{billableDays}</span>;
       }
-      const daysSoFar = differenceInDays(new Date(), parseISO(rental.rentalStartDate));
+      // Corrigido: adicionado +1 para que o dia de início já conte como dia 1
+      const daysSoFar = differenceInDays(new Date(), parseISO(rental.rentalStartDate)) + 1;
       return (
         <div className="text-center">
             <span className="font-semibold">{daysSoFar}</span>

@@ -82,9 +82,8 @@ const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
   
   const allPayments = rentals.flatMap(r => 
     (r.payments || []).map(p => {
-        // Calculate fuel ratio for this specific payment based on the parent rental
         const fuelValue = r.fuelValue || 0;
-        const totalContractValue = r.value || 1; // Avoid division by zero
+        const totalContractValue = r.value || 1;
         const fuelRatio = fuelValue / totalContractValue;
         return { ...p, adjustedAmount: p.amount * (1 - fuelRatio) };
     })
@@ -105,7 +104,6 @@ const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
         const paymentMonthYear = getMonthYearKey(payment.paymentDate);
         if (paymentMonthYear === 'invalid_date') return;
         if (!monthlyData[paymentMonthYear]) monthlyData[paymentMonthYear] = { revenue: 0, expenses: 0, profit: 0 };
-        // Use adjustedAmount which excludes fuel
         monthlyData[paymentMonthYear].revenue += payment.adjustedAmount;
       });
 
@@ -252,22 +250,26 @@ export default function DashboardDisplay() {
 
         let totalContractValueExcludingFuel = 0;
         let dailyActiveRevenue = 0;
+        let activeRentalsCount = 0;
         const todayStr = format(new Date(), 'yyyy-MM-dd');
 
         rentalsData.forEach(rental => {
             let currentRentalValue: number;
             if (rental.isOpenEnded && !rental.actualReturnDate) {
                 const billableDays = countBillableDays(rental.rentalStartDate, todayStr, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
-                currentRentalValue = billableDays * rental.value; // For open-ended, rental.value is the daily rate.
+                currentRentalValue = billableDays * rental.value; 
             } else {
                 currentRentalValue = rental.value;
             }
             
-            // Subtract fuel from contract value for overview purposes
             const contractExcludingFuel = currentRentalValue - (rental.fuelValue || 0);
             totalContractValueExcludingFuel += contractExcludingFuel;
 
-            if (!rental.actualReturnDate) {
+            // Only count as "Active" for the stat if NOT physically returned AND NOT fully paid.
+            // This excludes finalized-but-unpaid contracts from the "Generating revenue" rate,
+            // as they are no longer accruing daily revenue.
+            if (!rental.actualReturnDate && rental.paymentStatus !== 'paid') {
+              activeRentalsCount++;
               rental.equipment.forEach(eq => {
                 const itemDetails = inventoryItemsData.find(inv => inv.id === eq.equipmentId);
                 const rate = eq.customDailyRentalRate ?? itemDetails?.dailyRentalRate ?? 0;
@@ -275,8 +277,6 @@ export default function DashboardDisplay() {
               });
             }
         });
-        
-        const activeRentalsCount = rentalsData.filter(r => !r.actualReturnDate).length;
         
         let expensesTrendText: string | null = null;
         let expensesTrendColor = 'text-muted-foreground';
@@ -327,7 +327,6 @@ export default function DashboardDisplay() {
           const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
           const pendingValue = rental.value - totalPaid;
           
-          // Skip if effectively paid (avoids precision issues showing R$ 0,00)
           if (pendingValue < 0.005) return;
 
           if (!customerMap[rental.customerId]) {
