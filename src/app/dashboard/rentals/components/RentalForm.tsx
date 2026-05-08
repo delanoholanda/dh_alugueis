@@ -247,7 +247,10 @@ export function RentalForm({
       }
     }
     
-    return inventoryList.map(item => {
+    // Filter out items that are NOT for rental
+    const rentalOnlyInventory = inventoryList.filter(item => item.forRental);
+
+    return rentalOnlyInventory.map(item => {
       const rented = rentedQuantities.get(item.id) || 0;
       return { ...item, availableQuantity: item.quantity - rented };
     });
@@ -376,14 +379,14 @@ export function RentalForm({
         const refreshedInventory = await getInventoryItems(); 
         setInventoryList(refreshedInventory.sort((a, b) => a.name.localeCompare(b.name)));
 
-        if (currentEquipmentIndexForAddItem !== null) {
+        if (currentEquipmentIndexForAddItem !== null && newItem.forRental) {
           form.setValue(`equipment.${currentEquipmentIndexForAddItem}.equipmentId`, newItem.id, { shouldValidate: true });
           const rateToSet = (typeof newItem.dailyRentalRate === 'number' && !isNaN(newItem.dailyRentalRate)) ? newItem.dailyRentalRate : undefined;
           form.setValue(`equipment.${currentEquipmentIndexForAddItem}.customDailyRentalRate`, rateToSet , { shouldValidate: true });
         }
         toast({
           title: "Item de Inventário Criado",
-          description: `${newItem.name} foi adicionado e selecionado.`,
+          description: `${newItem.name} foi adicionado.`,
           variant: 'success',
         });
         setIsInventoryItemFormOpen(false);
@@ -430,7 +433,7 @@ export function RentalForm({
         const inventoryItemDetails = currentAvailabilityMap.get(eqInForm.equipmentId);
         
         if (!inventoryItemDetails) { 
-            form.setError(`equipment.${index}.equipmentId`, { message: "Item de inventário não encontrado." });
+            form.setError(`equipment.${index}.equipmentId`, { message: "Item de inventário não disponível para aluguel." });
             validationPassed = false;
             return;
         }

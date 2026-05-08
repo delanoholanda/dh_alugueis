@@ -1,5 +1,4 @@
 
-
 export interface Customer {
   id: string;
   name: string;
@@ -26,6 +25,22 @@ export interface Equipment {
   status: 'available' | 'rented';
   imageUrl?: string;
   dailyRentalRate: number;
+  unitAcquisitionPrice?: number; // Preço de custo unitário
+  forRental: boolean; // Indica se o item é destinado a aluguel ou é apenas patrimônio (ativo fixo)
+}
+
+export interface Purchase {
+  id: string;
+  inventoryId: string;
+  inventoryName?: string; // Para exibição
+  quantity: number;
+  unitPrice: number;
+  freightValue: number;
+  totalAmount: number;
+  purchaseDate: string;
+  notes?: string;
+  affectsStock?: boolean;
+  batchId?: string;
 }
 
 export type PaymentMethod = 'pix' | 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'nao_definido';

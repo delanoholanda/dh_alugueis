@@ -13,17 +13,20 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, type ChangeEvent } from 'react';
-import { ImageIcon, PlusCircle, Tags, X } from 'lucide-react';
+import { ImageIcon, PlusCircle, Tags, X, DollarSign } from 'lucide-react';
 import { formatToBRL, parseFromBRL } from '@/lib/utils';
 import { EquipmentTypeForm } from '@/app/dashboard/settings/equipment-types/components/EquipmentTypeForm';
 import { createEquipmentType, getEquipmentTypes as fetchEquipmentTypesAction } from '@/actions/equipmentTypeActions';
+import { Switch } from '@/components/ui/switch';
 
 const inventoryItemSchema = z.object({
   name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
   typeId: z.string().min(1, "Tipo é obrigatório"),
   quantity: z.coerce.number().min(0, "Quantidade não pode ser negativa"),
   dailyRentalRate: z.coerce.number({invalid_type_error: "Taxa diária deve ser um número."}).min(0, "Taxa diária não pode ser negativa"),
+  unitAcquisitionPrice: z.coerce.number({invalid_type_error: "Preço de aquisição deve ser um número."}).min(0, "Preço não pode ser negativo"),
   status: z.enum(['available', 'rented']), 
+  forRental: z.boolean().default(true),
   imageUrl: z.string().refine(val => {
     if (val === '') return true;
     if (val.startsWith('data:image/')) return true;
@@ -54,6 +57,7 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
   const [currentEquipmentTypes, setCurrentEquipmentTypes] = useState<EquipmentType[]>(initialEquipmentTypes);
   const [isEquipmentTypeFormOpen, setIsEquipmentTypeFormOpen] = useState(false);
   const [isRateFocused, setIsRateFocused] = useState(false);
+  const [isAcqPriceFocused, setIsAcqPriceFocused] = useState(false);
 
   useEffect(() => {
     setCurrentEquipmentTypes(initialEquipmentTypes.sort((a, b) => a.name.localeCompare(b.name)));
@@ -65,13 +69,17 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
     {
       ...initialData,
       status: initialData.status || 'available',
+      unitAcquisitionPrice: initialData.unitAcquisitionPrice || 0,
+      forRental: initialData.forRental ?? true,
     }
     : {
       name: '',
       typeId: currentEquipmentTypes.find(et => et.name.toLowerCase() === 'outro')?.id || currentEquipmentTypes[0]?.id || '',
       quantity: 0,
       dailyRentalRate: 0,
+      unitAcquisitionPrice: 0,
       status: 'available',
+      forRental: true,
       imageUrl: '',
     },
   });
@@ -99,48 +107,6 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
       event.target.value = '';
     }
   };
-
-  useEffect(() => {
-    const handlePaste = (event: ClipboardEvent) => {
-      const items = event.clipboardData?.items;
-      if (!items) return;
-
-      for (const item of items) {
-        if (item.type.startsWith("image/")) {
-          event.preventDefault();
-          const file = item.getAsFile();
-          if (file) {
-            if (file.size > 2 * 1024 * 1024) { 
-              toast({
-                title: "Arquivo Muito Grande",
-                description: "A imagem colada é maior que 2MB.",
-                variant: "destructive",
-              });
-              return;
-            }
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const result = reader.result as string;
-              form.setValue("imageUrl", result, { shouldValidate: true });
-              toast({
-                title: "Imagem Colada!",
-                description: "A imagem da área de transferência foi carregada com sucesso.",
-                variant: "success",
-              });
-            };
-            reader.readAsDataURL(file);
-            return;
-          }
-        }
-      }
-    };
-    
-    document.addEventListener("paste", handlePaste);
-    return () => {
-      document.removeEventListener("paste", handlePaste);
-    };
-  }, [form, toast]);
-
 
   const handleNewEquipmentTypeCreated = async (data: Pick<EquipmentType, 'name' | 'iconName'>) => {
     try {
@@ -180,8 +146,8 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
       onClose();
     } catch (error) {
       toast({
-        title: 'Erro',
-        description: `Falha ao ${initialData ? 'atualizar' : 'criar'} item. ${(error as Error).message}`,
+        title: 'Erro ao Salvar Item',
+        description: (error as Error).message || `Falha ao ${initialData ? 'atualizar' : 'criar'} item.`,
         variant: 'destructive',
       });
     } finally {
@@ -209,19 +175,19 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
               <FormItem>
                 <FormLabel>Nome do Item</FormLabel>
                 <FormControl>
-                  <Input placeholder="ex: Andaime Tubular Metálico" {...field} />
+                  <Input placeholder="ex: Veículo Reboque / Andaime Tubular" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
 
-          <FormItem key={watchedImageUrl || 'inventory-image-form-item'}>
+          <FormItem>
             <FormLabel>Imagem do Item</FormLabel>
             <div className="relative mt-2 group">
               <div className="w-full h-40 relative rounded-md overflow-hidden border bg-muted flex items-center justify-center">
                 {watchedImageUrl ? (
-                   <div className="relative w-full h-full" key={watchedImageUrl}>
+                   <div className="relative w-full h-full">
                     <Image 
                       src={watchedImageUrl} 
                       alt="Pré-visualização do item" 
@@ -244,7 +210,6 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
                   onClick={() => form.setValue('imageUrl', '', { shouldValidate: true })}
                 >
                   <X className="h-4 w-4" />
-                  <span className="sr-only">Remover Imagem</span>
                 </Button>
               )}
             </div>
@@ -256,10 +221,7 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
                     <FormItem>
                         <FormLabel className="text-xs text-muted-foreground">URL da imagem (opcional)</FormLabel>
                         <FormControl>
-                        <Input
-                            placeholder="https://..."
-                            {...field} 
-                        />
+                        <Input placeholder="https://..." {...field} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -268,16 +230,10 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
                 <FormItem>
                     <FormLabel className="text-xs text-muted-foreground">Ou carregue do computador</FormLabel>
                     <FormControl>
-                        <Input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageChange}
-                            className="cursor-pointer file:mr-2 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary file:border-0 file:rounded file:px-2 file:py-1 hover:file:bg-primary/20"
-                        />
+                        <Input type="file" accept="image/*" onChange={handleImageChange} className="cursor-pointer file:mr-2 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary file:border-0 file:rounded file:px-2 file:py-1 hover:file:bg-primary/20" />
                     </FormControl>
                 </FormItem>
             </div>
-             <FormDescription>Forneça uma URL, carregue uma imagem (máx 2MB), ou cole (Ctrl+V) uma imagem.</FormDescription>
           </FormItem>
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -291,7 +247,7 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
                     <Select onValueChange={field.onChange} value={field.value || ''}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecione o tipo do item" />
+                          <SelectValue placeholder="Selecione o tipo" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -302,16 +258,9 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
                     </Select>
                     <Dialog open={isEquipmentTypeFormOpen} onOpenChange={setIsEquipmentTypeFormOpen}>
                         <DialogTrigger asChild>
-                            <Button type="button" variant="outline" size="icon" title="Adicionar Novo Tipo de Equipamento">
-                                <Tags className="h-4 w-4 text-primary" />
-                            </Button>
+                            <Button type="button" variant="outline" size="icon"><Tags className="h-4 w-4 text-primary" /></Button>
                         </DialogTrigger>
-                        {isEquipmentTypeFormOpen && (
-                            <EquipmentTypeForm
-                                onSubmitAction={handleNewEquipmentTypeCreated}
-                                onClose={() => setIsEquipmentTypeFormOpen(false)}
-                            />
-                        )}
+                        {isEquipmentTypeFormOpen && <EquipmentTypeForm onSubmitAction={handleNewEquipmentTypeCreated} onClose={() => setIsEquipmentTypeFormOpen(false)} />}
                     </Dialog>
                   </div>
                   <FormMessage />
@@ -323,40 +272,31 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
               name="quantity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Quantidade Total em Estoque</FormLabel>
+                  <FormLabel>Quantidade em Estoque</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="ex: 100" {...field} />
+                    <Input type="number" placeholder="ex: 1" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
-              name="dailyRentalRate"
+              name="unitAcquisitionPrice"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Taxa de Aluguel Diária (R$)</FormLabel>
+                  <FormLabel>Preço de Aquisição Unit. (Patrimônio)</FormLabel>
                   <FormControl>
                      <Input
-                      type={isRateFocused ? 'number' : 'text'}
+                      type={isAcqPriceFocused ? 'number' : 'text'}
                       placeholder="R$ 0,00"
-                      value={isRateFocused ? (field.value ?? '') : formatToBRL(field.value)}
-                      onFocus={() => setIsRateFocused(true)}
-                      onBlur={() => setIsRateFocused(false)}
-                      onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === '') {
-                              field.onChange(0);
-                          } else {
-                              const numericValue = parseFloat(value);
-                              if (!isNaN(numericValue)) {
-                                  field.onChange(numericValue);
-                              }
-                          }
-                      }}
+                      value={isAcqPriceFocused ? (field.value ?? '') : formatToBRL(field.value)}
+                      onFocus={() => setIsAcqPriceFocused(true)}
+                      onBlur={() => setIsAcqPriceFocused(false)}
+                      onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       step="0.01"
                     />
                   </FormControl>
@@ -366,27 +306,71 @@ export function InventoryItemForm({ initialData, equipmentTypes: initialEquipmen
             />
             <FormField
               control={form.control}
-              name="status"
+              name="dailyRentalRate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status Base do Item</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="available">Disponível (Geral)</SelectItem>
-                      <SelectItem value="rented">Em Manutenção/Indisponível</SelectItem> 
-                    </SelectContent>
-                  </Select>
-                  <FormDescription className="text-xs">Status geral do item. A disponibilidade real para aluguel é calculada dinamicamente.</FormDescription>
+                  <FormLabel>Taxa de Aluguel Diária</FormLabel>
+                  <FormControl>
+                     <Input
+                      type={isRateFocused ? 'number' : 'text'}
+                      placeholder="R$ 0,00"
+                      value={isRateFocused ? (field.value ?? '') : formatToBRL(field.value)}
+                      onFocus={() => setIsRateFocused(true)}
+                      onBlur={() => setIsRateFocused(false)}
+                      onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                      step="0.01"
+                      disabled={!form.watch('forRental')}
+                    />
+                  </FormControl>
+                  <FormDescription className="text-[10px]">Desative se não for para aluguel.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
           </div>
+
+          <FormField
+            control={form.control}
+            name="forRental"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-primary/5">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-sm font-semibold">Disponível para Aluguel?</FormLabel>
+                  <FormDescription className="text-xs">
+                    Desative para itens como carros ou ferramentas de uso interno (Ativos Fixos).
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                        field.onChange(checked);
+                        if (!checked) form.setValue('dailyRentalRate', 0);
+                    }}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Status Base</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value="available">Disponível / Ativo</SelectItem>
+                    <SelectItem value="rented">Indisponível / Manutenção</SelectItem> 
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
           <DialogFooter className="py-4 border-t">
             <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancelar</Button>

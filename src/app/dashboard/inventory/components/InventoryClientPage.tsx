@@ -9,7 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { InventoryItemForm } from './InventoryItemForm';
 import { createInventoryItem, updateInventoryItem, deleteInventoryItem } from '@/actions/inventoryActions';
-import { PlusCircle, Edit, Trash2, ImageIcon as ImageIconLucide, PackageCheck, PackageX, DollarSign, Tag } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, ImageIcon as ImageIconLucide, PackageCheck, PackageX, DollarSign, Tag, Briefcase } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { BadgeProps } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -33,7 +33,10 @@ interface InventoryClientPageProps {
   initialEquipmentTypes: EquipmentType[];
 }
 
-function determineGeneralStatus(availableQuantity: number): { text: string; variant: BadgeProps['variant']; icon: React.ElementType } {
+function determineGeneralStatus(availableQuantity: number, forRental: boolean): { text: string; variant: BadgeProps['variant']; icon: React.ElementType } {
+  if (!forRental) {
+    return { text: 'Ativo Fixo', variant: 'secondary', icon: Briefcase };
+  }
   if (availableQuantity <= 0) {
     return { text: 'Esgotado', variant: 'destructive', icon: PackageX };
   }
@@ -144,7 +147,7 @@ export default function InventoryClientPage({ initialItems, rentedQuantities: in
             const totalQuantity = item.quantity;
             const currentRentedQuantity = rentedQuantities[item.id] || 0;
             const availableQuantity = totalQuantity - currentRentedQuantity;
-            const { text: generalStatusText, variant: generalStatusVariant, icon: StatusIcon } = determineGeneralStatus(availableQuantity);
+            const { text: generalStatusText, variant: generalStatusVariant, icon: StatusIcon } = determineGeneralStatus(availableQuantity, item.forRental);
             const itemTypeDetails = typeDetailsMap[item.typeId] || { name: 'Desconhecido', iconName: 'HelpCircle' };
 
             return (
@@ -197,18 +200,27 @@ export default function InventoryClientPage({ initialItems, rentedQuantities: in
                     <span className="text-muted-foreground">Total em Estoque:</span>
                     <span className="font-semibold">{totalQuantity} un.</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Alugados Atualmente:</span>
-                    <span className="font-semibold text-orange-600">{currentRentedQuantity} un.</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Disponíveis:</span>
-                    <span className="font-bold text-green-600">{Math.max(0, availableQuantity)} un.</span>
-                  </div>
-                   <div className="flex justify-between items-center pt-1">
-                    <span className="text-muted-foreground flex items-center"><DollarSign className="h-4 w-4 mr-1"/>Taxa Diária:</span>
-                    <span className="font-semibold">{formatToBRL(item.dailyRentalRate)}</span>
-                  </div>
+                  {item.forRental && (
+                    <>
+                        <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground">Alugados Atualmente:</span>
+                            <span className="font-semibold text-orange-600">{currentRentedQuantity} un.</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground">Disponíveis:</span>
+                            <span className="font-bold text-green-600">{Math.max(0, availableQuantity)} un.</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-1">
+                            <span className="text-muted-foreground flex items-center"><DollarSign className="h-4 w-4 mr-1"/>Taxa Diária:</span>
+                            <span className="font-semibold">{formatToBRL(item.dailyRentalRate)}</span>
+                        </div>
+                    </>
+                  )}
+                  {!item.forRental && (
+                      <div className="flex justify-between items-center pt-1 italic text-muted-foreground">
+                          Item de uso interno da empresa.
+                      </div>
+                  )}
                 </CardContent>
                 <CardFooter className="p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-2">
                    <Badge variant={generalStatusVariant} className="capitalize w-full sm:w-auto justify-center py-1.5">

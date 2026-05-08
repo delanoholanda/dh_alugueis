@@ -191,7 +191,10 @@ export function QuoteForm({
       }
     }
     
-    return inventoryList.map(item => {
+    // Filter to show only items for rental
+    const rentalOnlyInventory = inventoryList.filter(item => item.forRental);
+
+    return rentalOnlyInventory.map(item => {
       const rented = rentedQuantities.get(item.id) || 0;
       return { ...item, availableQuantity: item.quantity - rented };
     });

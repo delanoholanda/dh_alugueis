@@ -3,7 +3,7 @@ import {
   Building2, Construction, LayoutPanelTop, Package, Wrench,
   HardHat, Lightbulb, Power, Layers, Truck, HelpCircle, Palette, ListTree, Hammer, Drill, Cable, Box, Factory, BarChartBig, CircleDollarSign,
   TrendingUp, TrendingDown, Users, LayoutDashboard, BarChart, PieChart, LineChart, CalendarClock, Bell, MailCheck, MessageCircleQuestion,
-  ClipboardList, Handshake, PackageSearch, ScrollText, HandCoins
+  ClipboardList, Handshake, PackageSearch, ScrollText, HandCoins, Car, Tractor
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -25,6 +25,8 @@ export const selectableIconsList: SelectableIcon[] = [
   { name: 'Power', label: 'Gerador/Energia', icon: Power },
   { name: 'Cable', label: 'Cabos/Extensões', icon: Cable },
   { name: 'Truck', label: 'Transporte/Veículo', icon: Truck },
+  { name: 'Car', label: 'Carro/Pick-up', icon: Car },
+  { name: 'Tractor', label: 'Máquina/Trator', icon: Tractor },
   { name: 'Box', label: 'Caixa/Armazenamento', icon: Box },
   { name: 'Factory', label: 'Maquinário Pesado', icon: Factory },
   { name: 'BarChartBig', label: 'Medição/Nível', icon: BarChartBig },
@@ -40,7 +42,7 @@ export const iconMap: { [key: string]: LucideIcon } = {
   Building2, Construction, LayoutPanelTop, Package, Wrench,
   HardHat, Lightbulb, Power, Layers, Truck, HelpCircle, Palette, ListTree, Hammer, Drill, Cable, Box, Factory, BarChartBig, CircleDollarSign,
   TrendingUp, TrendingDown, Users, LayoutDashboard, BarChart, PieChart, LineChart, CalendarClock, Bell, MailCheck, MessageCircleQuestion,
-  ClipboardList, Handshake, PackageSearch, ScrollText, HandCoins
+  ClipboardList, Handshake, PackageSearch, ScrollText, HandCoins, Car, Tractor
 };
 
 export const DefaultIcon = Package; // Default icon if specific one not found

@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -22,6 +23,8 @@ import {
   Handshake,
   PackageSearch,
   CalendarDays,
+  ShoppingCart,
+  Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -70,8 +73,12 @@ const mainNavItems: NavItem[] = [
   { href: '/dashboard/quotes', label: 'Orçamentos', iconName: 'ClipboardList' },
   { 
     href: '/dashboard/inventory', 
-    label: 'Inventário Geral', 
-    iconName: 'Warehouse', 
+    label: 'Inventário', 
+    iconName: 'Warehouse',
+    subItems: [
+        { href: '/dashboard/inventory', label: 'Estoque Atual', iconName: 'Warehouse' },
+        { href: '/dashboard/inventory/purchases', label: 'Entrada/Compras', iconName: 'ShoppingCart' },
+    ]
   },
   { href: '/dashboard/customers', label: 'Clientes', iconName: 'Users' },
   { 
@@ -83,6 +90,7 @@ const mainNavItems: NavItem[] = [
         { href: '/dashboard/financials/contracts', label: 'Contratos', iconName: 'Handshake' },
         { href: '/dashboard/financials/statement', label: 'Extrato', iconName: 'FileText' },
         { href: '/dashboard/financials/item-performance', label: 'Desempenho por Item', iconName: 'BarChart' },
+        { href: '/dashboard/financials/patrimony', label: 'Patrimônio', iconName: 'Building2' },
     ]
   },
   { 
@@ -134,7 +142,7 @@ export function SidebarNav() {
         const inventoryNavIndex = mainNavItems.findIndex(item => item.href === '/dashboard/inventory');
         
         if (inventoryNavIndex !== -1) {
-          const inventorySubItems: NavItem[] = fetchedTypes.map(type => {
+          const typeSubItems: NavItem[] = fetchedTypes.map(type => {
             let hrefSegment = type.id.replace('type_', '');
             if (type.name.toLowerCase() === 'plataforma') {
               hrefSegment = 'platforms';
@@ -147,9 +155,11 @@ export function SidebarNav() {
           });
 
           const updatedNavItems = [...mainNavItems];
+          // Mantemos os subitens fixos (Entrada/Compras) e adicionamos os tipos dinâmicos
+          const fixedSubItems = updatedNavItems[inventoryNavIndex].subItems || [];
           updatedNavItems[inventoryNavIndex] = {
             ...updatedNavItems[inventoryNavIndex],
-            subItems: inventorySubItems
+            subItems: [...fixedSubItems, ...typeSubItems]
           };
           setDynamicNavItems(updatedNavItems);
         }
@@ -168,12 +178,18 @@ export function SidebarNav() {
   };
 
   const isNavItemActive = (item: NavItem) => {
-    if (item.href === '/dashboard' || item.href === '/dashboard/rentals') {
-      return pathname === item.href;
+    // Se for o painel, correspondência exata
+    if (item.href === '/dashboard') {
+      return pathname === '/dashboard';
     }
-    if(item.subItems) {
-        return pathname.startsWith(item.href)
+    
+    // Se tiver subitens, está ativo se o pathname começar com o href do item pai
+    // ou se qualquer subitem estiver ativo.
+    if (item.subItems) {
+      return pathname.startsWith(item.href);
     }
+
+    // Caso padrão: correspondência de início de rota
     return pathname.startsWith(item.href);
   };
 
@@ -183,14 +199,7 @@ export function SidebarNav() {
         <div className="flex items-center gap-2">
           <SidebarTrigger className="md:hidden" />
           <Link href="/dashboard" className="inline-block group-data-[collapsible=icon]:hidden bg-black p-1 rounded-sm h-[80px] w-[200px] relative" onClick={handleLinkClick}>
-            <Image 
-              src={currentLogo} 
-              alt="DH Alugueis Logo" 
-              layout="fill" 
-              objectFit="contain"
-              priority
-              key={currentLogo}
-            />
+            <Image src={currentLogo} alt="DH Alugueis Logo" layout="fill" objectFit="contain" priority key={currentLogo} />
           </Link>
         </div>
       </SidebarHeader>
@@ -215,7 +224,8 @@ export function SidebarNav() {
                   <SidebarMenuSub className={cn("group-data-[collapsible=icon]:hidden", isActive ? "flex" : "hidden")}>
                     {item.subItems.map((subItem) => {
                       const SubIconComp = getIcon(subItem.iconName);
-                      const isSubActive = pathname === subItem.href;
+                      // Subitem está ativo se o pathname for exatamente o dele ou começar com ele
+                      const isSubActive = pathname === subItem.href || (subItem.href !== item.href && pathname.startsWith(subItem.href));
                       return (
                         <SidebarMenuSubItem key={subItem.href}>
                           <SidebarMenuSubButton asChild isActive={isSubActive}>
@@ -243,16 +253,17 @@ export function SidebarNav() {
                 tooltip={{children: "Configurações", className: "bg-primary text-primary-foreground"}}
               >
                 <Link href="/dashboard/settings" onClick={handleLinkClick}>
-                  <DynamicLucideIcon iconName="Settings" className="h-5 w-5" />
+                  <Settings className="h-5 w-5" />
                   <span>Configurações</span>
                 </Link>
               </SidebarMenuButton>
               <SidebarMenuSub className={cn("group-data-[collapsible=icon]:hidden", (pathname.startsWith('/dashboard/settings')) ? "flex" : "hidden")}>
                   {settingsNavItems.map((subItem) => {
                      const SubIconComp = getIcon(subItem.iconName);
+                     const isSubActive = pathname === subItem.href;
                      return (
                         <SidebarMenuSubItem key={subItem.href}>
-                        <SidebarMenuSubButton asChild isActive={pathname === subItem.href}>
+                        <SidebarMenuSubButton asChild isActive={isSubActive}>
                             <Link href={subItem.href} onClick={handleLinkClick}>
                             <SubIconComp className="h-4 w-4 mr-1" />
                             <span>{subItem.label}</span>
@@ -269,20 +280,12 @@ export function SidebarNav() {
           <SidebarMenuButton
             variant="default"
             className="w-full justify-start bg-destructive/20 text-destructive-foreground hover:bg-destructive/30 group-data-[collapsible=icon]:bg-transparent"
-            onClick={() => {
-              logout();
-              handleLinkClick(); 
-            }}
+            onClick={() => { logout(); handleLinkClick(); }}
             tooltip={{children: "Sair", className: "bg-destructive text-destructive-foreground"}}
             >
             <LogOut className="h-5 w-5 text-destructive group-data-[collapsible=icon]:text-sidebar-foreground" />
             <span className="group-data-[collapsible=icon]:hidden text-destructive">Sair</span>
           </SidebarMenuButton>
-          {user && (
-            <div className="text-xs text-sidebar-foreground/70 mt-2 group-data-[collapsible=icon]:hidden">
-              Logado como {user.name}
-            </div>
-          )}
         </div>
       </SidebarFooter>
     </>

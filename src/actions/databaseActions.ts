@@ -10,7 +10,7 @@ import { validateServerSession } from '@/lib/auth-utils';
 
 const dataDirectory = path.join(process.cwd(), 'data');
 const backupsDirectory = path.join(dataDirectory, 'backups');
-const DB_FILE_NAME = 'dhalugueis.db';
+const DB_FILE_NAME = 'dhalugueis_v2.db'; // Updated name here
 const DB_PATH = path.join(dataDirectory, DB_FILE_NAME);
 const TIME_ZONE = 'America/Sao_Paulo'; // Using a consistent timezone
 

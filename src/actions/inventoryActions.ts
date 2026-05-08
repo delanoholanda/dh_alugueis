@@ -13,8 +13,11 @@ export async function getInventoryItems(): Promise<Equipment[]> {
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT * FROM inventory ORDER BY name ASC');
-    const items = stmt.all() as Equipment[];
-    return items;
+    const items = stmt.all() as any[];
+    return items.map(item => ({
+      ...item,
+      forRental: item.forRental === 1 || item.forRental === null // Treat null as true for legacy data
+    }));
   } catch (error) {
     console.error("Failed to fetch inventory items:", error);
     return [];
@@ -26,8 +29,12 @@ export async function getInventoryItemById(id: string): Promise<Equipment | unde
   const db = getDb();
   try {
     const stmt = db.prepare('SELECT * FROM inventory WHERE id = ?');
-    const item = stmt.get(id) as Equipment | undefined;
-    return item;
+    const item = stmt.get(id) as any;
+    if (!item) return undefined;
+    return {
+      ...item,
+      forRental: item.forRental === 1 || item.forRental === null
+    };
   } catch (error) {
     console.error(`Failed to fetch inventory item with id ${id}:`, error);
     return undefined;
@@ -47,12 +54,16 @@ export async function createInventoryItem(itemData: Omit<Equipment, 'id'>): Prom
   const newItem: Equipment = { 
     ...itemData, 
     id: newId,
-    imageUrl: savedImageUrl || ''
+    imageUrl: savedImageUrl || '',
+    forRental: itemData.forRental ?? true // Ensure default true
   };
 
   try {
-    const stmt = db.prepare('INSERT INTO inventory (id, name, typeId, quantity, status, imageUrl, dailyRentalRate) VALUES (@id, @name, @typeId, @quantity, @status, @imageUrl, @dailyRentalRate)');
-    stmt.run(newItem);
+    const stmt = db.prepare('INSERT INTO inventory (id, name, typeId, quantity, status, imageUrl, dailyRentalRate, unitAcquisitionPrice, forRental) VALUES (@id, @name, @typeId, @quantity, @status, @imageUrl, @dailyRentalRate, @unitAcquisitionPrice, @forRental)');
+    stmt.run({
+        ...newItem,
+        forRental: newItem.forRental ? 1 : 0
+    });
     revalidatePath('/dashboard/inventory', 'layout');
     revalidatePath('/dashboard', 'layout');
     return newItem;
@@ -88,8 +99,11 @@ export async function updateInventoryItem(id: string, itemData: Partial<Omit<Equ
 
     const updatedItemForDb = { ...existingItem, ...finalUpdateData };
 
-    const stmt = db.prepare('UPDATE inventory SET name = @name, typeId = @typeId, quantity = @quantity, status = @status, imageUrl = @imageUrl, dailyRentalRate = @dailyRentalRate WHERE id = @id');
-    stmt.run(updatedItemForDb);
+    const stmt = db.prepare('UPDATE inventory SET name = @name, typeId = @typeId, quantity = @quantity, status = @status, imageUrl = @imageUrl, dailyRentalRate = @dailyRentalRate, unitAcquisitionPrice = @unitAcquisitionPrice, forRental = @forRental WHERE id = @id');
+    stmt.run({
+        ...updatedItemForDb,
+        forRental: updatedItemForDb.forRental ? 1 : 0
+    });
     revalidatePath('/dashboard/inventory', 'layout');
     revalidatePath(`/dashboard/inventory/${id}`);
     revalidatePath('/dashboard', 'layout');
