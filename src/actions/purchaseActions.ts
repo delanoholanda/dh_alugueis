@@ -35,7 +35,7 @@ export async function createPurchase(purchaseData: Omit<Purchase, 'id' | 'invent
   await validateServerSession();
   const db = getDb();
   
-  const totalAmount = (purchaseData.quantity * purchaseData.unitPrice) + (purchaseData.freightValue || 0);
+  const totalAmount = (purchaseData.quantity * purchaseData.unitPrice) + (purchaseData.freightValue || 0) - (purchaseData.discountValue || 0);
   const newId = `pur_${crypto.randomBytes(8).toString('hex')}`;
   const batchId = `batch_${crypto.randomBytes(8).toString('hex')}`;
   
@@ -50,31 +50,34 @@ export async function createPurchase(purchaseData: Omit<Purchase, 'id' | 'invent
   try {
     db.transaction(() => {
       const insertStmt = db.prepare(`
-        INSERT INTO purchases (id, inventoryId, quantity, unitPrice, freightValue, totalAmount, purchaseDate, notes, affectsStock, batchId) 
-        VALUES (@id, @inventoryId, @quantity, @unitPrice, @freightValue, @totalAmount, @purchaseDate, @notes, @affectsStock, @batchId)
+        INSERT INTO purchases (id, inventoryId, quantity, unitPrice, freightValue, discountValue, totalAmount, purchaseDate, notes, affectsStock, batchId) 
+        VALUES (@id, @inventoryId, @quantity, @unitPrice, @freightValue, @discountValue, @totalAmount, @purchaseDate, @notes, @affectsStock, @batchId)
       `);
       insertStmt.run(newPurchase);
+
+      // We update the inventory acquisition price based on the effective cost (landed cost)
+      const effectiveUnitPrice = totalAmount / purchaseData.quantity;
 
       if (purchaseData.affectsStock) {
           const updateInventoryStmt = db.prepare(`
             UPDATE inventory 
             SET quantity = quantity + @quantity,
-                unitAcquisitionPrice = @unitPrice
+                unitAcquisitionPrice = @effectiveUnitPrice
             WHERE id = @inventoryId
           `);
           updateInventoryStmt.run({
             quantity: purchaseData.quantity,
-            unitPrice: purchaseData.unitPrice,
+            effectiveUnitPrice,
             inventoryId: purchaseData.inventoryId
           });
       } else {
           const updatePriceStmt = db.prepare(`
             UPDATE inventory 
-            SET unitAcquisitionPrice = @unitPrice
+            SET unitAcquisitionPrice = @effectiveUnitPrice
             WHERE id = @inventoryId
           `);
           updatePriceStmt.run({
-            unitPrice: purchaseData.unitPrice,
+            effectiveUnitPrice,
             inventoryId: purchaseData.inventoryId
           });
       }
@@ -97,6 +100,7 @@ export async function createPurchase(purchaseData: Omit<Purchase, 'id' | 'invent
 export async function createBulkPurchase(data: {
     items: Array<{ inventoryId: string; quantity: number; unitPrice: number }>;
     freightValue: number;
+    discountValue: number;
     purchaseDate: string;
     notes?: string;
     affectsStock: boolean;
@@ -105,29 +109,34 @@ export async function createBulkPurchase(data: {
     const db = getDb();
     const batchId = `batch_${crypto.randomBytes(8).toString('hex')}`;
 
-    const totalItemsValue = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const totalItemsBaseValue = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
     try {
         db.transaction(() => {
             for (const item of data.items) {
-                const itemLineValue = item.quantity * item.unitPrice;
-                const itemProportionalFreight = totalItemsValue > 0 
-                    ? (itemLineValue / totalItemsValue) * data.freightValue 
-                    : (data.freightValue / data.items.length);
+                const itemLineBaseValue = item.quantity * item.unitPrice;
                 
-                const totalAmount = itemLineValue + itemProportionalFreight;
+                // Proportion logic for both freight and discount
+                const proportion = totalItemsBaseValue > 0 ? (itemLineBaseValue / totalItemsBaseValue) : (1 / data.items.length);
+                const itemProportionalFreight = proportion * data.freightValue;
+                const itemProportionalDiscount = proportion * data.discountValue;
+                
+                const totalLineAmount = itemLineBaseValue + itemProportionalFreight - itemProportionalDiscount;
+                const effectiveUnitPrice = item.quantity > 0 ? (totalLineAmount / item.quantity) : 0;
+
                 const newId = `pur_${crypto.randomBytes(8).toString('hex')}`;
 
                 db.prepare(`
-                    INSERT INTO purchases (id, inventoryId, quantity, unitPrice, freightValue, totalAmount, purchaseDate, notes, affectsStock, batchId) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO purchases (id, inventoryId, quantity, unitPrice, freightValue, discountValue, totalAmount, purchaseDate, notes, affectsStock, batchId) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `).run(
                     newId, 
                     item.inventoryId, 
                     item.quantity, 
                     item.unitPrice, 
                     itemProportionalFreight, 
-                    totalAmount, 
+                    itemProportionalDiscount,
+                    totalLineAmount, 
                     data.purchaseDate, 
                     data.notes || null, 
                     data.affectsStock ? 1 : 0,
@@ -140,13 +149,13 @@ export async function createBulkPurchase(data: {
                         SET quantity = quantity + ?,
                             unitAcquisitionPrice = ?
                         WHERE id = ?
-                    `).run(item.quantity, item.unitPrice, item.inventoryId);
+                    `).run(item.quantity, effectiveUnitPrice, item.inventoryId);
                 } else {
                     db.prepare(`
                         UPDATE inventory 
                         SET unitAcquisitionPrice = ?
                         WHERE id = ?
-                    `).run(item.unitPrice, item.inventoryId);
+                    `).run(effectiveUnitPrice, item.inventoryId);
                 }
             }
         })();
@@ -185,13 +194,15 @@ export async function deleteBatchPurchase(batchId: string): Promise<{ success: b
                 // 2. Tentar restaurar o preço de aquisição anterior
                 // Buscamos a compra anterior a esta para este item específico
                 const previousPurchase = db.prepare(`
-                    SELECT unitPrice FROM purchases 
-                    WHERE inventoryId = ? AND id != ?
+                    SELECT totalAmount, quantity FROM purchases 
+                    WHERE inventoryId = ? AND batchId != ?
                     ORDER BY purchaseDate DESC, id DESC 
                     LIMIT 1
-                `).get(purchase.inventoryId, purchase.id) as { unitPrice: number } | undefined;
+                `).get(purchase.inventoryId, batchId) as { totalAmount: number, quantity: number } | undefined;
 
-                const priceToRestore = previousPurchase ? previousPurchase.unitPrice : 0;
+                const priceToRestore = (previousPurchase && previousPurchase.quantity > 0) 
+                    ? (previousPurchase.totalAmount / previousPurchase.quantity) 
+                    : 0;
                 
                 db.prepare(`
                     UPDATE inventory 

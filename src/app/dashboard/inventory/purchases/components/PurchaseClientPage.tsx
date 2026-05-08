@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { PurchaseForm } from './PurchaseForm';
 import { createBulkPurchase, deleteBatchPurchase, getPurchases } from '@/actions/purchaseActions';
-import { PlusCircle, Trash2, ShoppingCart, Package, Eye, FileText, Loader2, Truck } from 'lucide-react';
+import { PlusCircle, Trash2, ShoppingCart, Package, Eye, FileText, Loader2, Truck, Percent } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -23,6 +24,7 @@ interface GroupedPurchase {
     affectsStock: boolean;
     totalAmount: number;
     totalFreight: number;
+    totalDiscount: number;
     itemCount: number;
     items: Purchase[];
 }
@@ -52,12 +54,14 @@ export default function PurchaseClientPage({ initialPurchases, inventory }: Purc
                   affectsStock: p.affectsStock === true,
                   totalAmount: 0,
                   totalFreight: 0,
+                  totalDiscount: 0,
                   itemCount: 0,
                   items: []
               };
           }
           groups[bId].totalAmount += p.totalAmount;
           groups[bId].totalFreight += p.freightValue || 0;
+          groups[bId].totalDiscount += p.discountValue || 0;
           groups[bId].itemCount += 1;
           groups[bId].items.push(p);
       });
@@ -140,6 +144,7 @@ export default function PurchaseClientPage({ initialPurchases, inventory }: Purc
                     <TableHead>Descrição / Notas</TableHead>
                     <TableHead className="text-center">Itens</TableHead>
                     <TableHead className="text-right">Frete Total</TableHead>
+                    <TableHead className="text-right">Desconto Total</TableHead>
                     <TableHead className="text-right">Total da Nota</TableHead>
                     <TableHead className="text-center">Ações</TableHead>
                   </TableRow>
@@ -155,6 +160,7 @@ export default function PurchaseClientPage({ initialPurchases, inventory }: Purc
                           <Badge variant="secondary">{group.itemCount} un.</Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{formatToBRL(group.totalFreight)}</TableCell>
+                      <TableCell className="text-right font-mono text-orange-600">-{formatToBRL(group.totalDiscount)}</TableCell>
                       <TableCell className="text-right font-bold text-primary font-mono">{formatToBRL(group.totalAmount)}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -238,8 +244,8 @@ export default function PurchaseClientPage({ initialPurchases, inventory }: Purc
                                       <TableRow className="bg-muted/50">
                                           <TableHead>Equipamento</TableHead>
                                           <TableHead className="text-center">Qtd</TableHead>
-                                          <TableHead className="text-right">Unitário</TableHead>
-                                          <TableHead className="text-right">Frete Prop.</TableHead>
+                                          <TableHead className="text-right">Unitário Base</TableHead>
+                                          <TableHead className="text-right">Custo Efetivo</TableHead>
                                           <TableHead className="text-right">Total Linha</TableHead>
                                       </TableRow>
                                   </TableHeader>
@@ -249,7 +255,9 @@ export default function PurchaseClientPage({ initialPurchases, inventory }: Purc
                                               <TableCell className="font-medium text-xs">{item.inventoryName}</TableCell>
                                               <TableCell className="text-center text-xs">{item.quantity}</TableCell>
                                               <TableCell className="text-right text-xs">{formatToBRL(item.unitPrice)}</TableCell>
-                                              <TableCell className="text-right text-xs text-muted-foreground">{formatToBRL(item.freightValue)}</TableCell>
+                                              <TableCell className="text-right text-xs text-primary font-semibold" title="Preço após diluição de frete e desconto">
+                                                  {formatToBRL(item.totalAmount / item.quantity)}
+                                              </TableCell>
                                               <TableCell className="text-right text-xs font-bold">{formatToBRL(item.totalAmount)}</TableCell>
                                           </TableRow>
                                       ))}
@@ -261,11 +269,15 @@ export default function PurchaseClientPage({ initialPurchases, inventory }: Purc
                       <div className="flex flex-col items-end gap-1 pt-2 border-t">
                           <div className="flex justify-between w-full max-w-[250px] text-xs">
                               <span className="text-muted-foreground">Soma dos Itens:</span>
-                              <span>{formatToBRL(selectedBatch.totalAmount - selectedBatch.totalFreight)}</span>
+                              <span>{formatToBRL(selectedBatch.totalAmount - selectedBatch.totalFreight + selectedBatch.totalDiscount)}</span>
                           </div>
                           <div className="flex justify-between w-full max-w-[250px] text-xs">
                               <span className="text-muted-foreground flex items-center"><Truck className="h-3 w-3 mr-1" /> Frete Total:</span>
                               <span>{formatToBRL(selectedBatch.totalFreight)}</span>
+                          </div>
+                          <div className="flex justify-between w-full max-w-[250px] text-xs">
+                              <span className="text-orange-600 flex items-center"><Percent className="h-3 w-3 mr-1" /> Desconto Total:</span>
+                              <span className="text-orange-600">-{formatToBRL(selectedBatch.totalDiscount)}</span>
                           </div>
                           <div className="flex justify-between w-full max-w-[250px] text-lg font-bold border-t mt-1 pt-1">
                               <span>Total Geral:</span>

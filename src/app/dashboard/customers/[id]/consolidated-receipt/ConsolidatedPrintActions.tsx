@@ -3,7 +3,6 @@
 import { Button } from '@/components/ui/button';
 import { Printer, ArrowLeft, FileDown, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import html2pdf from 'html2pdf.js';
 import { useState } from 'react';
 
 interface ConsolidatedPrintActionsProps {
@@ -25,80 +24,86 @@ export default function ConsolidatedPrintActions({ customerId, customerName }: C
       .substring(0, 15); 
   };
 
-  const getWorkerAndOptions = () => {
+  const getWorkerOptions = (customerFirstNamePart: string) => {
     const element = document.querySelector('.contract-container');
     if (!element) {
-      console.error("Elemento .contract-container não encontrado.");
-      return { worker: null, actionsElement: null, customerFirstNamePart: null };
+      return null;
     }
 
-    const actionsElement = element.querySelector('.no-print');
-    if (actionsElement) (actionsElement as HTMLElement).style.display = 'none';
-    
-    const customerFirstNamePart = sanitizeFilenamePart(customerName);
     const pdfFilename = `Contrato_Consolidado_DH_Alugueis_${customerFirstNamePart || customerId}.pdf`;
 
-    const opt = {
-      margin: [10, 12, 10, 12], 
-      filename: pdfFilename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, dpi: 192, letterRendering: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+    return {
+      element,
+      options: {
+        margin: [10, 12, 10, 12], 
+        filename: pdfFilename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false, dpi: 192, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      }
     };
-    
-    const worker = html2pdf().from(element).set(opt);
-    return { worker, actionsElement, customerFirstNamePart };
   }
   
   const generatePdf = async (outputType: 'save' | 'open') => {
     if (processingType) return;
+    
+    const customerFirstNamePart = sanitizeFilenamePart(customerName);
+    const setup = getWorkerOptions(customerFirstNamePart);
+    if (!setup) return;
+
     setProcessingType('pdf');
-
-    const { worker, actionsElement } = getWorkerAndOptions();
-
-    if (!worker) {
-        setProcessingType(null);
-        return;
-    }
     
     try {
+        const html2pdf = (await import('html2pdf.js')).default;
+        
+        const actionsElement = setup.element.querySelector('.no-print');
+        if (actionsElement) (actionsElement as HTMLElement).style.display = 'none';
+
+        const worker = html2pdf().from(setup.element).set(setup.options);
+
         if (outputType === 'save') {
             await worker.save();
         } else {
             await worker.outputPdf('dataurlnewwindow');
         }
+
+        if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
     } catch (error) {
         console.error("Erro ao gerar PDF:", error);
     } finally {
-        if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
         setProcessingType(null);
     }
   };
 
   const generateImage = async () => {
     if (processingType) return;
+
+    const customerFirstNamePart = sanitizeFilenamePart(customerName);
+    const setup = getWorkerOptions(customerFirstNamePart);
+    if (!setup) return;
+
     setProcessingType('image');
 
-    const { worker, actionsElement, customerFirstNamePart } = getWorkerAndOptions();
-    
-    if (!worker) {
-        setProcessingType(null);
-        return;
-    }
-
     try {
-        const imgData = await worker.outputImg('datauristring');
+        const html2pdf = (await import('html2pdf.js')).default;
+        
+        const actionsElement = setup.element.querySelector('.no-print');
+        if (actionsElement) (actionsElement as HTMLElement).style.display = 'none';
+
+        const imgData = await html2pdf().from(setup.element).set(setup.options).outputImg('datauristring');
+        
         const link = document.createElement('a');
         link.download = `Contrato_Consolidado_DH_Alugueis_${customerFirstNamePart || customerId}.png`;
         link.href = imgData;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+
+        if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
     } catch (error) {
         console.error("Erro ao gerar imagem:", error);
     } finally {
-        if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
         setProcessingType(null);
     }
   };

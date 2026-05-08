@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, ShoppingCart, Loader2, Plus, Trash2, Package } from 'lucide-react';
+import { CalendarIcon, ShoppingCart, Loader2, Plus, Trash2, Package, Percent } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Switch } from '@/components/ui/switch';
@@ -30,6 +30,7 @@ const purchaseItemSchema = z.object({
 const bulkPurchaseSchema = z.object({
   items: z.array(purchaseItemSchema).min(1, "Adicione pelo menos um item"),
   freightValue: z.coerce.number().min(0).default(0),
+  discountValue: z.coerce.number().min(0).default(0),
   purchaseDate: z.date({ required_error: "Data obrigatória" }),
   notes: z.string().optional(),
   affectsStock: z.boolean().default(true),
@@ -53,6 +54,7 @@ export function PurchaseForm({ inventory, onSubmitAction, onClose }: PurchaseFor
     defaultValues: {
       items: [{ inventoryId: '', quantity: 1, unitPrice: 0 }],
       freightValue: 0,
+      discountValue: 0,
       purchaseDate: new Date(),
       notes: '',
       affectsStock: true,
@@ -66,9 +68,10 @@ export function PurchaseForm({ inventory, onSubmitAction, onClose }: PurchaseFor
 
   const watchedItems = form.watch("items");
   const watchedFreight = form.watch("freightValue");
+  const watchedDiscount = form.watch("discountValue");
   
   const totalItemsValue = watchedItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
-  const grandTotal = totalItemsValue + (watchedFreight || 0);
+  const grandTotal = totalItemsValue + (watchedFreight || 0) - (watchedDiscount || 0);
 
   const onSubmit = async (data: BulkPurchaseFormValues) => {
     setIsLoading(true);
@@ -116,27 +119,50 @@ export function PurchaseForm({ inventory, onSubmitAction, onClose }: PurchaseFor
                 </FormItem>
                 )}
             />
-            <FormField
-                control={form.control}
-                name="freightValue"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Frete Total da Nota (R$)</FormLabel>
-                    <FormControl>
-                        <Input
-                        type={focusedField === 'freight' ? 'number' : 'text'}
-                        placeholder="R$ 0,00"
-                        value={focusedField === 'freight' ? (field.value ?? '') : formatToBRL(field.value)}
-                        onFocus={() => setFocusedField('freight')}
-                        onBlur={() => setFocusedField(null)}
-                        onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
-                        step="0.01"
-                        />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-            />
+             <div className="grid grid-cols-2 gap-2">
+                <FormField
+                    control={form.control}
+                    name="freightValue"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Frete (R$)</FormLabel>
+                        <FormControl>
+                            <Input
+                            type={focusedField === 'freight' ? 'number' : 'text'}
+                            placeholder="R$ 0,00"
+                            value={focusedField === 'freight' ? (field.value ?? '') : formatToBRL(field.value)}
+                            onFocus={() => setFocusedField('freight')}
+                            onBlur={() => setFocusedField(null)}
+                            onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                            step="0.01"
+                            />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="discountValue"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Desconto (R$)</FormLabel>
+                        <FormControl>
+                            <Input
+                            type={focusedField === 'discount' ? 'number' : 'text'}
+                            placeholder="R$ 0,00"
+                            value={focusedField === 'discount' ? (field.value ?? '') : formatToBRL(field.value)}
+                            onFocus={() => setFocusedField('discount')}
+                            onBlur={() => setFocusedField(null)}
+                            onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                            step="0.01"
+                            />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -237,7 +263,11 @@ export function PurchaseForm({ inventory, onSubmitAction, onClose }: PurchaseFor
             <div className="bg-primary/5 p-4 rounded-lg border border-primary/20 flex flex-col items-end">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Geral da Nota</span>
                 <span className="text-2xl font-bold text-primary">{formatToBRL(grandTotal)}</span>
-                <span className="text-[10px] text-muted-foreground">Itens: {formatToBRL(totalItemsValue)} + Frete: {formatToBRL(watchedFreight)}</span>
+                <span className="text-[10px] text-muted-foreground">
+                    Itens: {formatToBRL(totalItemsValue)} 
+                    {watchedFreight > 0 && ` + Frete: ${formatToBRL(watchedFreight)}`}
+                    {watchedDiscount > 0 && ` - Desc: ${formatToBRL(watchedDiscount)}`}
+                </span>
             </div>
           </div>
 

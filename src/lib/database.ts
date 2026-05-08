@@ -52,6 +52,7 @@ function runMigrations(db: Database.Database) {
                 quantity INTEGER NOT NULL,
                 unitPrice REAL NOT NULL,
                 freightValue REAL DEFAULT 0,
+                discountValue REAL DEFAULT 0,
                 totalAmount REAL NOT NULL,
                 purchaseDate TEXT NOT NULL,
                 notes TEXT,
@@ -67,6 +68,9 @@ function runMigrations(db: Database.Database) {
         }
         if (!columns.some(col => col.name === 'batchId')) {
             db.exec('ALTER TABLE purchases ADD COLUMN batchId TEXT');
+        }
+        if (!columns.some(col => col.name === 'discountValue')) {
+            db.exec('ALTER TABLE purchases ADD COLUMN discountValue REAL DEFAULT 0');
         }
     } catch (error) {
         console.error("[DB Migration] Error ensuring 'purchases' table exists:", error);
@@ -279,6 +283,7 @@ function initializeSchemaAndSeed(db: Database.Database) {
         quantity INTEGER NOT NULL,
         unitPrice REAL NOT NULL,
         freightValue REAL DEFAULT 0,
+        discountValue REAL DEFAULT 0,
         totalAmount REAL NOT NULL,
         purchaseDate TEXT NOT NULL,
         notes TEXT,
