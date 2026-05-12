@@ -179,11 +179,11 @@ export function RentalForm({
       customerId: '',
       equipment: [{ equipmentId: '', quantity: 1, customDailyRentalRate: undefined }],
       rentalStartDate: new Date(),
-      expectedReturnDate: addDays(new Date(), 4), 
+      expectedReturnDate: addDays(new Date(), 0), 
       isOpenEnded: false,
       chargeSaturdays: true,
       chargeSundays: true,
-      rentalDays: 5,
+      rentalDays: 1,
       freightValue: 0,
       discountValue: 0,
       fuelValue: 0,
@@ -216,13 +216,21 @@ export function RentalForm({
 
   const inventoryWithAvailability = useMemo(() => {
     const newStartDate = form.getValues('rentalStartDate');
-    const newEndDate = form.getValues('expectedReturnDate');
+    const isOpenEnded = form.getValues('isOpenEnded');
+    // For availability check, if open-ended, we assume a very far future to check any current/future conflicts
+    const newEndDate = isOpenEnded ? addDays(new Date(), 3650) : form.getValues('expectedReturnDate');
 
-    if (!newStartDate || !newEndDate) {
-      return inventoryList.map(item => ({ ...item, availableQuantity: item.quantity }));
+    if (!newStartDate || (!isOpenEnded && !newEndDate)) {
+      return inventoryList.map(item => ({ 
+        ...item, 
+        availableQuantity: item.status === 'rented' ? 0 : item.quantity 
+      }));
     }
 
-    const newInterval = { start: startOfDay(newStartDate), end: endOfDay(newEndDate) };
+    const newInterval = { 
+        start: startOfDay(newStartDate), 
+        end: endOfDay(newEndDate || addDays(newStartDate, 1)) 
+    };
 
     const rentedQuantities = new Map<string, number>();
 
@@ -252,10 +260,12 @@ export function RentalForm({
 
     return rentalOnlyInventory.map(item => {
       const rented = rentedQuantities.get(item.id) || 0;
-      return { ...item, availableQuantity: item.quantity - rented };
+      // If base status is maintenance ('rented'), availability is zero
+      const baseAvailable = item.status === 'rented' ? 0 : item.quantity;
+      return { ...item, availableQuantity: Math.max(0, baseAvailable - rented) };
     });
 
-  }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate]);
+  }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate, watchedIsOpenEnded]);
 
   useEffect(() => {
     if (watchedIsOpenEnded) {
@@ -265,7 +275,7 @@ export function RentalForm({
     } else {
         const currentDays = form.getValues('rentalDays');
         if (currentDays === 0) {
-            form.setValue('rentalDays', 5); 
+            form.setValue('rentalDays', 1); 
         }
     }
   }, [watchedIsOpenEnded, form]);
@@ -1136,6 +1146,7 @@ export function RentalForm({
                             mode="single"
                             selected={field.value}
                             onSelect={field.onChange}
+                            disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
                             initialFocus
                             locale={ptBR}
                             />

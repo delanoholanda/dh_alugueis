@@ -9,7 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { InventoryItemForm } from './InventoryItemForm';
 import { createInventoryItem, updateInventoryItem, deleteInventoryItem } from '@/actions/inventoryActions';
-import { PlusCircle, Edit, Trash2, ImageIcon as ImageIconLucide, PackageCheck, PackageX, DollarSign, Tag, Briefcase } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, ImageIcon as ImageIconLucide, PackageCheck, PackageX, DollarSign, Tag, Briefcase, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { BadgeProps } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -25,7 +25,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { DynamicLucideIcon } from '@/lib/lucide-icons';
-import { formatToBRL } from '@/lib/utils';
+import { formatToBRL, cn } from '@/lib/utils';
 
 interface InventoryClientPageProps {
   initialItems: Equipment[];
@@ -33,9 +33,13 @@ interface InventoryClientPageProps {
   initialEquipmentTypes: EquipmentType[];
 }
 
-function determineGeneralStatus(availableQuantity: number, forRental: boolean): { text: string; variant: BadgeProps['variant']; icon: React.ElementType } {
+function determineGeneralStatus(availableQuantity: number, forRental: boolean, status: string): { text: string; variant: BadgeProps['variant']; icon: React.ElementType } {
   if (!forRental) {
     return { text: 'Ativo Fixo', variant: 'secondary', icon: Briefcase };
+  }
+  // No código, o status 'rented' no inventário foi definido como "Indisponível / Manutenção"
+  if (status === 'rented') {
+    return { text: 'Em Manutenção', variant: 'destructive', icon: Wrench };
   }
   if (availableQuantity <= 0) {
     return { text: 'Esgotado', variant: 'destructive', icon: PackageX };
@@ -147,8 +151,10 @@ export default function InventoryClientPage({ initialItems, rentedQuantities: in
             const totalQuantity = item.quantity;
             const currentRentedQuantity = rentedQuantities[item.id] || 0;
             const availableQuantity = totalQuantity - currentRentedQuantity;
-            const { text: generalStatusText, variant: generalStatusVariant, icon: StatusIcon } = determineGeneralStatus(availableQuantity, item.forRental);
+            const { text: generalStatusText, variant: generalStatusVariant, icon: StatusIcon } = determineGeneralStatus(availableQuantity, item.forRental, item.status);
             const itemTypeDetails = typeDetailsMap[item.typeId] || { name: 'Desconhecido', iconName: 'HelpCircle' };
+
+            const displayAvailableCount = item.status === 'rented' ? 0 : Math.max(0, availableQuantity);
 
             return (
               <Card key={item.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -208,7 +214,9 @@ export default function InventoryClientPage({ initialItems, rentedQuantities: in
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="text-muted-foreground">Disponíveis:</span>
-                            <span className="font-bold text-green-600">{Math.max(0, availableQuantity)} un.</span>
+                            <span className={cn("font-bold", item.status === 'rented' ? "text-destructive" : "text-green-600")}>
+                                {displayAvailableCount} un.
+                            </span>
                         </div>
                         <div className="flex justify-between items-center pt-1">
                             <span className="text-muted-foreground flex items-center"><DollarSign className="h-4 w-4 mr-1"/>Taxa Diária:</span>

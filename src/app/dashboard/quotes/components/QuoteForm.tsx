@@ -164,7 +164,10 @@ export function QuoteForm({
     const newEndDate = form.getValues('expectedReturnDate');
 
     if (!newStartDate || !newEndDate) {
-      return inventoryList.map(item => ({ ...item, availableQuantity: item.quantity }));
+      return inventoryList.map(item => ({ 
+        ...item, 
+        availableQuantity: item.status === 'rented' ? 0 : item.quantity 
+      }));
     }
 
     const newInterval = { start: startOfDay(newStartDate), end: endOfDay(newEndDate) };
@@ -196,7 +199,9 @@ export function QuoteForm({
 
     return rentalOnlyInventory.map(item => {
       const rented = rentedQuantities.get(item.id) || 0;
-      return { ...item, availableQuantity: item.quantity - rented };
+      // If base status is maintenance ('rented'), availability is zero
+      const baseAvailable = item.status === 'rented' ? 0 : item.quantity;
+      return { ...item, availableQuantity: Math.max(0, baseAvailable - rented) };
     });
 
   }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate]);
@@ -378,7 +383,9 @@ export function QuoteForm({
                                   <CommandList>
                                     <CommandEmpty>Nenhum equipamento encontrado.</CommandEmpty>
                                     <CommandGroup>
-                                    {inventoryWithAvailability.map(invItem => (
+                                    {inventoryWithAvailability
+                                        .filter(inv => inv.availableQuantity > 0 || inv.id === field.value)
+                                        .map(invItem => (
                                           <CommandItem
                                             value={`${invItem.name} ${invItem.id}`}
                                             key={invItem.id}

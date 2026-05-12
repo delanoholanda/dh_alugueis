@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -9,7 +8,7 @@ import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart,
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import type { Rental, Customer, Equipment, Expense, EquipmentType, Payment } from '@/types';
-import { format, parseISO, isToday, isPast, isBefore, startOfDay, addDays, eachMonthOfInterval, startOfMonth, parse } from 'date-fns';
+import { format, parseISO, isToday, isPast, startOfDay, addDays, eachMonthOfInterval, startOfMonth, parse, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn, getPaymentStatusVariant, paymentStatusMap, countBillableDays } from '@/lib/utils';
 import type { ChartConfig } from "@/components/ui/chart";
@@ -135,6 +134,7 @@ const aggregateEquipmentItemActivity = (inventory: Equipment[], rentals: Rental[
   });
 
   return inventory
+    .filter(item => item.forRental) // Only show rental items in activity chart
     .map(item => ({
       name: item.name,
       total: item.quantity,
