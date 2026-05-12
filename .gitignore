@@ -22,7 +22,12 @@
 
 # User-generated data, uploads, and database
 # This line prevents the database and all user uploads from being committed.
-/data/
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+/data/uploads
+/data/backups
 
 # Log files
 npm-debug.log*
