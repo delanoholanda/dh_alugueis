@@ -101,13 +101,6 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
     }
   }
 
-  const itemsSummary = rental.equipment
-    .map(eq => `${eq.quantity}x ${eq.name || 'item desconhecido'}`)
-    .slice(0, 2)
-    .join(', ');
-  
-  const remainingItemsCount = rental.equipment.length > 2 ? rental.equipment.length - 2 : 0;
-
   // Corrigido: adicionado +1 para que o dia de início já conte como dia 1
   const daysDisplay = rental.isOpenEnded 
     ? `${differenceInDays(new Date(), parseISO(rental.rentalStartDate)) + 1} dias corridos` 
@@ -134,8 +127,8 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
               </div>
               <div className="flex flex-col items-end flex-shrink-0 gap-1">
                   {isFullyFinalized && <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-xs whitespace-nowrap"><CircleCheck className="h-3 w-3 mr-1"/>Finalizado</Badge>}
-                  {isPhysicallyReturned && isPaymentPending && <Badge variant="secondary" className="border-orange-500/50 text-xs whitespace-nowrap"><HandCoins className="h-3 w-3 mr-1"/>Aguard. Pagamento</Badge>}
-                  {rental.isOpenEnded && !isPhysicallyReturned && <Badge variant="secondary" className="border-blue-500/50 text-xs whitespace-nowrap"><InfinityIcon className="h-3 w-3 mr-1"/>Em Aberto</Badge>}
+                  {isPhysicallyReturned && isPaymentPending && <Badge variant="secondary" className="border-orange-500/50 text-xs whitespace-nowrap ml-2"><HandCoins className="h-3 w-3 mr-1"/>Aguard. Pagamento</Badge>}
+                  {rental.isOpenEnded && !isPhysicallyReturned && <Badge variant="secondary" className="border-blue-500/50 text-xs whitespace-nowrap ml-2"><InfinityIcon className="h-3 w-3 mr-1"/>Em Aberto</Badge>}
                   {!isPhysicallyReturned && !rental.isOpenEnded && returnDateSuffix.includes('Atrasado') && <Badge variant="destructive" className="text-xs whitespace-nowrap"><CircleAlert className="h-3 w-3 mr-1"/>Atrasado</Badge>}
               </div>
           </div>
@@ -182,16 +175,35 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
             </div>
           )}
 
-           <div className="flex items-start">
-            <Package className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <div className="text-muted-foreground">
-              Itens:
-              <span className="ml-1 font-medium text-foreground">{itemsSummary}</span>
-              {remainingItemsCount > 0 && <span className="ml-1 text-xs font-semibold text-muted-foreground">+{remainingItemsCount} mais</span>}
+           <div className="pt-2">
+            <p className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-wider flex items-center"><Package className="h-3 w-3 mr-1" /> Itens Alugados</p>
+            <div className="border rounded-md overflow-hidden bg-background/50">
+                <table className="w-full text-[10px] text-left border-collapse">
+                    <thead className="bg-muted/50 border-b">
+                        <tr>
+                            <th className="px-2 py-1 font-semibold">Item</th>
+                            <th className="px-2 py-1 font-semibold text-center">Qtd</th>
+                            <th className="px-2 py-1 font-semibold text-right">Diária</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                        {rental.equipment.map((eq, i) => {
+                            const inventoryItem = inventory.find(inv => inv.id === eq.equipmentId);
+                            const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+                            return (
+                                <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                    <td className="px-2 py-1 truncate max-w-[100px]" title={eq.name}>{eq.name}</td>
+                                    <td className="px-2 py-1 text-center font-medium">{eq.quantity}</td>
+                                    <td className="px-2 py-1 text-right font-mono">{formatToBRL(rateToUse)}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
           </div>
           
-          <div className="flex items-center">
+          <div className="flex items-center pt-1">
             <Badge 
               variant={getPaymentStatusVariant(rental.paymentStatus)} 
               className={cn("capitalize text-xs py-0.5 px-2", isPayable && "cursor-pointer hover:opacity-80 transition-opacity")}

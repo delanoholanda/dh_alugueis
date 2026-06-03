@@ -1,10 +1,11 @@
+
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse, CheckCircle2 } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse, CheckCircle2, AlertCircle, Fuel, Edit } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import type { Rental, Customer, Equipment, Expense, EquipmentType, Payment } from '@/types';
@@ -60,6 +61,15 @@ export interface GroupedPendingPayment {
   customerId: string;
   customerName: string;
   customerImageUrl?: string;
+  totalPendingValue: number;
+  rentals: Rental[];
+}
+
+export interface GroupedUpcomingReturn {
+  customerId: string;
+  customerName: string;
+  customerImageUrl?: string;
+  hasOverdue: boolean;
   totalPendingValue: number;
   rentals: Rental[];
 }
@@ -213,7 +223,7 @@ export default function DashboardDisplay() {
   const [mostRentedTypesData, setMostRentedTypesData] = useState<MostRentedTypeData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRentalForPayment, setSelectedRentalForPayment] = useState<Rental | null>(null);
-  const [selectedGroupForBulkPayment, setSelectedGroupForBulkPayment] = useState<GroupedPendingPayment | null>(null);
+  const [selectedGroupForBulkPayment, setSelectedGroupForBulkPayment] = useState<GroupedPendingPayment | GroupedUpcomingReturn | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -310,14 +320,46 @@ export default function DashboardDisplay() {
     await fetchData();
   }, [fetchData]);
 
-  const { upcomingReturns, groupedPendingPayments } = useMemo(() => {
+  const { groupedUpcomingReturns, groupedPendingPayments } = useMemo(() => {
     const today = startOfDay(new Date());
     const upcomingCutoff = addDays(today, 8);
 
-    const returns = rentals
+    // --- 1. Group Upcoming Returns ---
+    const upcomingMap: Record<string, GroupedUpcomingReturn> = {};
+    
+    rentals
       .filter(rental => !rental.actualReturnDate && !rental.isOpenEnded && isBefore(parseISO(rental.expectedReturnDate), upcomingCutoff))
-      .sort((a, b) => parseISO(a.expectedReturnDate).getTime() - parseISO(b.expectedReturnDate).getTime());
+      .forEach(rental => {
+          if (!upcomingMap[rental.customerId]) {
+              const customer = customers.find(c => c.id === rental.customerId);
+              upcomingMap[rental.customerId] = {
+                  customerId: rental.customerId,
+                  customerName: rental.customerName || 'Cliente Desconhecido',
+                  customerImageUrl: customer?.imageUrl,
+                  hasOverdue: false,
+                  totalPendingValue: 0,
+                  rentals: []
+              };
+          }
+          const group = upcomingMap[rental.customerId];
+          group.rentals.push(rental);
+          
+          const returnDate = parseISO(rental.expectedReturnDate);
+          if (isPast(returnDate) && !isToday(returnDate)) {
+              group.hasOverdue = true;
+          }
+          
+          const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
+          group.totalPendingValue += Math.max(0, rental.value - totalPaid);
+      });
 
+    const sortedUpcoming = Object.values(upcomingMap).sort((a, b) => {
+        if (a.hasOverdue && !b.hasOverdue) return -1;
+        if (!a.hasOverdue && b.hasOverdue) return 1;
+        return a.customerName.localeCompare(b.customerName);
+    });
+
+    // --- 2. Group Pending Payments (Items already returned) ---
     const customerMap: { [key: string]: GroupedPendingPayment } = {};
     const pending: GroupedPendingPayment[] = [];
 
@@ -347,7 +389,7 @@ export default function DashboardDisplay() {
 
     pending.sort((a,b) => b.totalPendingValue - a.totalPendingValue);
 
-    return { upcomingReturns: returns, groupedPendingPayments: pending };
+    return { groupedUpcomingReturns: sortedUpcoming, groupedPendingPayments: pending };
 
   }, [rentals, customers]);
 
@@ -380,11 +422,6 @@ export default function DashboardDisplay() {
         </div>
     );
   }
-
-  const getFirstName = (fullName?: string) => {
-    if (!fullName) return '';
-    return fullName.split(' ')[0];
-  };
 
   const CustomTooltipContentFormatter = (value: any, name: any, props: any) => {
     const numericValue = Number(value);
@@ -422,48 +459,100 @@ export default function DashboardDisplay() {
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle className="font-headline flex items-center"><CalendarClock className="h-6 w-6 mr-2 text-primary" /> Próximas Devoluções (Atrasadas e Futuras)</CardTitle>
-                    <CardDescription>Aluguéis que ainda não foram devolvidos e estão atrasados ou com devolução nos próximos 7 dias.</CardDescription>
+                    <CardTitle className="font-headline flex items-center"><CalendarClock className="h-6 w-6 mr-2 text-primary" /> Próximas Devoluções</CardTitle>
+                    <CardDescription>Aluguéis que estão para vencer ou já estão atrasados.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {upcomingReturns.length > 0 ? (
+                    {groupedUpcomingReturns.length > 0 ? (
                         <Accordion type="single" collapsible className="w-full space-y-2">
-                            {upcomingReturns.map(rental => {
-                                const customer = customers.find(c => c.id === rental.customerId);
-                                const returnDate = parseISO(rental.expectedReturnDate);
-                                const isOverdue = isPast(returnDate) && !isToday(returnDate);
-                                const isDueToday = isToday(returnDate);
-                                const isPayable = rental.paymentStatus !== 'paid' && !rental.isOpenEnded;
-
+                            {groupedUpcomingReturns.map(group => {
                                 return (
-                                    <AccordionItem value={`item-${rental.id}`} key={rental.id} className="border rounded-md hover:bg-muted/50 transition-colors">
+                                    <AccordionItem value={`up-group-${group.customerId}`} key={group.customerId} className="border rounded-md hover:bg-muted/50 transition-colors">
                                         <AccordionTrigger className="p-3 w-full hover:no-underline [&[data-state=open]]:border-b">
                                            <div className="flex items-center gap-3 w-full text-left">
-                                                <Avatar className="h-10 w-10"><AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name || 'Avatar'} /><AvatarFallback>{customer ? getFirstName(customer.name).charAt(0).toUpperCase() : 'C'}</AvatarFallback></Avatar>
+                                                <Avatar className="h-10 w-10"><AvatarImage src={group.customerImageUrl || undefined} alt={group.customerName} /><AvatarFallback>{group.customerName.charAt(0).toUpperCase()}</AvatarFallback></Avatar>
                                                 <div className="flex-grow">
-                                                    <p className="font-semibold">{getFirstName(rental.customerName)}</p>
-                                                    <div className={cn("text-sm font-medium", isOverdue && "text-destructive", isDueToday && "text-orange-500")}>
-                                                        Devolução: {format(returnDate, 'PP', { locale: ptBR })}
-                                                        {isOverdue && ' (Atrasado)'}
-                                                        {isDueToday && ' (Hoje)'}
+                                                    <p className="font-semibold">{group.customerName}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant="secondary" className="text-[10px]">{group.rentals.length} contrato(s)</Badge>
+                                                        {group.hasOverdue && <Badge variant="destructive" className="text-[10px] animate-pulse">Tem Atraso</Badge>}
                                                     </div>
                                                 </div>
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                            <div className="pl-16 pr-4 pb-3 pt-2 text-sm space-y-3">
-                                                <div>
-                                                  <h4 className="font-semibold mb-2">Itens a serem devolvidos:</h4>
-                                                  {rental.equipment.length > 0 ? (
-                                                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                                                          {rental.equipment.map((eq, index) => <li key={index}>{eq.quantity}x {eq.name || 'Equipamento desconhecido'}</li>)}
-                                                      </ul>
-                                                  ) : <p className="text-muted-foreground italic">Nenhum item listado.</p>}
+                                            <div className="pl-4 pr-4 pb-3 pt-2 text-sm space-y-4">
+                                                <div className="space-y-3">
+                                                    {group.rentals.map(rental => {
+                                                        const returnDate = parseISO(rental.expectedReturnDate);
+                                                        const isOverdue = isPast(returnDate) && !isToday(returnDate);
+                                                        const isDueToday = isToday(returnDate);
+                                                        const isPayable = rental.paymentStatus !== 'paid';
+
+                                                        return (
+                                                            <div key={rental.id} className="p-3 border rounded-lg bg-muted/30 relative">
+                                                                <div className="flex justify-between items-start mb-2">
+                                                                    <div>
+                                                                        <p className="font-bold text-xs uppercase text-muted-foreground">ID #{rental.id.toString().padStart(4, '0')} — Total: {formatToBRL(rental.value)}</p>
+                                                                        <p className={cn("font-semibold", isOverdue && "text-destructive", isDueToday && "text-orange-600")}>
+                                                                            Devolução: {format(returnDate, 'dd/MM/yy', { locale: ptBR })}
+                                                                            {isOverdue && ' (Atrasado)'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="text-[10px]">
+                                                                        {paymentStatusMap[rental.paymentStatus]}
+                                                                    </Badge>
+                                                                </div>
+                                                                
+                                                                <div className="mb-3">
+                                                                    <p className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-wider">Itens do Contrato</p>
+                                                                    <div className="border rounded-md overflow-hidden bg-background/50">
+                                                                        <table className="w-full text-[10px] text-left border-collapse">
+                                                                            <thead className="bg-muted/50 border-b">
+                                                                                <tr>
+                                                                                    <th className="px-2 py-1 font-semibold">Item</th>
+                                                                                    <th className="px-2 py-1 font-semibold text-center">Qtd</th>
+                                                                                    <th className="px-2 py-1 font-semibold text-right">Diária</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody className="divide-y">
+                                                                                {rental.equipment.map((eq, i) => {
+                                                                                    const inventoryItem = inventory.find(inv => inv.id === eq.equipmentId);
+                                                                                    const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+                                                                                    return (
+                                                                                        <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                                                                            <td className="px-2 py-1 truncate max-w-[120px]">{eq.name}</td>
+                                                                                            <td className="px-2 py-1 text-center font-medium">{eq.quantity}</td>
+                                                                                            <td className="px-2 py-1 text-right font-mono">{formatToBRL(rateToUse)}</td>
+                                                                                        </tr>
+                                                                                    );
+                                                                                })}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <FinalizeRentalButton rental={rental} isFinalized={false} onFinalized={handleActionSuccess} buttonProps={{ variant: "outline", size: "sm", className: "h-8 text-[10px]" }} />
+                                                                    {isPayable && <Button variant="outline" size="sm" className="h-8 text-[10px]" onClick={() => setSelectedRentalForPayment(rental)}><DollarSign className="mr-1 h-3 w-3" />Pagar</Button>}
+                                                                    <Button asChild variant="outline" size="sm" className="h-8 text-[10px]" title="Gerar Contrato Individual">
+                                                                        <Link href={`/dashboard/rentals/${rental.id}/receipt`}>
+                                                                            <FileText className="mr-1 h-3 w-3 text-blue-500" /> Contrato
+                                                                        </Link>
+                                                                    </Button>
+                                                                    <Button asChild variant="ghost" size="sm" className="h-8 text-[10px] ml-auto"><Link href={`/dashboard/rentals/${rental.id}/edit`}><Edit className="mr-1 h-3 w-3" /> Editar</Link></Button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-                                                    <FinalizeRentalButton rental={rental} isFinalized={!!rental.actualReturnDate} onFinalized={handleActionSuccess} buttonProps={{ variant: "outline", size: "sm", className: "text-green-600 border-green-600/50 hover:bg-green-600/10 hover:text-green-700" }} />
-                                                    {isPayable && <Button variant="outline" size="sm" onClick={() => setSelectedRentalForPayment(rental)}><DollarSign className="mr-2 h-4 w-4 text-green-600" />Registrar Pagamento</Button>}
-                                                    <Button asChild variant="outline" size="sm"><Link href={`/dashboard/rentals/${rental.id}/details`}><Eye className="mr-2 h-4 w-4" /> Ver detalhes</Link></Button>
+                                                <div className="flex flex-wrap justify-end pt-2 gap-2 border-t mt-2">
+                                                    {group.totalPendingValue > 0 && (
+                                                        <Button variant="outline" size="sm" onClick={() => setSelectedGroupForBulkPayment(group)}>
+                                                            <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" /> Quitar {group.rentals.length} Contratos ({formatToBRL(group.totalPendingValue)})
+                                                        </Button>
+                                                    )}
+                                                    <Button asChild size="sm" variant="secondary"><Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}><FileText className="h-4 w-4 mr-2" />Contrato Consolidado</Link></Button>
                                                 </div>
                                             </div>
                                         </AccordionContent>
@@ -477,7 +566,7 @@ export default function DashboardDisplay() {
 
             <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle className="font-headline flex items-center"><HandCoins className="h-6 w-6 mr-2 text-primary" />Pagamentos Pendentes (Itens Devolvidos)</CardTitle>
+                    <CardTitle className="font-headline flex items-center"><HandCoins className="h-6 w-6 mr-2 text-primary" />Pagamentos Pendentes (Já Devolvidos)</CardTitle>
                     <CardDescription>
                         Aluguéis finalizados que aguardam pagamento. 
                         {totalPendingSum > 0 && <span className="font-bold text-foreground"> Total: {formatToBRL(totalPendingSum)}</span>}
@@ -503,13 +592,37 @@ export default function DashboardDisplay() {
                                                 {group.rentals.map(rental => {
                                                     const pendingValue = Math.max(0, rental.value - (rental.payments?.reduce((acc,p)=>acc+p.amount,0) ?? 0));
                                                     return(
-                                                        <div key={rental.id} className="flex flex-wrap items-center justify-between gap-2 p-2 border-b last:border-b-0">
-                                                            <div>
-                                                                <p className="text-muted-foreground text-xs">Contrato ID: {rental.id}</p>
-                                                                <p className="font-semibold text-destructive">Pendente: {formatToBRL(pendingValue)}</p>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
+                                                        <div key={rental.id} className="flex flex-col gap-2 p-3 border rounded-lg bg-muted/20">
+                                                            <div className="flex justify-between items-start">
+                                                                <div>
+                                                                    <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-tight">Contrato #{rental.id.toString().padStart(4, '0')} — Total: {formatToBRL(rental.value)}</p>
+                                                                    <p className="font-bold text-destructive text-sm">{formatToBRL(pendingValue)} Pendente</p>
+                                                                </div>
                                                                 <RentalTableActions rental={rental} inventory={inventory} onActionSuccess={handleActionSuccess} />
+                                                            </div>
+                                                            <div className="border rounded-md overflow-hidden bg-background/50">
+                                                                <table className="w-full text-[10px] text-left border-collapse">
+                                                                    <thead className="bg-muted/50 border-b">
+                                                                        <tr>
+                                                                            <th className="px-2 py-1 font-semibold">Item</th>
+                                                                            <th className="px-2 py-1 font-semibold text-center">Qtd</th>
+                                                                            <th className="px-2 py-1 font-semibold text-right">Diária</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y">
+                                                                        {rental.equipment.map((eq, i) => {
+                                                                            const inventoryItem = inventory.find(inv => inv.id === eq.equipmentId);
+                                                                            const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+                                                                            return (
+                                                                                <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                                                                    <td className="px-2 py-1 truncate max-w-[150px]">{eq.name}</td>
+                                                                                    <td className="px-2 py-1 text-center font-medium">{eq.quantity}</td>
+                                                                                    <td className="px-2 py-1 text-right font-mono">{formatToBRL(rateToUse)}</td>
+                                                                                </tr>
+                                                                            );
+                                                                        })}
+                                                                    </tbody>
+                                                                </table>
                                                             </div>
                                                         </div>
                                                     )

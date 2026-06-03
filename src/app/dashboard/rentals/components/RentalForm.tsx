@@ -217,7 +217,6 @@ export function RentalForm({
   const inventoryWithAvailability = useMemo(() => {
     const newStartDate = form.getValues('rentalStartDate');
     const isOpenEnded = form.getValues('isOpenEnded');
-    // For availability check, if open-ended, we assume a very far future to check any current/future conflicts
     const newEndDate = isOpenEnded ? addDays(new Date(), 3650) : form.getValues('expectedReturnDate');
 
     if (!newStartDate || (!isOpenEnded && !newEndDate)) {
@@ -255,12 +254,10 @@ export function RentalForm({
       }
     }
     
-    // Filter out items that are NOT for rental
     const rentalOnlyInventory = inventoryList.filter(item => item.forRental);
 
     return rentalOnlyInventory.map(item => {
       const rented = rentedQuantities.get(item.id) || 0;
-      // If base status is maintenance ('rented'), availability is zero
       const baseAvailable = item.status === 'rented' ? 0 : item.quantity;
       return { ...item, availableQuantity: Math.max(0, baseAvailable - rented) };
     });
@@ -501,7 +498,7 @@ export function RentalForm({
         description: `O contrato de aluguel foi ${initialData ? 'atualizado' : 'criado'} com sucesso.`,
         variant: 'success',
       });
-      router.push('/dashboard/rentals');
+      router.back();
       router.refresh();
     } catch (error) {
       console.error("Erro ao criar/atualizar aluguel (CLIENTE):", error);

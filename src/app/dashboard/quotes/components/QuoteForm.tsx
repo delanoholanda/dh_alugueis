@@ -194,12 +194,10 @@ export function QuoteForm({
       }
     }
     
-    // Filter to show only items for rental
     const rentalOnlyInventory = inventoryList.filter(item => item.forRental);
 
     return rentalOnlyInventory.map(item => {
       const rented = rentedQuantities.get(item.id) || 0;
-      // If base status is maintenance ('rented'), availability is zero
       const baseAvailable = item.status === 'rented' ? 0 : item.quantity;
       return { ...item, availableQuantity: Math.max(0, baseAvailable - rented) };
     });
@@ -285,7 +283,7 @@ export function QuoteForm({
     try {
       await onSubmitAction(actionData);
       toast({ title: `Orçamento ${initialData ? 'Atualizado' : 'Criado'}`, variant: 'success' });
-      router.push('/dashboard/quotes');
+      router.back();
       router.refresh();
     } catch (error) {
       toast({ title: 'Erro', description: `Falha ao salvar orçamento. Detalhes: ${(error as Error).message}`, variant: 'destructive' });
