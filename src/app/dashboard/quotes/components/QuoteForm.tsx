@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, UserPlus, PackagePlus, MapPin, Info, ChevronsUpDown, Check, Package, ArrowLeft } from 'lucide-react';
-import { format, parseISO, isSameDay, isWithinInterval, startOfDay, endOfDay, addDays } from 'date-fns';
+import { format, parseISO, isSameDay, isWithinInterval, startOfDay, endOfDay, addDays, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -170,37 +170,59 @@ export function QuoteForm({
       }));
     }
 
-    const newInterval = { start: startOfDay(newStartDate), end: endOfDay(newEndDate) };
-
-    const rentedQuantities = new Map<string, number>();
+    const requestedInterval = { start: startOfDay(newStartDate), end: endOfDay(newEndDate) };
+    const daysToCheck = eachDayOfInterval(requestedInterval);
+    const usageOnEachDay = new Map<string, Map<string, number>>();
+    
+    for (const day of daysToCheck) {
+        usageOnEachDay.set(format(day, 'yyyy-MM-dd'), new Map<string, number>());
+    }
 
     for (const rental of allRentals) {
-      if (rental.actualReturnDate) continue;
-
-      const existingInterval = {
-        start: startOfDay(parseISO(rental.rentalStartDate)),
-        end: rental.isOpenEnded ? addDays(new Date(), 3650) : endOfDay(parseISO(rental.expectedReturnDate)),
-      };
-
-      const overlaps = isWithinInterval(newInterval.start, existingInterval) ||
-                       isWithinInterval(newInterval.end, existingInterval) ||
-                       isWithinInterval(existingInterval.start, newInterval) ||
-                       isWithinInterval(existingInterval.end, newInterval);
-
-      if (overlaps) {
-        for (const eq of rental.equipment) {
-          rentedQuantities.set(eq.equipmentId, (rentedQuantities.get(eq.equipmentId) || 0) + eq.quantity);
+        if (rental.actualReturnDate) {
+             const rStart = startOfDay(parseISO(rental.rentalStartDate));
+             const rEnd = endOfDay(parseISO(rental.actualReturnDate));
+             const rInterval = { start: rStart, end: rEnd };
+             for (const day of daysToCheck) {
+                 if (isWithinInterval(day, rInterval)) {
+                     const dayKey = format(day, 'yyyy-MM-dd');
+                     const dayMap = usageOnEachDay.get(dayKey)!;
+                     for (const eq of rental.equipment) {
+                         dayMap.set(eq.equipmentId, (dayMap.get(eq.equipmentId) || 0) + eq.quantity);
+                     }
+                 }
+             }
+        } else {
+             const rStart = startOfDay(parseISO(rental.rentalStartDate));
+             const rEnd = rental.isOpenEnded ? addDays(new Date(), 730) : endOfDay(parseISO(rental.expectedReturnDate));
+             const rInterval = { start: rStart, end: rEnd };
+             for (const day of daysToCheck) {
+                 if (isWithinInterval(day, rInterval)) {
+                     const dayKey = format(day, 'yyyy-MM-dd');
+                     const dayMap = usageOnEachDay.get(dayKey)!;
+                     for (const eq of rental.equipment) {
+                         dayMap.set(eq.equipmentId, (dayMap.get(eq.equipmentId) || 0) + eq.quantity);
+                     }
+                 }
+             }
         }
-      }
     }
-    
-    const rentalOnlyInventory = inventoryList.filter(item => item.forRental);
 
-    return rentalOnlyInventory.map(item => {
-      const rented = rentedQuantities.get(item.id) || 0;
-      const baseAvailable = item.status === 'rented' ? 0 : item.quantity;
-      return { ...item, availableQuantity: Math.max(0, baseAvailable - rented) };
-    });
+    const maxRentedAcrossPeriod = new Map<string, number>();
+    for (const [dayKey, dayMap] of usageOnEachDay) {
+        for (const [eqId, qty] of dayMap) {
+            const currentMax = maxRentedAcrossPeriod.get(eqId) || 0;
+            if (qty > currentMax) maxRentedAcrossPeriod.set(eqId, qty);
+        }
+    }
+
+    return inventoryList
+        .filter(item => item.forRental)
+        .map(item => {
+            const maxRented = maxRentedAcrossPeriod.get(item.id) || 0;
+            const baseAvailable = item.status === 'rented' ? 0 : item.quantity;
+            return { ...item, availableQuantity: Math.max(0, baseAvailable - maxRented) };
+        });
 
   }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate]);
 

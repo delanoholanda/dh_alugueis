@@ -158,8 +158,8 @@ export async function createRental(
   const rentalFieldsToInsert = newRentalForDbBase;
 
   const insertRentalStmt = db.prepare(`
-    INSERT INTO rentals (customerId, customerName, rentalStartDate, rentalDays, expectedReturnDate, actualReturnDate, freightValue, discountValue, value, paymentStatus, paymentMethod, paymentDate, notes, deliveryAddress, isOpenEnded, chargeSaturdays, chargeSundays, returnNotificationSent, fuelValue, deliveredWithFullTank)
-    VALUES (@customerId, @customerName, @rentalStartDate, @rentalDays, @expectedReturnDate, @actualReturnDate, @freightValue, @discountValue, @value, @paymentStatus, @paymentMethod, @paymentDate, @notes, @deliveryAddress, @isOpenEnded, @chargeSaturdays, @chargeSundays, @returnNotificationSent, @fuelValue, @deliveredWithFullTank)
+    INSERT INTO rentals (customerId, customerName, rentalStartDate, rentalDays, expectedReturnDate, actualReturnDate, freightValue, discountValue, fuelValue, deliveredWithFullTank, value, paymentStatus, paymentMethod, paymentDate, notes, deliveryAddress, isOpenEnded, chargeSaturdays, chargeSundays, returnNotificationSent)
+    VALUES (@customerId, @customerName, @rentalStartDate, @rentalDays, @expectedReturnDate, @actualReturnDate, @freightValue, @discountValue, @fuelValue, @deliveredWithFullTank, @value, @paymentStatus, @paymentMethod, @paymentDate, @notes, @deliveryAddress, @isOpenEnded, @chargeSaturdays, @chargeSundays, @returnNotificationSent)
   `);
 
   const insertRentalEquipmentStmt = db.prepare(`
@@ -332,9 +332,10 @@ export async function updateRental(
     UPDATE rentals SET 
       customerId = @customerId, customerName = @customerName, rentalStartDate = @rentalStartDate, rentalDays = @rentalDays, 
       expectedReturnDate = @expectedReturnDate, actualReturnDate = @actualReturnDate, freightValue = @freightValue, discountValue = @discountValue,
-      value = @value, paymentStatus = @paymentStatus, paymentMethod = @paymentMethod, paymentDate = @paymentDate, notes = @notes,
+      fuelValue = @fuelValue, deliveredWithFullTank = @deliveredWithFullTank, value = @value, paymentStatus = @paymentStatus, 
+      paymentMethod = @paymentMethod, paymentDate = @paymentDate, notes = @notes,
       deliveryAddress = @deliveryAddress, isOpenEnded = @isOpenEnded, chargeSaturdays = @chargeSaturdays, chargeSundays = @chargeSundays,
-      returnNotificationSent = @returnNotificationSent, fuelValue = @fuelValue, deliveredWithFullTank = @deliveredWithFullTank
+      returnNotificationSent = @returnNotificationSent
     WHERE id = @id
   `);
 
@@ -447,6 +448,7 @@ export async function extendRental(
   }
 ): Promise<Rental | null> {
   await validateServerSession();
+  const db = getDb();
   const existingRental = await getRentalById(rentalId);
 
   if (!existingRental) {
@@ -458,17 +460,6 @@ export async function extendRental(
     console.error(`extendRental: Cannot extend an open-ended rental (ID: ${rentalId}).`);
     throw new Error('Não é possível prorrogar um aluguel que já está em aberto.');
   }
-
-  if (existingRental.paymentStatus === 'paid') {
-    try {
-      await finalizeRental(rentalId);
-      console.log(`[Action extendRental] Original rental ${rentalId} was paid and is now marked as finalized.`);
-    } catch (finalizeError) {
-      console.warn(`[Action extendRental] Could not automatically finalize original rental ${rentalId}. Proceeding with extension creation. Error: ${(finalizeError as Error).message}`);
-    }
-  }
-  
-  // -- Common Logic for both extension types --
 
   // 1. Find the actual start date of the extension by skipping non-billable weekend days.
   let newRentalStartDateObj = addDays(parseISO(existingRental.expectedReturnDate), 1);
@@ -503,11 +494,11 @@ export async function extendRental(
     equipment: equipmentForNewRental,
     paymentStatus: 'pending' as const,
     paymentMethod: existingRental.paymentMethod || 'pix',
-    freightValue: 0, // Extensions do not carry over freight
-    fuelValue: 0, // Extensions do not carry over fuel costs
-    deliveredWithFullTank: false, // Default to false for new extension
+    freightValue: 0, 
+    fuelValue: 0, 
+    deliveredWithFullTank: false, 
     discountValue: 0,
-    notes: `Extensão do aluguel ID: ${rentalId}. Período original de ${format(parseISO(existingRental.rentalStartDate), 'dd/MM/yyyy', { locale: ptBR })} a ${format(parseISO(existingRental.expectedReturnDate), 'dd/MM/yyyy', { locale: ptBR })}.`,
+    notes: `Prorrogação do aluguel ID: ${rentalId}. Período anterior: ${format(parseISO(existingRental.rentalStartDate), 'dd/MM/yy', { locale: ptBR })} a ${format(parseISO(existingRental.expectedReturnDate), 'dd/MM/yy', { locale: ptBR })}.`,
     deliveryAddress: existingRental.deliveryAddress || 'A definir',
     chargeSaturdays: options.chargeSaturdays,
     chargeSundays: options.chargeSundays,
@@ -516,24 +507,19 @@ export async function extendRental(
   if (options.type === 'open_ended') {
     newRentalData = {
       ...baseRentalData,
-      rentalDays: 0, // Open-ended starts with 0 days
-      value: dailyRateSum, // For open-ended, 'value' is the daily rate
+      rentalDays: 0, 
+      value: dailyRateSum, 
       isOpenEnded: true,
     };
-  } else { // type === 'fixed'
+  } else { 
     const additionalDays = options.additionalDays ?? 1;
     if (additionalDays <= 0) throw new Error("Additional days must be positive for a fixed extension.");
     
-    const totalCalendarDays = differenceInDays(
-        findNthBillableDay(newRentalStartDateObj, additionalDays, options.chargeSaturdays, options.chargeSundays), 
-        newRentalStartDateObj
-    ) + 1;
-
     const newRentalValue = dailyRateSum * additionalDays;
 
     newRentalData = {
       ...baseRentalData,
-      rentalDays: totalCalendarDays,
+      rentalDays: additionalDays,
       value: newRentalValue,
       isOpenEnded: false,
     };
@@ -541,6 +527,11 @@ export async function extendRental(
 
   try {
     const newRental = await createRental(newRentalData);
+    
+    // CRITICAL: Mark the original rental as physically returned/finalized to avoid inventory conflict.
+    // The items are now contractually covered by the new extension rental.
+    db.prepare('UPDATE rentals SET actualReturnDate = ? WHERE id = ?').run(existingRental.expectedReturnDate, rentalId);
+    
     revalidatePath('/dashboard/rentals');
     revalidatePath('/dashboard', 'layout');
     return newRental;
@@ -573,13 +564,12 @@ export async function calculateAndCloseOpenEndedRental(id: number): Promise<Rent
     existingRental.chargeSundays ?? true
   );
 
-  // For open-ended rentals, `value` stores the daily rate.
   const finalValue = billableDays * existingRental.value;
 
   const updatePayload = {
     value: finalValue,
     rentalDays: billableDays,
-    isOpenEnded: 0, // false
+    isOpenEnded: 0, 
     expectedReturnDate: formattedToday,
     paymentStatus: 'pending',
     id: id,
@@ -669,14 +659,13 @@ export async function addRentalPhoto(rentalId: number, imageDataUrl: string, pho
   await validateServerSession();
   const db = getDb();
 
-  // Save the file and get the public URL
   const imageUrl = await saveFile(imageDataUrl, 'rentals');
 
   const newId = `rpho_${crypto.randomBytes(8).toString('hex')}`;
   const newPhoto: RentalPhoto = {
     id: newId,
     rentalId,
-    imageUrl, // Store the public path
+    imageUrl, 
     photoType,
     uploadedAt: new Date().toISOString(),
   };
@@ -687,7 +676,6 @@ export async function addRentalPhoto(rentalId: number, imageDataUrl: string, pho
     revalidatePath(`/dashboard/rentals/${rentalId}/details`);
     return newPhoto;
   } catch (error) {
-    // If DB insert fails, try to delete the file we just saved
     await deleteFile(imageUrl);
     console.error("Failed to add rental photo:", error);
     throw new Error('Failed to add photo to database.');
@@ -705,10 +693,8 @@ export async function deleteRentalPhoto(photoId: string): Promise<{ success: boo
       throw new Error("Photo not found.");
     }
 
-    // Delete the file from the filesystem first
     await deleteFile(photo.imageUrl);
 
-    // Then delete the record from the database
     const stmt = db.prepare('DELETE FROM rental_photos WHERE id = ?');
     const result = stmt.run(photoId);
     
@@ -737,7 +723,6 @@ export async function addPayment(
   };
 
   const transaction = db.transaction(() => {
-    // 1. Get current rental and payments inside the transaction for consistency
     const rentalRow = db.prepare('SELECT * FROM rentals WHERE id = ?').get(rentalId) as (Rental | undefined);
     if (!rentalRow) {
       throw new Error(`Aluguel com ID ${rentalId} não encontrado.`);
@@ -745,17 +730,14 @@ export async function addPayment(
 
     const existingPayments = db.prepare('SELECT * FROM payments WHERE rentalId = ?').all(rentalId) as Payment[];
 
-    // 2. Insert the new payment record
     const insertPaymentStmt = db.prepare(
       'INSERT INTO payments (id, rentalId, amount, paymentDate, paymentMethod, isPartial) VALUES (@id, @rentalId, @amount, @paymentDate, @paymentMethod, @isPartial)'
     );
     insertPaymentStmt.run({ ...newPayment, isPartial: newPayment.isPartial ? 1 : 0 });
 
-    // 3. Calculate new payment totals
     const totalPaid = existingPayments.reduce((sum, p) => sum + p.amount, 0) + newPayment.amount;
     const remainingValue = rentalRow.value - totalPaid;
     
-    // 4. Determine the new payment status for the rental
     const isNowFullyPaid = remainingValue < 0.01;
     let newPaymentStatus: Rental['paymentStatus'] = rentalRow.paymentStatus;
     
@@ -765,10 +747,8 @@ export async function addPayment(
         newPaymentStatus = 'pending';
     }
     
-    // 5. Determine the main paymentDate for the rental (usually the date of the final payment)
     const newPaymentDateForRental = isNowFullyPaid ? newPayment.paymentDate : rentalRow.paymentDate;
 
-    // 6. Update the main rental table
     const updateRentalStmt = db.prepare(
       'UPDATE rentals SET paymentStatus = @paymentStatus, paymentDate = @paymentDate, paymentMethod = @paymentMethod WHERE id = @id'
     );
@@ -776,7 +756,7 @@ export async function addPayment(
       id: rentalId,
       paymentStatus: newPaymentStatus,
       paymentDate: newPaymentDateForRental,
-      paymentMethod: paymentData.paymentMethod, // Update to the latest payment method used
+      paymentMethod: paymentData.paymentMethod, 
     });
   });
 
@@ -787,7 +767,6 @@ export async function addPayment(
     revalidatePath('/dashboard/rentals');
     revalidatePath('/dashboard');
     
-    // We fetch the data again after the transaction to return the most up-to-date state.
     const finalUpdatedRental = await getRentalById(rentalId);
     return finalUpdatedRental || null;
 

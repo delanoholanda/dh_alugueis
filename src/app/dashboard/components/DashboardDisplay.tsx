@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse, CheckCircle2, AlertCircle, Fuel, Edit } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse, CheckCircle2, AlertCircle, Fuel, Edit, CalendarPlus } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import type { Rental, Customer, Equipment, Expense, EquipmentType, Payment } from '@/types';
@@ -19,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { DynamicLucideIcon } from '@/lib/lucide-icons';
 import { Badge } from '@/components/ui/badge';
 import { MarkAsPaidDialog } from '@/app/dashboard/rentals/components/MarkAsPaidDialog';
+import { ExtendRentalDialog } from '@/app/dashboard/rentals/components/ExtendRentalDialog';
 import FinalizeRentalButton from '@/app/dashboard/rentals/components/FinalizeRentalButton';
 import { getRentals } from '@/actions/rentalActions';
 import { getCustomers } from '@/actions/customerActions';
@@ -223,6 +223,7 @@ export default function DashboardDisplay() {
   const [mostRentedTypesData, setMostRentedTypesData] = useState<MostRentedTypeData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRentalForPayment, setSelectedRentalForPayment] = useState<Rental | null>(null);
+  const [selectedRentalForExtension, setSelectedRentalForExtension] = useState<Rental | null>(null);
   const [selectedGroupForBulkPayment, setSelectedGroupForBulkPayment] = useState<GroupedPendingPayment | GroupedUpcomingReturn | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -534,6 +535,7 @@ export default function DashboardDisplay() {
 
                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                     <FinalizeRentalButton rental={rental} isFinalized={false} onFinalized={handleActionSuccess} buttonProps={{ variant: "outline", size: "sm", className: "h-8 text-[10px]" }} />
+                                                                    <Button variant="outline" size="sm" className="h-8 text-[10px]" onClick={() => setSelectedRentalForExtension(rental)}><CalendarPlus className="mr-1 h-3 w-3 text-primary" />Prorrogar</Button>
                                                                     {isPayable && <Button variant="outline" size="sm" className="h-8 text-[10px]" onClick={() => setSelectedRentalForPayment(rental)}><DollarSign className="mr-1 h-3 w-3" />Pagar</Button>}
                                                                     <Button asChild variant="outline" size="sm" className="h-8 text-[10px]" title="Gerar Contrato Individual">
                                                                         <Link href={`/dashboard/rentals/${rental.id}/receipt`}>
@@ -704,6 +706,15 @@ export default function DashboardDisplay() {
       </div>
       {selectedRentalForPayment && (
         <MarkAsPaidDialog rental={selectedRentalForPayment} isOpen={!!selectedRentalForPayment} onOpenChange={(open) => !open && setSelectedRentalForPayment(null)} onSuccess={handleActionSuccess} />
+      )}
+      {selectedRentalForExtension && (
+        <ExtendRentalDialog 
+          rental={selectedRentalForExtension} 
+          isOpen={!!selectedRentalForExtension} 
+          onOpenChange={(open) => !open && setSelectedRentalForExtension(null)} 
+          inventory={inventory}
+          onExtensionSuccess={handleActionSuccess} 
+        />
       )}
       {selectedGroupForBulkPayment && (
         <BulkPaymentDialog
