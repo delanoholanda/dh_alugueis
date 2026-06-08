@@ -8,7 +8,7 @@ import { getInventoryItemById } from './inventoryActions';
 import { getDb } from '@/lib/database';
 import crypto from 'crypto';
 import { saveFile, deleteFile } from '@/lib/file-storage';
-import { addDays, format, parseISO, getDay, differenceInDays } from 'date-fns';
+import { addDays, format, parseISO, getDay, differenceInDays, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { countBillableDays, findNthBillableDay } from '@/lib/utils';
 import { validateServerSession } from '@/lib/auth-utils';
@@ -773,5 +773,53 @@ export async function addPayment(
   } catch (error) {
     console.error(`Falha ao adicionar pagamento para o aluguel ${rentalId}:`, error);
     throw new Error(`Falha ao registrar pagamento no banco de dados. Detalhes: ${(error as Error).message}`);
+  }
+}
+
+export async function deletePayment(paymentId: string): Promise<{ success: boolean }> {
+  await validateServerSession();
+  const db = getDb();
+  
+  try {
+    const payment = db.prepare('SELECT rentalId FROM payments WHERE id = ?').get(paymentId) as { rentalId: number } | undefined;
+    if (!payment) throw new Error("Pagamento não encontrado.");
+
+    const rentalId = payment.rentalId;
+
+    db.transaction(() => {
+        // 1. Delete the payment
+        db.prepare('DELETE FROM payments WHERE id = ?').run(paymentId);
+
+        // 2. Re-evaluate rental status based on remaining payments
+        const rental = db.prepare('SELECT value, expectedReturnDate, actualReturnDate FROM rentals WHERE id = ?').get(rentalId) as any;
+        const allPayments = db.prepare('SELECT amount, paymentDate FROM payments WHERE rentalId = ? ORDER BY paymentDate DESC').all(rentalId) as { amount: number, paymentDate: string }[];
+        const totalPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
+
+        let newStatus: 'paid' | 'pending' | 'overdue' = 'pending';
+        let newPaymentDate: string | null = null;
+
+        if (totalPaid >= rental.value - 0.01) {
+            newStatus = 'paid';
+            newPaymentDate = allPayments[0]?.paymentDate || null;
+        } else {
+            const expectedReturn = parseISO(rental.expectedReturnDate);
+            if (isPast(expectedReturn) && !isToday(expectedReturn)) {
+                newStatus = 'overdue';
+            } else {
+                newStatus = 'pending';
+            }
+        }
+
+        db.prepare('UPDATE rentals SET paymentStatus = ?, paymentDate = ? WHERE id = ?')
+          .run(newStatus, newPaymentDate, rentalId);
+    })();
+
+    revalidatePath(`/dashboard/rentals/${rentalId}/details`);
+    revalidatePath('/dashboard/rentals');
+    revalidatePath('/dashboard');
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to delete payment:", error);
+    throw error;
   }
 }

@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getRentalById } from '@/actions/rentalActions';
+import { getRentalById, deletePayment } from '@/actions/rentalActions';
 import { getCustomerById } from '@/actions/customerActions';
 import { getInventoryItems } from '@/actions/inventoryActions';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -13,12 +14,23 @@ import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit, History, FileText, Fuel } from 'lucide-react';
+import { Info, ListChecks, Banknote, ArrowLeft, CreditCard, Landmark, CircleDollarSign, Phone, Home, Fingerprint, MapPin, Camera, PackageX, Loader2, CheckSquare, Edit, History, FileText, Fuel, Trash2 } from 'lucide-react';
 import type { Rental, PaymentMethod, Customer, RentalPhoto, Equipment as InventoryEquipment } from '@/types';
 import RentalPhotoGallery from '../../components/RentalPhotoGallery';
 import { MarkAsPaidDialog } from '../../components/MarkAsPaidDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import FinalizeRentalButton from '../../components/FinalizeRentalButton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 
 const paymentStatusMap: Record<Rental['paymentStatus'], string> = {
@@ -68,6 +80,8 @@ export default function RentalDetailsPage() {
   const [totalDailyRate, setTotalDailyRate] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isPaidDialogOpen, setIsPaidDialogOpen] = useState(false);
+  const [isDeletingPayment, setIsDeletingPayment] = useState<string | null>(null);
+  const { toast } = (require('@/hooks/use-toast')).useToast();
 
   const fetchFullPageData = useCallback(async () => {
     if (isNaN(rentalId)) {
@@ -127,6 +141,19 @@ export default function RentalDetailsPage() {
 
   const handleActionSuccess = async () => {
     await fetchFullPageData();
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    setIsDeletingPayment(paymentId);
+    try {
+        await deletePayment(paymentId);
+        toast({ title: 'Pagamento Removido', description: 'O saldo do contrato foi atualizado e o valor removido do financeiro.', variant: 'success' });
+        await fetchFullPageData();
+    } catch (error) {
+        toast({ title: 'Erro ao Remover Pagamento', description: (error as Error).message, variant: 'destructive' });
+    } finally {
+        setIsDeletingPayment(null);
+    }
   };
 
   if (isLoading) {
@@ -470,6 +497,7 @@ export default function RentalDetailsPage() {
                                 <th className="p-2 text-left font-medium text-muted-foreground">Data</th>
                                 <th className="p-2 text-left font-medium text-muted-foreground">Método</th>
                                 <th className="p-2 text-right font-medium text-muted-foreground">Valor</th>
+                                <th className="p-2 text-center font-medium text-muted-foreground">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -478,6 +506,27 @@ export default function RentalDetailsPage() {
                                     <td className="p-2">{format(parseISO(p.paymentDate), 'P', { locale: ptBR })}</td>
                                     <td className="p-2 capitalize">{paymentMethodMap[p.paymentMethod]?.label || p.paymentMethod}</td>
                                     <td className="p-2 text-right font-mono">{formatToBRL(p.amount)}</td>
+                                    <td className="p-2 text-center">
+                                         <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" disabled={isDeletingPayment === p.id}>
+                                                    {isDeletingPayment === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Remover este pagamento?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        O valor de {formatToBRL(p.amount)} será removido do saldo do contrato e do seu extrato financeiro. Deseja continuar?
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDeletePayment(p.id)} className="bg-destructive hover:bg-destructive/90">Confirmar</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

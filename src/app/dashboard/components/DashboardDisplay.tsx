@@ -537,6 +537,11 @@ export default function DashboardDisplay() {
                                                                     <FinalizeRentalButton rental={rental} isFinalized={false} onFinalized={handleActionSuccess} buttonProps={{ variant: "outline", size: "sm", className: "h-8 text-[10px]" }} />
                                                                     <Button variant="outline" size="sm" className="h-8 text-[10px]" onClick={() => setSelectedRentalForExtension(rental)}><CalendarPlus className="mr-1 h-3 w-3 text-primary" />Prorrogar</Button>
                                                                     {isPayable && <Button variant="outline" size="sm" className="h-8 text-[10px]" onClick={() => setSelectedRentalForPayment(rental)}><DollarSign className="mr-1 h-3 w-3" />Pagar</Button>}
+                                                                    <Button asChild variant="outline" size="sm" className="h-8 text-[10px]" title="Ver Detalhes do Aluguel">
+                                                                        <Link href={`/dashboard/rentals/${rental.id}/details`}>
+                                                                            <Eye className="mr-1 h-3 w-3 text-muted-foreground" /> Detalhes
+                                                                        </Link>
+                                                                    </Button>
                                                                     <Button asChild variant="outline" size="sm" className="h-8 text-[10px]" title="Gerar Contrato Individual">
                                                                         <Link href={`/dashboard/rentals/${rental.id}/receipt`}>
                                                                             <FileText className="mr-1 h-3 w-3 text-blue-500" /> Contrato
@@ -592,13 +597,17 @@ export default function DashboardDisplay() {
                                         <div className="pl-4 pr-4 pb-3 pt-2 text-sm space-y-3">
                                             <div className="space-y-2">
                                                 {group.rentals.map(rental => {
-                                                    const pendingValue = Math.max(0, rental.value - (rental.payments?.reduce((acc,p)=>acc+p.amount,0) ?? 0));
+                                                    const totalPaid = rental.payments?.reduce((acc,p)=>acc+p.amount,0) ?? 0;
+                                                    const pendingValue = Math.max(0, rental.value - totalPaid);
+                                                    const returnDate = rental.actualReturnDate ? parseISO(rental.actualReturnDate) : parseISO(rental.expectedReturnDate);
+                                                    const formattedReturnDate = format(returnDate, 'dd/MM/yy', { locale: ptBR });
+                                                    
                                                     return(
                                                         <div key={rental.id} className="flex flex-col gap-2 p-3 border rounded-lg bg-muted/20">
                                                             <div className="flex justify-between items-start">
                                                                 <div>
                                                                     <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-tight">Contrato #{rental.id.toString().padStart(4, '0')} — Total: {formatToBRL(rental.value)}</p>
-                                                                    <p className="font-bold text-destructive text-sm">{formatToBRL(pendingValue)} Pendente</p>
+                                                                    <p className="font-bold text-destructive text-sm">{formatToBRL(pendingValue)} Pendente ({formattedReturnDate})</p>
                                                                 </div>
                                                                 <RentalTableActions rental={rental} inventory={inventory} onActionSuccess={handleActionSuccess} />
                                                             </div>
