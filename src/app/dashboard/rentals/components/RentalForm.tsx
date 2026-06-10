@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Rental, Customer, Equipment as InventoryEquipment, PaymentMethod, EquipmentType } from '@/types';
@@ -29,7 +30,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-
 
 const rentalFormSchema = z.object({
   customerId: z.string().min(1, "Cliente é obrigatório"),
@@ -78,32 +78,7 @@ const rentalFormSchema = z.object({
   paymentDate: z.date().optional(),
   notes: z.string().optional(),
   deliveryAddress: z.string().optional(),
-}).refine(data => {
-    if (!data.isOpenEnded) {
-        return !!data.expectedReturnDate;
-    }
-    return true;
-}, {
-    message: "Data de devolução é obrigatória.",
-    path: ["expectedReturnDate"],
-}).refine(data => {
-    if (!data.isOpenEnded) {
-        return data.rentalDays >= 1;
-    }
-    return true;
-}, {
-    message: "Deve ser pelo menos 1 para contratos com data final.",
-    path: ["rentalDays"],
-}).refine(data => {
-    if (!data.isOpenEnded && data.rentalStartDate && data.expectedReturnDate) {
-        return data.expectedReturnDate >= data.rentalStartDate;
-    }
-    return true;
-}, {
-    message: "A data de devolução não pode ser anterior à data de início.",
-    path: ["expectedReturnDate"],
 });
-
 
 type RentalFormValues = z.infer<typeof rentalFormSchema>;
 
@@ -131,36 +106,22 @@ export function RentalForm({
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-
-  const [isCustomerFormOpen, setIsCustomerFormOpen] = useState(false);
-  const [customerList, setCustomerList] = useState<Customer[]>(() =>
-    initialCustomers.sort((a, b) => a.name.localeCompare(b.name))
-  );
+  const [customerList, setCustomerList] = useState<Customer[]>(() => initialCustomers.sort((a, b) => a.name.localeCompare(b.name)));
+  const [inventoryList, setInventoryList] = useState<InventoryEquipment[]>(() => initialInventory.sort((a, b) => a.name.localeCompare(b.name)));
+  
   const [openCustomerCombobox, setOpenCustomerCombobox] = useState(false);
   const [openEquipmentCombobox, setOpenEquipmentCombobox] = useState<Record<number, boolean>>({});
-
+  const [isCustomerFormOpen, setIsCustomerFormOpen] = useState(false);
   const [isInventoryItemFormOpen, setIsInventoryItemFormOpen] = useState(false);
-  const [inventoryList, setInventoryList] = useState<InventoryEquipment[]>(() =>
-    initialInventory.sort((a, b) => a.name.localeCompare(b.name))
-  );
-  const [equipmentTypesList, setEquipmentTypesList] = useState<EquipmentType[]>(() =>
-    initialEquipmentTypes.sort((a, b) => a.name.localeCompare(b.name))
-  );
   const [currentEquipmentIndexForAddItem, setCurrentEquipmentIndexForAddItem] = useState<number | null>(null);
   const [focusedCurrencyField, setFocusedCurrencyField] = useState<string | null>(null);
-
 
   const form = useForm<RentalFormValues>({
     resolver: zodResolver(rentalFormSchema),
     defaultValues: initialData ? {
-      ...initialData,
+      customerId: initialData.customerId,
       rentalStartDate: initialData.rentalStartDate ? parseISO(initialData.rentalStartDate) : new Date(),
       expectedReturnDate: initialData.expectedReturnDate ? parseISO(initialData.expectedReturnDate) : undefined,
-      equipment: initialData.equipment.map(eq => ({
-        equipmentId: eq.equipmentId,
-        quantity: eq.quantity,
-        customDailyRentalRate: eq.customDailyRentalRate === null ? undefined : eq.customDailyRentalRate 
-      })),
       isOpenEnded: initialData.isOpenEnded ?? false,
       chargeSaturdays: initialData.chargeSaturdays ?? true,
       chargeSundays: initialData.chargeSundays ?? true,
@@ -169,15 +130,22 @@ export function RentalForm({
       discountValue: initialData.discountValue || 0,
       fuelValue: initialData.fuelValue || 0,
       deliveredWithFullTank: initialData.deliveredWithFullTank || false,
+      value: initialData.value,
+      paymentStatus: initialData.paymentStatus,
       paymentMethod: initialData.paymentMethod || 'pix',
       paymentDate: initialData.paymentDate ? parseISO(initialData.paymentDate) : undefined,
       notes: initialData.notes ?? '', 
       deliveryAddress: initialData.deliveryAddress || 'A definir',
+      equipment: initialData.equipment.map(eq => ({
+        equipmentId: eq.equipmentId,
+        quantity: eq.quantity,
+        customDailyRentalRate: eq.customDailyRentalRate === null ? undefined : eq.customDailyRentalRate 
+      })),
     } : {
       customerId: '',
       equipment: [{ equipmentId: '', quantity: 1, customDailyRentalRate: undefined }],
       rentalStartDate: new Date(),
-      expectedReturnDate: addDays(new Date(), 0), 
+      expectedReturnDate: undefined, 
       isOpenEnded: false,
       chargeSaturdays: true,
       chargeSundays: true,
@@ -195,101 +163,79 @@ export function RentalForm({
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "equipment"
-  });
-
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: "equipment" });
   const watchedIsOpenEnded = form.watch("isOpenEnded");
   const watchedEquipment = form.watch("equipment");
   const watchedRentalDays = form.watch("rentalDays");
-  const watchedFreightValue = form.watch("freightValue");
-  const watchedFuelValue = form.watch("fuelValue");
-  const watchedDiscountValue = form.watch("discountValue");
-  const watchedPaymentStatus = form.watch("paymentStatus");
   const watchedRentalStartDate = form.watch("rentalStartDate");
   const watchedChargeSaturdays = form.watch("chargeSaturdays");
   const watchedChargeSundays = form.watch("chargeSundays");
   const watchedExpectedReturnDate = form.watch("expectedReturnDate");
+  const watchedFreightValue = form.watch("freightValue");
+  const watchedFuelValue = form.watch("fuelValue");
+  const watchedDiscountValue = form.watch("discountValue");
 
   const inventoryWithAvailability = useMemo(() => {
     const startDate = form.getValues('rentalStartDate');
     const isOpen = form.getValues('isOpenEnded');
     const endDate = isOpen ? addDays(new Date(), 730) : (form.getValues('expectedReturnDate') || addDays(startDate, 1));
-
-    if (!startDate) {
-      return inventoryList.map(item => ({ 
-        ...item, 
-        availableQuantity: item.status === 'rented' ? 0 : item.quantity 
-      }));
-    }
-
+    
     const requestedInterval = { start: startOfDay(startDate), end: endOfDay(endDate) };
     const daysToCheck = eachDayOfInterval(requestedInterval);
     const usageOnEachDay = new Map<string, Map<string, number>>(); 
-    
-    for (const day of daysToCheck) {
-        usageOnEachDay.set(format(day, 'yyyy-MM-dd'), new Map<string, number>());
-    }
+    for (const day of daysToCheck) usageOnEachDay.set(format(day, 'yyyy-MM-dd'), new Map<string, number>());
 
     for (const rental of allRentals) {
-        // Ignora o contrato atual durante o cálculo para mostrar disponibilidade REAL para este contrato
         if (initialData && String(rental.id) === String(initialData.id)) continue;
+        if (rental.actualReturnDate) continue;
 
         const rStart = startOfDay(parseISO(rental.rentalStartDate));
-        const rEnd = rental.actualReturnDate 
-            ? endOfDay(parseISO(rental.actualReturnDate))
-            : (rental.isOpenEnded ? addDays(new Date(), 730) : endOfDay(parseISO(rental.expectedReturnDate)));
-        
+        const rEnd = rental.isOpenEnded ? addDays(new Date(), 730) : endOfDay(parseISO(rental.expectedReturnDate));
         const rentalInterval = { start: rStart, end: rEnd };
 
         for (const day of daysToCheck) {
             if (isWithinInterval(day, rentalInterval)) {
                 const dayKey = format(day, 'yyyy-MM-dd');
                 const dayMap = usageOnEachDay.get(dayKey)!;
-                for (const eq of rental.equipment) {
-                    dayMap.set(eq.equipmentId, (dayMap.get(eq.equipmentId) || 0) + eq.quantity);
-                }
+                for (const eq of rental.equipment) dayMap.set(eq.equipmentId, (dayMap.get(eq.equipmentId) || 0) + eq.quantity);
             }
         }
     }
 
-    const maxRentedAcrossPeriod = new Map<string, number>();
-    for (const [dayKey, dayMap] of usageOnEachDay) {
+    const maxUsageByOthers = new Map<string, number>();
+    for (const [_, dayMap] of usageOnEachDay) {
         for (const [eqId, qty] of dayMap) {
-            const currentMax = maxRentedAcrossPeriod.get(eqId) || 0;
-            if (qty > currentMax) maxRentedAcrossPeriod.set(eqId, qty);
+            const currentMax = maxUsageByOthers.get(eqId) || 0;
+            if (qty > currentMax) maxUsageByOthers.set(eqId, qty);
         }
     }
     
     return inventoryList.map(item => {
-        const maxRentedByOthers = maxRentedAcrossPeriod.get(item.id) || 0;
-        const baseCapacity = item.status === 'rented' ? 0 : item.quantity;
-        return { 
-            ...item, 
-            availableQuantity: Math.max(0, baseCapacity - maxRentedByOthers) 
-        };
-    });
+        const usage = maxUsageByOthers.get(item.id) || 0;
+        const capacity = item.status === 'rented' ? 0 : item.quantity;
+        const freeInYard = Math.max(0, capacity - usage);
+        
+        let availableForThisContract = freeInYard;
+        if (initialData) {
+            const currentQtyInThisRental = initialData.equipment.find(e => e.equipmentId === item.id)?.quantity || 0;
+            availableForThisContract += currentQtyInThisRental;
+        }
 
-  }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate, watchedIsOpenEnded]);
+        return { ...item, availableQuantity: availableForThisContract };
+    });
+  }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate, watchedIsOpenEnded, form]);
 
   useEffect(() => {
     if (watchedIsOpenEnded) {
         form.setValue('rentalDays', 0);
-        form.setValue('expectedReturnDate', undefined); 
-        form.clearErrors(['rentalDays', 'expectedReturnDate']);
+        form.setValue('expectedReturnDate', undefined);
     } else {
-        const currentDays = form.getValues('rentalDays');
-        if (currentDays === 0) form.setValue('rentalDays', 1); 
+        if (form.getValues('rentalDays') === 0) form.setValue('rentalDays', 1);
     }
   }, [watchedIsOpenEnded, form]);
 
-
   useEffect(() => {
-    if (watchedIsOpenEnded) {
-      form.setValue('expectedReturnDate', undefined);
-      return;
-    }
+    if (watchedIsOpenEnded) return;
     const startDate = form.getValues('rentalStartDate');
     const days = form.getValues('rentalDays');
     if (startDate && !isNaN(days) && days > 0) {
@@ -302,158 +248,80 @@ export function RentalForm({
   }, [watchedRentalDays, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, watchedIsOpenEnded, form]);
   
   useEffect(() => {
-    const daysInput = watchedRentalDays;
-    const days = (!watchedIsOpenEnded && daysInput && !isNaN(Number(daysInput)) && Number(daysInput) > 0) ? Number(daysInput) : 0;
+    const days = !watchedIsOpenEnded ? (Number(watchedRentalDays) || 0) : 1;
     let itemsTotalValue = 0;
-    if (watchedEquipment) {
-      watchedEquipment.forEach(item => {
-        const qtyInput = item.quantity;
-        const qty = (qtyInput && !isNaN(Number(qtyInput))) ? Number(qtyInput) : 0;
-        if (item.equipmentId && qty > 0) {
-          const equipmentDetails = inventoryList.find(invItem => invItem.id === item.equipmentId);
-          if (equipmentDetails) {
-            const standardRate = (typeof equipmentDetails.dailyRentalRate === 'number' && !isNaN(equipmentDetails.dailyRentalRate)) ? equipmentDetails.dailyRentalRate : 0;
-            let customRateInput = item.customDailyRentalRate;
-            let customRate: number;
-            if (customRateInput === undefined || String(customRateInput).trim() === '') {
-                customRate = standardRate; 
-            } else if (typeof customRateInput === 'number' && !isNaN(customRateInput)) {
-                customRate = customRateInput;
-            } else {
-                customRate = standardRate; 
-            }
-            itemsTotalValue += (qty * customRate * (watchedIsOpenEnded ? 1 : days));
-          }
+    watchedEquipment.forEach(item => {
+      const qty = Number(item.quantity) || 0;
+      if (item.equipmentId && qty > 0) {
+        const details = inventoryList.find(inv => inv.id === item.equipmentId);
+        if (details) {
+          const rate = item.customDailyRentalRate ?? details.dailyRentalRate ?? 0;
+          itemsTotalValue += (qty * rate * days);
         }
-      });
-    }
-    const freight = (typeof watchedFreightValue === 'number' && !isNaN(watchedFreightValue)) ? watchedFreightValue : 0;
-    const fuel = (typeof watchedFuelValue === 'number' && !isNaN(watchedFuelValue)) ? watchedFuelValue : 0;
-    const discount = (typeof watchedDiscountValue === 'number' && !isNaN(watchedDiscountValue)) ? watchedDiscountValue : 0;
-    let finalContractValue = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight + fuel - discount;
-    form.setValue('value', isNaN(finalContractValue) ? 0 : Math.max(0, finalContractValue), { shouldValidate: true });
-  }, [JSON.stringify(watchedEquipment), watchedRentalDays, watchedFreightValue, watchedFuelValue, watchedDiscountValue, inventoryList, form, watchedIsOpenEnded]);
-
-
-  const getEquipmentStandardRate = (equipmentId: string): number | undefined => {
-    const item = inventoryList.find(inv => inv.id === equipmentId);
-    return item?.dailyRentalRate;
-  };
+      }
+    });
+    const freight = Number(watchedFreightValue) || 0;
+    const fuel = Number(watchedFuelValue) || 0;
+    const discount = Number(watchedDiscountValue) || 0;
+    const final = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight + fuel - discount;
+    form.setValue('value', Math.max(0, final), { shouldValidate: true });
+  }, [watchedEquipment, watchedRentalDays, watchedFreightValue, watchedFuelValue, watchedDiscountValue, inventoryList, watchedIsOpenEnded, form]);
 
   const handleNewCustomerCreated = async (data: Omit<Customer, 'id'>) => {
-    try {
-      const newCustomer = await createCustomer(data); 
-      if (newCustomer) {
-        const refreshedCustomers = await getCustomers(); 
-        setCustomerList(refreshedCustomers.sort((a, b) => a.name.localeCompare(b.name)));
-        requestAnimationFrame(() => {
-          form.setValue('customerId', newCustomer.id, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
-        });
-        toast({ title: "Cliente Adicionado", description: `Cliente "${newCustomer.name}" foi adicionado e selecionado.`, variant: 'success' });
-        setIsCustomerFormOpen(false); 
-      }
-    } catch (error) {
-      console.error("Erro ao processar novo cliente:", error);
-      throw error; 
+    const newCustomer = await createCustomer(data); 
+    if (newCustomer) {
+      const refreshed = await getCustomers(); 
+      setCustomerList(refreshed.sort((a, b) => a.name.localeCompare(b.name)));
+      form.setValue('customerId', newCustomer.id, { shouldValidate: true });
+      setIsCustomerFormOpen(false); 
     }
   };
 
   const handleNewInventoryItemCreated = async (data: Omit<InventoryEquipment, 'id'>) => {
-    try {
-      const newItem = await createInventoryItem(data);
-      if (newItem) {
-        const refreshedInventory = await getInventoryItems(); 
-        setInventoryList(refreshedInventory.sort((a, b) => a.name.localeCompare(b.name)));
-        if (currentEquipmentIndexForAddItem !== null && newItem.forRental) {
-          form.setValue(`equipment.${currentEquipmentIndexForAddItem}.equipmentId`, newItem.id, { shouldValidate: true });
-          const rateToSet = (typeof newItem.dailyRentalRate === 'number' && !isNaN(newItem.dailyRentalRate)) ? newItem.dailyRentalRate : undefined;
-          form.setValue(`equipment.${currentEquipmentIndexForAddItem}.customDailyRentalRate`, rateToSet , { shouldValidate: true });
-        }
-        toast({ title: "Item de Inventário Criado", description: `${newItem.name} foi adicionado.`, variant: 'success' });
-        setIsInventoryItemFormOpen(false);
-        setCurrentEquipmentIndexForAddItem(null);
+    const newItem = await createInventoryItem(data);
+    if (newItem) {
+      const refreshed = await getInventoryItems(); 
+      setInventoryList(refreshed.sort((a, b) => a.name.localeCompare(b.name)));
+      if (currentEquipmentIndexForAddItem !== null) {
+        form.setValue(`equipment.${currentEquipmentIndexForAddItem}.equipmentId`, newItem.id, { shouldValidate: true });
+        form.setValue(`equipment.${currentEquipmentIndexForAddItem}.customDailyRentalRate`, newItem.dailyRentalRate, { shouldValidate: true });
       }
-    } catch (error) {
-       toast({ title: 'Erro ao Criar Item', description: (error as Error).message, variant: 'destructive' });
+      setIsInventoryItemFormOpen(false);
     }
   };
 
   const onSubmit = async (data: RentalFormValues) => {
     setIsLoading(true);
-    form.clearErrors(); 
-
     let validationPassed = true;
     const availabilityMap = new Map<string, number>();
     inventoryWithAvailability.forEach(item => availabilityMap.set(item.id, item.availableQuantity));
 
     data.equipment.forEach((eqInForm, index) => {
         if (!eqInForm.equipmentId) return; 
-
-        // REGRA DE OURO: Se a quantidade não aumentou em relação ao contrato original, ignora a validação de estoque
-        if (initialData) {
-            const originalEq = initialData.equipment.find(e => e.equipmentId === eqInForm.equipmentId);
-            const originalQty = originalEq ? originalEq.quantity : 0;
-            if (eqInForm.quantity <= originalQty) {
-                return; // Pula este item pois as peças já "pertencem" a este aluguel
-            }
-        }
-
-        const availableQty = availabilityMap.get(eqInForm.equipmentId);
-        if (availableQty === undefined) { 
-            form.setError(`equipment.${index}.equipmentId`, { message: "Item não encontrado." });
-            validationPassed = false;
-            return;
-        }
-
-        if (eqInForm.quantity > availableQty) {
-            form.setError(`equipment.${index}.quantity`, { 
-                message: `Capacidade excedida. ${availableQty} unids. livres para o período.` 
-            });
+        const available = availabilityMap.get(eqInForm.equipmentId) || 0;
+        if (eqInForm.quantity > available) {
+            form.setError(`equipment.${index}.quantity`, { message: `Livre: ${available} un.` });
             validationPassed = false;
         }
     });
 
     if (!validationPassed) {
         setIsLoading(false);
-        toast({ title: "Verificar Disponibilidade", description: "Alguns itens selecionados não possuem estoque livre para este período.", variant: "destructive" });
+        toast({ title: "Verificar Disponibilidade", variant: "destructive" });
         return;
     }
-    
-    const equipmentProcessed = data.equipment.map(eq => {
-      let rate: number | null | undefined = eq.customDailyRentalRate;
-      const standardRate = getEquipmentStandardRate(eq.equipmentId);
-      if (rate === undefined || String(rate).trim() === '' || isNaN(Number(rate))) {
-        rate = (standardRate !== undefined && !isNaN(standardRate)) ? standardRate : null;
-      } else {
-        rate = Number(rate);
-      }
-      return {
-        ...eq,
-        quantity: Number(eq.quantity) || 0,
-        customDailyRentalRate: rate === null ? null : Number(rate) 
-      };
-    });
-    
-    const { expectedReturnDate, ...restOfData } = data;
+
     const actionData = {
-      ...restOfData,
-      equipment: equipmentProcessed,
+      ...data,
       rentalStartDate: format(data.rentalStartDate, 'yyyy-MM-dd'),
       expectedReturnDate: data.expectedReturnDate ? format(data.expectedReturnDate, 'yyyy-MM-dd') : undefined,
       paymentDate: data.paymentDate ? format(data.paymentDate, 'yyyy-MM-dd') : undefined,
-      rentalDays: data.isOpenEnded ? 0 : data.rentalDays,
-      freightValue: Number(data.freightValue) || 0,
-      discountValue: Number(data.discountValue) || 0,
-      fuelValue: Number(data.fuelValue) || 0,
-      value: Number(data.value) || 0,
-      deliveryAddress: data.deliveryAddress && data.deliveryAddress.trim() !== '' ? data.deliveryAddress : 'A definir',
-    } as any; 
+    } as any;
 
     try {
       await onSubmitAction(actionData);
-      toast({ title: `Aluguel ${initialData ? 'Atualizado' : 'Criado'}`, variant: 'success' });
+      toast({ title: `Aluguel Salvo`, variant: 'success' });
       router.back();
-      router.refresh();
     } catch (error) {
       toast({ title: 'Erro', description: (error as Error).message, variant: 'destructive' });
     } finally {
@@ -463,295 +331,100 @@ export function RentalForm({
 
   return (
     <Card className="max-w-4xl mx-auto shadow-xl">
-      <CardHeader>
-        <CardTitle className="font-headline text-2xl">{formTitle}</CardTitle>
-      </CardHeader>
+      <CardHeader><CardTitle className="font-headline text-2xl">{formTitle}</CardTitle></CardHeader>
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <FormField
-              control={form.control}
-              name="customerId"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Cliente</FormLabel>
+            <FormField control={form.control} name="customerId" render={({ field }) => (
+                <FormItem className="flex flex-col"><FormLabel>Cliente</FormLabel>
                   <div className="flex items-center gap-2">
                     <Popover open={openCustomerCombobox} onOpenChange={setOpenCustomerCombobox}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
-                            {field.value ? customerList.find(c => c.id === field.value)?.name : "Selecione um cliente"}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                        <Command>
-                          <CommandInput placeholder="Buscar por nome ou telefone..." />
-                          <CommandList>
-                            <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
-                            <CommandGroup>
-                              {customerList.map((customer) => (
-                                <CommandItem value={`${customer.name} ${customer.phone}`} key={customer.id} onSelect={() => { form.setValue("customerId", customer.id, { shouldValidate: true }); setOpenCustomerCombobox(false); }}>
-                                  <Check className={cn("mr-2 h-4 w-4", customer.id === field.value ? "opacity-100" : "opacity-0")} />
-                                  <div className="flex items-center gap-3">
-                                      <Avatar className="h-6 w-6"><AvatarImage src={customer.imageUrl || undefined} alt={customer.name} /><AvatarFallback>{customer.name.charAt(0).toUpperCase()}</AvatarFallback></Avatar>
-                                      <span>{customer.name} - {customer.phone}</span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <Dialog open={isCustomerFormOpen} onOpenChange={setIsCustomerFormOpen}>
-                      <DialogTrigger asChild><Button type="button" variant="outline" size="icon" title="Adicionar Novo Cliente"><UserPlus className="h-4 w-4" /></Button></DialogTrigger>
-                      {isCustomerFormOpen && <CustomerForm onSubmitAction={handleNewCustomerCreated} onClose={() => setIsCustomerFormOpen(false)} isSubForm={true} />}
-                    </Dialog>
+                      <PopoverTrigger asChild><FormControl><Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>{field.value ? customerList.find(c => c.id === field.value)?.name : "Selecione..."}<ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="Buscar..." /><CommandList><CommandEmpty>Nenhum cliente.</CommandEmpty><CommandGroup>{customerList.map((c) => (<CommandItem key={c.id} onSelect={() => { form.setValue("customerId", c.id, { shouldValidate: true }); setOpenCustomerCombobox(false); }}><Check className={cn("mr-2 h-4 w-4", c.id === field.value ? "opacity-100" : "opacity-0")} />{c.name}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent></Popover>
+                    <Button type="button" variant="outline" size="icon" onClick={() => setIsCustomerFormOpen(true)}><UserPlus className="h-4 w-4" /></Button>
+                    <Dialog open={isCustomerFormOpen} onOpenChange={setIsCustomerFormOpen}>{isCustomerFormOpen && <CustomerForm onSubmitAction={handleNewCustomerCreated} onClose={() => setIsCustomerFormOpen(false)} isSubForm={true} />}</Dialog>
                   </div>
                   <FormMessage />
                 </FormItem>
               )}
             />
             
-            <FormField
-                control={form.control}
-                name="isOpenEnded"
-                render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                        <FormLabel>Aluguel em Aberto</FormLabel>
-                        <FormDescription>Marque se o aluguel não tem data de término definida. O valor será cobrado por dia.</FormDescription>
-                    </div>
-                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                    </FormItem>
-                )}
-            />
+            <FormField control={form.control} name="isOpenEnded" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Aluguel em Aberto</FormLabel><FormDescription>Sem data de término definida.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)} />
 
             <div>
               <FormLabel className="text-base font-semibold">Equipamento(s)</FormLabel>
-              {fields.map((item, index) => {
-                const selectedEquipmentId = watchedEquipment[index]?.equipmentId;
-                const selectedEquipmentDetails = inventoryList.find(inv => inv.id === selectedEquipmentId);
-                return (
-                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-end mt-2 p-3 border rounded-md relative">
-                    <FormField
-                      control={form.control}
-                      name={`equipment.${index}.equipmentId`}
-                      render={({ field }) => (
-                        <FormItem className="flex-grow min-w-[200px]">
-                          {index === 0 && <FormLabel className="text-xs text-muted-foreground">Item</FormLabel>}
-                          <Popover open={openEquipmentCombobox[index] || false} onOpenChange={(open) => setOpenEquipmentCombobox(prev => ({...prev, [index]: open}))}>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
-                                  {field.value ? inventoryList.find((eq) => eq.id === field.value)?.name : "Selecione..."}
-                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                               <Command>
-                                  <CommandInput placeholder="Buscar equipamento..." />
-                                  <CommandList>
-                                    <CommandEmpty>Nenhum equipamento encontrado.</CommandEmpty>
-                                    <CommandGroup>
-                                    {inventoryWithAvailability
-                                        .filter(inv => inv.availableQuantity > 0 || inv.id === field.value)
-                                        .map(invItem => (
-                                          <CommandItem value={`${invItem.name} ${invItem.id}`} key={invItem.id} onSelect={() => {
-                                              form.setValue(`equipment.${index}.equipmentId`, invItem.id, { shouldValidate: true });
-                                              const rate = getEquipmentStandardRate(invItem.id);
-                                              const currentCustomRate = form.getValues(`equipment.${index}.customDailyRentalRate`);
-                                              if (rate !== undefined && (currentCustomRate === undefined || String(currentCustomRate).trim() === '' || currentCustomRate === getEquipmentStandardRate(field.value)) ) {
-                                                form.setValue(`equipment.${index}.customDailyRentalRate`, rate, {shouldValidate: true});
-                                              }
-                                              setOpenEquipmentCombobox(prev => ({...prev, [index]: false}));
-                                            }}>
-                                            <Check className={cn("mr-2 h-4 w-4", invItem.id === field.value ? "opacity-100" : "opacity-0")} />
-                                             <div className="flex items-center gap-3">
-                                                <Avatar className="h-8 w-8"><AvatarImage src={invItem.imageUrl || undefined} alt={invItem.name} /><AvatarFallback><Package className="h-4 w-4" /></AvatarFallback></Avatar>
-                                                <span>{invItem.name} (Livre: {invItem.availableQuantity})</span>
-                                            </div>
-                                          </CommandItem>
-                                    ))}
-                                    </CommandGroup>
-                                  </CommandList>
-                               </Command>
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Dialog open={isInventoryItemFormOpen && currentEquipmentIndexForAddItem === index} onOpenChange={(open) => {if(!open) {setIsInventoryItemFormOpen(false); setCurrentEquipmentIndexForAddItem(null);}}}>
-                        <DialogTrigger asChild><Button type="button" variant="outline" size="icon" title="Adicionar Novo Item" onClick={() => {setCurrentEquipmentIndexForAddItem(index); setIsInventoryItemFormOpen(true);}} className="self-end h-9 w-9"><PackagePlus className="h-4 w-4" /></Button></DialogTrigger>
-                        {isInventoryItemFormOpen && currentEquipmentIndexForAddItem === index && (
-                            <InventoryItemForm equipmentTypes={equipmentTypesList} inventory={inventoryList} onSubmitAction={handleNewInventoryItemCreated} onClose={() => {setIsInventoryItemFormOpen(false); setCurrentEquipmentIndexForAddItem(null);}} />
-                        )}
-                    </Dialog>
-                     <FormField
-                      control={form.control}
-                      name={`equipment.${index}.customDailyRentalRate`}
-                      render={({ field }) => (
-                        <FormItem className="min-w-[150px]">
-                           {index === 0 && <FormLabel className="text-xs text-muted-foreground">Taxa Diária (R$)</FormLabel>}
-                           <div className="flex items-center gap-1">
-                            <FormControl>
-                                <Input type={focusedCurrencyField === `customRate-${index}` ? 'number' : 'text'} placeholder="Padrão se vazio" value={focusedCurrencyField === `customRate-${index}` ? (field.value ?? '') : formatToBRL(field.value)} onFocus={() => setFocusedCurrencyField(`customRate-${index}`)} onBlur={() => setFocusedCurrencyField(null)} onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} step="0.01" className="w-full" />
-                            </FormControl>
-                            {selectedEquipmentDetails && (
-                                <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" type="button" className="h-8 w-8 p-0"><Info className="h-4 w-4 text-muted-foreground"/></Button></PopoverTrigger>
-                                <PopoverContent className="w-auto text-xs p-2">Taxa Padrão: {formatToBRL(selectedEquipmentDetails.dailyRentalRate)}</PopoverContent></Popover>
-                            )}
-                           </div>
-                           <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`equipment.${index}.quantity`}
-                      render={({ field }) => (
-                        <FormItem className="min-w-[80px]">
-                          {index === 0 && <FormLabel className="text-xs text-muted-foreground">Qtd.</FormLabel>}
-                          <Input type="number" placeholder="Qtd" {...field} className="w-full" min="1"/>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {fields.length > 1 && (
-                      <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)} title="Remover" className="self-end h-9 w-9"><Trash2 className="h-4 w-4" /></Button>
-                    )}
-                  </div>
-                );
-              })}
+              {fields.map((item, index) => (
+                <div key={item.id} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-3 items-end mt-2 p-3 border rounded-md">
+                  <FormField control={form.control} name={`equipment.${index}.equipmentId`} render={({ field }) => (
+                    <FormItem className="flex-grow">
+                      {index === 0 && <FormLabel className="text-xs text-muted-foreground">Item</FormLabel>}
+                      <Popover open={openEquipmentCombobox[index]} onOpenChange={(v) => setOpenEquipmentCombobox(prev => ({...prev, [index]: v}))}>
+                        <PopoverTrigger asChild><FormControl><Button variant="outline" role="combobox" className="w-full justify-between">{field.value ? inventoryList.find(e => e.id === field.value)?.name : "Selecionar..."}<ChevronsUpDown className="ml-2 h-4 w-4 opacity-50"/></Button></FormControl></PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="..."/><CommandList><CommandEmpty>Nenhum.</CommandEmpty><CommandGroup>{inventoryWithAvailability.map(i => (<CommandItem key={i.id} onSelect={() => { form.setValue(`equipment.${index}.equipmentId`, i.id, {shouldValidate: true}); form.setValue(`equipment.${index}.customDailyRentalRate`, i.dailyRentalRate, {shouldValidate: true}); setOpenEquipmentCombobox(p => ({...p, [index]: false})); }}><Check className={cn("mr-2 h-4 w-4", i.id === field.value ? "opacity-100" : "opacity-0")}/>{i.name} (Livre: {i.availableQuantity})</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent></Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name={`equipment.${index}.customDailyRentalRate`} render={({ field }) => (
+                    <FormItem className="min-w-[120px]">
+                      {index === 0 && <FormLabel className="text-xs text-muted-foreground">Taxa Diária</FormLabel>}
+                      <FormControl><Input type={focusedCurrencyField === `rate-${index}` ? 'number' : 'text'} value={focusedCurrencyField === `rate-${index}` ? (field.value ?? '') : formatToBRL(field.value)} onFocus={() => setFocusedCurrencyField(`rate-${index}`)} onBlur={() => setFocusedCurrencyField(null)} onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} step="0.01"/></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name={`equipment.${index}.quantity`} render={({ field }) => (
+                    <FormItem className="min-w-[80px]">
+                      {index === 0 && <FormLabel className="text-xs text-muted-foreground">Qtd.</FormLabel>}
+                      <FormControl><Input type="number" {...field} min="1"/></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)} title="Remover" className="self-end h-10 w-10"><Trash2 className="h-4 w-4"/></Button>
+                </div>
+              ))}
               <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => append({ equipmentId: '', quantity: 1, customDailyRentalRate: undefined })}><PlusCircle className="mr-2 h-4 w-4" /> Adicionar Equipamento</Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField control={form.control} name="rentalStartDate" render={({ field }) => (
-                  <FormItem className="flex flex-col"><FormLabel>Data de Início</FormLabel>
-                    <Popover modal={true}><PopoverTrigger asChild><FormControl>
-                          <Button type="button" variant={"outline"} className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button>
-                        </FormControl></PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {!watchedIsOpenEnded && (
-                 <FormField control={form.control} name="rentalDays" render={({ field }) => (
-                    <FormItem><FormLabel>Dias de Aluguel</FormLabel><FormControl><Input type="number" {...field} disabled={watchedIsOpenEnded} min={watchedIsOpenEnded ? "0" : "0.5"} step="0.5" /></FormControl><FormMessage /></FormItem>
-                  )}
-                />
-              )}
-            </div>
-            
-            {!watchedIsOpenEnded && (
-              <FormField control={form.control} name="expectedReturnDate" render={({ field }) => (
-                  <FormItem className="flex flex-col"><FormLabel>Data de Retorno (Calculada)</FormLabel>
-                      <Popover modal={true}><PopoverTrigger asChild disabled><FormControl>
-                          <Button type="button" variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground", "bg-muted/50 disabled:opacity-100 disabled:cursor-default")} disabled>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>-</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button>
-                          </FormControl></PopoverTrigger></Popover>
-                      <FormDescription>Calculado automaticamente.</FormDescription><FormMessage />
-                  </FormItem>
-                  )}
-              />
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={form.control} name="chargeSaturdays" render={({ field }) => (<FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><div className="space-y-1 leading-none"><FormLabel>Cobrar Sábados?</FormLabel></div></FormItem>)} />
-                <FormField control={form.control} name="chargeSundays" render={({ field }) => (<FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><div className="space-y-1 leading-none"><FormLabel>Cobrar Domingos?</FormLabel></div></FormItem>)} />
-            </div>
-            
-            <FormField control={form.control} name="deliveryAddress" render={({ field }) => (
-                <FormItem><FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground"/>Endereço de Entrega</FormLabel>
-                    <FormControl><Textarea placeholder="Digite o endereço para entrega." {...field} onChange={(e) => field.onChange(e.target.value === 'A definir' ? '' : e.target.value)} value={field.value === 'A definir' ? '' : field.value || ''} rows={3} /></FormControl>
-                    <FormMessage />
+                <FormItem className="flex flex-col"><FormLabel>Data de Início</FormLabel>
+                  <Popover modal={true}><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha...</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50"/></Button></FormControl></PopoverTrigger>
+                  <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR}/></PopoverContent></Popover>
+                  <FormMessage />
                 </FormItem>
-                )}
-            />
-
-            <Card>
-                <CardHeader><CardTitle className="text-lg font-semibold flex items-center"><Fuel className="mr-2 h-5 w-5 text-primary" />Combustível</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                     <FormField control={form.control} name="fuelValue" render={({ field }) => (
-                        <FormItem><FormLabel>Valor Adicional (R$)</FormLabel>
-                            <FormControl><Input type={focusedCurrencyField === 'fuel' ? 'number' : 'text'} placeholder="R$ 0,00" value={focusedCurrencyField === 'fuel' ? (field.value ?? '') : formatToBRL(field.value)} onFocus={() => setFocusedCurrencyField('fuel')} onBlur={() => setFocusedCurrencyField(null)} onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))} step="0.01" /></FormControl>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                     <FormField control={form.control} name="deliveredWithFullTank" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Entregue com Tanque Cheio?</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)} />
-                </CardContent>
-            </Card>
-
-            <FormField control={form.control} name="freightValue" render={({ field }) => (
-              <FormItem><FormLabel className="flex items-center"><Truck className="mr-2 h-4 w-4 text-muted-foreground"/>Valor do Frete (R$)</FormLabel>
-                  <FormControl><Input type={focusedCurrencyField === 'freight' ? 'number' : 'text'} placeholder="R$ 0,00" value={focusedCurrencyField === 'freight' ? (field.value ?? '') : formatToBRL(field.value)} onFocus={() => setFocusedCurrencyField('freight')} onBlur={() => setFocusedCurrencyField(null)} onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))} step="0.01" /></FormControl>
-                  <FormMessage />
-              </FormItem>
+              )} />
+              {!watchedIsOpenEnded && (
+                <FormField control={form.control} name="rentalDays" render={({ field }) => (<FormItem><FormLabel>Dias de Aluguel</FormLabel><FormControl><Input type="number" {...field} min="0.5" step="0.5"/></FormControl><FormMessage /></FormItem>)} />
               )}
-            />
-            
-            <FormField control={form.control} name="discountValue" render={({ field }) => (
-              <FormItem><FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4 text-muted-foreground"/>Desconto (R$)</FormLabel>
-                  <FormControl><Input type={focusedCurrencyField === 'discount' ? 'number' : 'text'} placeholder="R$ 0,00" value={focusedCurrencyField === 'discount' ? (field.value ?? '') : formatToBRL(field.value)} onFocus={() => setFocusedCurrencyField('discount')} onBlur={() => setFocusedCurrencyField(null)} onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))} step="0.01" /></FormControl>
-                  <FormMessage />
-              </FormItem>
-              )}
-            />
+            </div>
+
+            <FormField control={form.control} name="deliveryAddress" render={({ field }) => (<FormItem><FormLabel>Endereço de Entrega</FormLabel><FormControl><Textarea placeholder="..." {...field} rows={2} /></FormControl><FormMessage /></FormItem>)} />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField control={form.control} name="freightValue" render={({ field }) => (<FormItem><FormLabel>Frete (R$)</FormLabel><FormControl><Input type={focusedCurrencyField === 'freight' ? 'number' : 'text'} value={focusedCurrencyField === 'freight' ? (field.value ?? '') : formatToBRL(field.value)} onFocus={() => setFocusedCurrencyField('freight')} onBlur={() => setFocusedCurrencyField(null)} onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))} /></FormControl></FormItem>)} />
+                <FormField control={form.control} name="fuelValue" render={({ field }) => (<FormItem><FormLabel>Combustível (R$)</FormLabel><FormControl><Input type={focusedCurrencyField === 'fuel' ? 'number' : 'text'} value={focusedCurrencyField === 'fuel' ? (field.value ?? '') : formatToBRL(field.value)} onFocus={() => setFocusedCurrencyField('fuel')} onBlur={() => setFocusedCurrencyField(null)} onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))} /></FormControl></FormItem>)} />
+                <FormField control={form.control} name="discountValue" render={({ field }) => (<FormItem><FormLabel>Desconto (R$)</FormLabel><FormControl><Input type={focusedCurrencyField === 'discount' ? 'number' : 'text'} value={focusedCurrencyField === 'discount' ? (field.value ?? '') : formatToBRL(field.value)} onFocus={() => setFocusedCurrencyField('discount')} onBlur={() => setFocusedCurrencyField(null)} onChange={(e) => field.onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))} /></FormControl></FormItem>)} />
+            </div>
 
             <FormField control={form.control} name="value" render={({ field }) => (
               <FormItem><FormLabel>{watchedIsOpenEnded ? "Valor da Diária" : "Valor Total"}</FormLabel>
-                    <FormControl><Input type="text" value={formatToBRL(field.value)} readOnly disabled className="bg-muted/50 font-bold text-lg" /></FormControl>
-                    <FormMessage />
+                <FormControl><Input type="text" value={formatToBRL(field.value)} readOnly disabled className="bg-muted/50 font-bold text-lg" /></FormControl>
+                <FormMessage />
               </FormItem>
-              )}
-            />
+            )} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField control={form.control} name="paymentStatus" render={({ field }) => (
-                    <FormItem><FormLabel>Status do Pagamento</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || 'pending'}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                        <SelectContent><SelectItem value="pending">Pendente</SelectItem><SelectItem value="paid">Pago</SelectItem><SelectItem value="overdue">Atrasado</SelectItem></SelectContent></Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="pending">Pendente</SelectItem><SelectItem value="paid">Pago</SelectItem><SelectItem value="overdue">Atrasado</SelectItem></SelectContent></Select></FormItem>
+                )} />
                 <FormField control={form.control} name="paymentMethod" render={({ field }) => (
-                    <FormItem><FormLabel>Forma de Pagamento</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || 'pix'}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                        <SelectContent><SelectItem value="nao_definido">Não Definido</SelectItem>
-                          <SelectItem value="pix"><div className="flex items-center"><Landmark className="mr-2 h-4 w-4" />PIX</div></SelectItem>
-                          <SelectItem value="dinheiro"><div className="flex items-center"><CircleDollarSign className="mr-2 h-4 w-4" />Dinheiro</div></SelectItem>
-                          <SelectItem value="cartao_credito"><div className="flex items-center"><CreditCard className="mr-2 h-4 w-4" />Cartão de Crédito</div></SelectItem>
-                          <SelectItem value="cartao_debito"><div className="flex items-center"><CreditCard className="mr-2 h-4 w-4" />Cartão de Débito</div></SelectItem>
-                        </SelectContent></Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormItem><FormLabel>Método</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="pix">PIX</SelectItem><SelectItem value="dinheiro">Dinheiro</SelectItem><SelectItem value="cartao_credito">Cartão Crédito</SelectItem><SelectItem value="cartao_debito">Cartão Débito</SelectItem><SelectItem value="nao_definido">A Definir</SelectItem></SelectContent></Select></FormItem>
+                )} />
             </div>
 
-            {watchedPaymentStatus === 'paid' && (
-                 <FormField control={form.control} name="paymentDate" render={({ field }) => (
-                    <FormItem className="flex flex-col"><FormLabel>Data do Pagamento</FormLabel>
-                        <Popover modal={true}><PopoverTrigger asChild><FormControl>
-                            <Button type="button" variant={"outline"} className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button>
-                            </FormControl></PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
-            )}
+            <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>Notas</FormLabel><FormControl><Textarea {...field} /></FormControl></FormItem>)} />
 
-            <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>Observações</FormLabel><FormControl><Textarea placeholder="..." {...field} /></FormControl><FormMessage /></FormItem>)} />
             <CardFooter className="px-0 pt-6">
-              <Button type="submit" className="w-full md:w-auto" disabled={isLoading}>{isLoading ? 'Salvando...' : <><Save className="mr-2 h-4 w-4" /> {submitButtonText}</>}</Button>
+              <Button type="submit" disabled={isLoading}>{isLoading ? 'Salvando...' : <><Save className="mr-2 h-4 w-4" /> {submitButtonText}</>}</Button>
               <Button type="button" variant="outline" onClick={() => router.back()} className="ml-2" disabled={isLoading}><ArrowLeft className="mr-2 h-4 w-4" /> Cancelar</Button>
             </CardFooter>
           </form>
