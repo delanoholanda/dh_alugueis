@@ -21,12 +21,11 @@ import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useMemo } from 'react';
-import { formatToBRL, parseFromBRL, cn, findNthBillableDay } from '@/lib/utils';
+import { formatToBRL, cn, findNthBillableDay } from '@/lib/utils';
 import { CustomerForm } from '@/app/dashboard/customers/components/CustomerForm';
 import { createCustomer, getCustomers } from '@/actions/customerActions';
 import { InventoryItemForm } from '@/app/dashboard/inventory/components/InventoryItemForm';
 import { createInventoryItem, getInventoryItems } from '@/actions/inventoryActions';
-import { getEquipmentTypes as fetchEquipmentTypesAction } from '@/actions/equipmentTypeActions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -231,7 +230,6 @@ export function RentalForm({
         end: endOfDay(newEndDate) 
     };
 
-    // Calculate max rented quantity for each item on ANY single day within the requested interval.
     const daysToCheck = eachDayOfInterval(requestedInterval);
     const usageOnEachDay = new Map<string, Map<string, number>>(); 
     
@@ -240,7 +238,9 @@ export function RentalForm({
     }
 
     for (const rental of allRentals) {
-        if (initialData && rental.id === initialData.id) continue;
+        // Robust check to skip the current rental if editing
+        if (initialData && Number(rental.id) === Number(initialData.id)) continue;
+
         const rStart = startOfDay(parseISO(rental.rentalStartDate));
         const rEnd = rental.actualReturnDate 
             ? endOfDay(parseISO(rental.actualReturnDate))
@@ -268,9 +268,10 @@ export function RentalForm({
     }
     
     return inventoryList
-        .filter(item => item.forRental)
         .map(item => {
             const maxRented = maxRentedAcrossPeriod.get(item.id) || 0;
+            // Maintenance check: if global status is 'rented' (maintenance), base is 0. 
+            // Otherwise, base is total owned quantity.
             const baseAvailable = item.status === 'rented' ? 0 : item.quantity;
             return { ...item, availableQuantity: Math.max(0, baseAvailable - maxRented) };
         });
@@ -459,14 +460,14 @@ export function RentalForm({
         }
 
         if (eqInForm.quantity > inventoryItemDetails.availableQuantity) {
-            form.setError(`equipment.${index}.quantity`, { message: `Máx ${inventoryItemDetails.availableQuantity} unid. disponíveis.` });
+            form.setError(`equipment.${index}.quantity`, { message: `Máx ${inventoryItemDetails.availableQuantity} unid. disponíveis para este período.` });
             validationPassed = false;
         }
     });
 
     if (!validationPassed) {
         setIsLoading(false);
-        toast({ title: "Erro de Validação", description: "Corrija os erros no formulário.", variant: "destructive" });
+        toast({ title: "Erro de Validação", description: "Verifique as quantidades disponíveis dos itens.", variant: "destructive" });
         return;
     }
     
@@ -514,10 +515,10 @@ export function RentalForm({
       router.back();
       router.refresh();
     } catch (error) {
-      console.error("Erro ao criar/atualizar aluguel (CLIENTE):", error);
+      console.error("Erro ao salvar aluguel:", error);
       toast({
         title: 'Erro',
-        description: `Falha ao ${initialData ? 'atualizar' : 'criar'} aluguel. Detalhes: ${(error as Error).message}`,
+        description: `Falha ao salvar aluguel. Detalhes: ${(error as Error).message}`,
         variant: 'destructive',
       });
     } finally {

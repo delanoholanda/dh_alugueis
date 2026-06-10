@@ -5,8 +5,8 @@ import type { Quote, Rental } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/database';
 import { getCustomerById } from './customerActions';
-import { createRental } from './rentalActions';
-import { format, parseISO } from 'date-fns';
+import { createRental, getRentals } from './rentalActions';
+import { format, parseISO, startOfDay, endOfDay, eachDayOfInterval, isWithinInterval, addDays } from 'date-fns';
 import { findNthBillableDay } from '@/lib/utils';
 import { getInventoryItems } from './inventoryActions';
 import { validateServerSession } from '@/lib/auth-utils';
@@ -93,7 +93,7 @@ export async function createQuote(
 
   let finalRentalStartDateString: string;
   try {
-    finalRentalStartDateString = format(parseISO(quoteData.rentalStartDate), 'yyyy-MM-dd');
+    finalRentalStartDateString = format(parseISO(quoteData.rentalStartDate as any), 'yyyy-MM-dd');
   } catch (e) {
     console.error(`[SERVER ACTION - createQuote] Invalid rentalStartDate format: ${quoteData.rentalStartDate}`, e);
     throw new Error(`Formato inválido para Data de Início: ${quoteData.rentalStartDate}`);
@@ -193,7 +193,7 @@ export async function updateQuote(id: number, quoteData: Partial<Omit<Quote, 'id
     const customer = await getCustomerById(quoteData.customerId || existingQuote.customerId);
     const customerName = customer?.name || existingQuote.customerName || 'Cliente Desconhecido';
 
-    const startDate = quoteData.rentalStartDate ? parseISO(quoteData.rentalStartDate) : parseISO(existingQuote.rentalStartDate);
+    const startDate = quoteData.rentalStartDate ? parseISO(quoteData.rentalStartDate as any) : parseISO(existingQuote.rentalStartDate);
     const rentalDays = quoteData.rentalDays ?? existingQuote.rentalDays;
     const chargeSaturdays = quoteData.chargeSaturdays ?? existingQuote.chargeSaturdays ?? true;
     const chargeSundays = quoteData.chargeSundays ?? existingQuote.chargeSundays ?? true;
@@ -203,7 +203,7 @@ export async function updateQuote(id: number, quoteData: Partial<Omit<Quote, 'id
         id: id,
         customerId: quoteData.customerId || existingQuote.customerId,
         customerName: customerName,
-        rentalStartDate: quoteData.rentalStartDate || existingQuote.rentalStartDate,
+        rentalStartDate: quoteData.rentalStartDate ? format(startDate, 'yyyy-MM-dd') : existingQuote.rentalStartDate,
         rentalDays: rentalDays,
         expectedReturnDate: format(expectedReturnDate, 'yyyy-MM-dd'),
         value: quoteData.value ?? existingQuote.value,
@@ -278,36 +278,75 @@ export async function convertQuoteToRental(quoteId: number): Promise<Rental> {
     }
 
     const inventoryItems = await getInventoryItems();
-    const rentals = await getQuotes(); // Reading all active rentals to check availability
+    const allActiveRentals = await getRentals();
 
-    const rentedQuantities = new Map<string, number>();
-    rentals.forEach(r => {
-        r.equipment.forEach(eq => {
-            rentedQuantities.set(eq.equipmentId, (rentedQuantities.get(eq.equipmentId) || 0) + eq.quantity);
-        });
-    });
+    // 1. Robust Availability Check for the period
+    const startDate = startOfDay(parseISO(quote.rentalStartDate));
+    const endDate = endOfDay(parseISO(quote.expectedReturnDate));
+    const requestedInterval = { start: startDate, end: endDate };
+    const daysToCheck = eachDayOfInterval(requestedInterval);
+    
+    const usageOnEachDay = new Map<string, Map<string, number>>();
+    for (const day of daysToCheck) {
+        usageOnEachDay.set(format(day, 'yyyy-MM-dd'), new Map<string, number>());
+    }
 
+    for (const rental of allActiveRentals) {
+        // Ignorar contratos devolvidos
+        if (rental.actualReturnDate) continue;
+
+        const rStart = startOfDay(parseISO(rental.rentalStartDate));
+        const rEnd = rental.isOpenEnded 
+            ? addDays(new Date(), 365) // Projeta 1 ano se em aberto
+            : endOfDay(parseISO(rental.expectedReturnDate));
+        
+        const rentalInterval = { start: rStart, end: rEnd };
+
+        for (const day of daysToCheck) {
+            if (isWithinInterval(day, rentalInterval)) {
+                const dayKey = format(day, 'yyyy-MM-dd');
+                const dayMap = usageOnEachDay.get(dayKey)!;
+                for (const eq of rental.equipment) {
+                    dayMap.set(eq.equipmentId, (dayMap.get(eq.equipmentId) || 0) + eq.quantity);
+                }
+            }
+        }
+    }
+
+    // 2. Validate against Inventory
     for (const item of quote.equipment) {
         const inventoryItem = inventoryItems.find(inv => inv.id === item.equipmentId);
-        const totalRented = rentedQuantities.get(item.equipmentId) || 0;
-        const available = (inventoryItem?.quantity || 0) - totalRented;
-        if (item.quantity > available) {
-            throw new Error(`Equipamento "${item.name}" não tem estoque suficiente. Disponível: ${available}, Solicitado: ${item.quantity}.`);
+        if (!inventoryItem) continue;
+
+        const baseAvailable = inventoryItem.status === 'rented' ? 0 : inventoryItem.quantity;
+        
+        for (const [dayKey, dayMap] of usageOnEachDay) {
+            const alreadyRented = dayMap.get(item.equipmentId) || 0;
+            const availableAtDay = Math.max(0, baseAvailable - alreadyRented);
+            
+            if (item.quantity > availableAtDay) {
+                throw new Error(`Equipamento "${item.name}" não tem estoque suficiente para o dia ${format(parseISO(dayKey), 'dd/MM')}. Disponível: ${availableAtDay}, Solicitado: ${item.quantity}.`);
+            }
         }
     }
 
     const rentalData = {
         customerId: quote.customerId,
-        equipment: quote.equipment,
+        equipment: quote.equipment.map(eq => ({
+            equipmentId: eq.equipmentId,
+            quantity: eq.quantity,
+            name: eq.name,
+            customDailyRentalRate: eq.customDailyRentalRate
+        })),
         rentalStartDate: quote.rentalStartDate,
         rentalDays: quote.rentalDays,
         value: quote.value,
-        freightValue: quote.freightValue,
-        discountValue: quote.discountValue,
+        freightValue: quote.freightValue ?? 0,
+        discountValue: quote.discountValue ?? 0,
         notes: quote.notes,
         deliveryAddress: quote.deliveryAddress,
-        chargeSaturdays: quote.chargeSaturdays,
-        chargeSundays: quote.chargeSundays,
+        chargeSaturdays: quote.chargeSaturdays ?? true,
+        chargeSundays: quote.chargeSundays ?? true,
         paymentStatus: 'pending' as const,
         paymentMethod: 'nao_definido' as const,
         isOpenEnded: false,
@@ -316,28 +355,20 @@ export async function convertQuoteToRental(quoteId: number): Promise<Rental> {
     const db = getDb();
     
     try {
-        let newRental: Rental | null = null;
-        db.transaction(() => {
-            // Create rental
-            // Note: createRental is an async function, which is problematic inside a transaction.
-            // We'll call it outside for now. This is a simplification.
-            
-            // Mark quote as converted
-            db.prepare('UPDATE quotes SET status = ? WHERE id = ?').run('converted', quoteId);
-        })();
-
-        // This is a simplification. For a real-world app, you might want to move the rental creation logic here.
-        newRental = await createRental(rentalData);
+        const newRental = await createRental(rentalData);
 
         if (!newRental) {
-            // Rollback the status change if rental creation fails
-            db.prepare('UPDATE quotes SET status = ? WHERE id = ?').run('pending', quoteId);
             throw new Error('Falha ao criar o aluguel a partir do orçamento.');
         }
+
+        // Marcar orçamento como convertido APÓS sucesso da criação do aluguel
+        db.prepare('UPDATE quotes SET status = ? WHERE id = ?').run('converted', quoteId);
         
         revalidatePath('/dashboard/quotes');
         revalidatePath('/dashboard/rentals');
+        revalidatePath('/dashboard', 'layout');
         return newRental;
+
     } catch (error) {
         console.error('Error converting quote to rental:', error);
         throw error;

@@ -19,12 +19,11 @@ import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useMemo } from 'react';
-import { formatToBRL, parseFromBRL, cn, findNthBillableDay } from '@/lib/utils';
+import { formatToBRL, cn, findNthBillableDay } from '@/lib/utils';
 import { CustomerForm } from '@/app/dashboard/customers/components/CustomerForm';
 import { createCustomer, getCustomers } from '@/actions/customerActions';
 import { InventoryItemForm } from '@/app/dashboard/inventory/components/InventoryItemForm';
 import { createInventoryItem, getInventoryItems } from '@/actions/inventoryActions';
-import { getEquipmentTypes as fetchEquipmentTypesAction } from '@/actions/equipmentTypeActions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -179,32 +178,23 @@ export function QuoteForm({
     }
 
     for (const rental of allRentals) {
-        if (rental.actualReturnDate) {
-             const rStart = startOfDay(parseISO(rental.rentalStartDate));
-             const rEnd = endOfDay(parseISO(rental.actualReturnDate));
-             const rInterval = { start: rStart, end: rEnd };
-             for (const day of daysToCheck) {
-                 if (isWithinInterval(day, rInterval)) {
-                     const dayKey = format(day, 'yyyy-MM-dd');
-                     const dayMap = usageOnEachDay.get(dayKey)!;
-                     for (const eq of rental.equipment) {
-                         dayMap.set(eq.equipmentId, (dayMap.get(eq.equipmentId) || 0) + eq.quantity);
-                     }
-                 }
-             }
-        } else {
-             const rStart = startOfDay(parseISO(rental.rentalStartDate));
-             const rEnd = rental.isOpenEnded ? addDays(new Date(), 730) : endOfDay(parseISO(rental.expectedReturnDate));
-             const rInterval = { start: rStart, end: rEnd };
-             for (const day of daysToCheck) {
-                 if (isWithinInterval(day, rInterval)) {
-                     const dayKey = format(day, 'yyyy-MM-dd');
-                     const dayMap = usageOnEachDay.get(dayKey)!;
-                     for (const eq of rental.equipment) {
-                         dayMap.set(eq.equipmentId, (dayMap.get(eq.equipmentId) || 0) + eq.quantity);
-                     }
-                 }
-             }
+        // Robust ID check: quotes don't overlap with rentals in the same way, 
+        // but we'll leave it prepared for future enhancements.
+        const rStart = startOfDay(parseISO(rental.rentalStartDate));
+        const rEnd = rental.actualReturnDate 
+            ? endOfDay(parseISO(rental.actualReturnDate))
+            : (rental.isOpenEnded ? addDays(new Date(), 730) : endOfDay(parseISO(rental.expectedReturnDate)));
+        
+        const rentalInterval = { start: rStart, end: rEnd };
+
+        for (const day of daysToCheck) {
+            if (isWithinInterval(day, rentalInterval)) {
+                const dayKey = format(day, 'yyyy-MM-dd');
+                const dayMap = usageOnEachDay.get(dayKey)!;
+                for (const eq of rental.equipment) {
+                    dayMap.set(eq.equipmentId, (dayMap.get(eq.equipmentId) || 0) + eq.quantity);
+                }
+            }
         }
     }
 
