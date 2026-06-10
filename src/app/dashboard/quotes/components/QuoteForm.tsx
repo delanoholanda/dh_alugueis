@@ -178,8 +178,9 @@ export function QuoteForm({
     }
 
     for (const rental of allRentals) {
-        // Robust ID check: quotes don't overlap with rentals in the same way, 
-        // but we'll leave it prepared for future enhancements.
+        // Robust ID check using string conversion to skip current comparison issues in production
+        if (initialData && String(rental.id) === String(initialData.id)) continue;
+
         const rStart = startOfDay(parseISO(rental.rentalStartDate));
         const rEnd = rental.actualReturnDate 
             ? endOfDay(parseISO(rental.actualReturnDate))
@@ -207,11 +208,10 @@ export function QuoteForm({
     }
 
     return inventoryList
-        .filter(item => item.forRental)
         .map(item => {
-            const maxRented = maxRentedAcrossPeriod.get(item.id) || 0;
-            const baseAvailable = item.status === 'rented' ? 0 : item.quantity;
-            return { ...item, availableQuantity: Math.max(0, baseAvailable - maxRented) };
+            const maxRentedByOthers = maxRentedAcrossPeriod.get(item.id) || 0;
+            const baseCapacity = item.status === 'rented' ? 0 : item.quantity;
+            return { ...item, availableQuantity: Math.max(0, baseCapacity - maxRentedByOthers) };
         });
 
   }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate]);
@@ -286,6 +286,27 @@ export function QuoteForm({
 
   const onSubmit = async (data: QuoteFormValues) => {
     setIsLoading(true);
+    
+    // Final availability check before submission
+    let validationPassed = true;
+    const availabilityMap = new Map<string, number>();
+    inventoryWithAvailability.forEach(item => availabilityMap.set(item.id, item.availableQuantity));
+
+    data.equipment.forEach((eqInForm, index) => {
+        if (!eqInForm.equipmentId) return; 
+        const available = availabilityMap.get(eqInForm.equipmentId);
+        if (available !== undefined && eqInForm.quantity > available) {
+            form.setError(`equipment.${index}.quantity`, { message: `Livre: ${available} un.` });
+            validationPassed = false;
+        }
+    });
+
+    if (!validationPassed) {
+        setIsLoading(false);
+        toast({ title: "Falta Estoque", description: "Verifique as quantidades disponíveis.", variant: "destructive" });
+        return;
+    }
+
     const actionData = {
       ...data,
       rentalStartDate: format(data.rentalStartDate, 'yyyy-MM-dd'),
@@ -417,7 +438,7 @@ export function QuoteForm({
                                                     <AvatarImage src={invItem.imageUrl || undefined} alt={invItem.name} />
                                                     <AvatarFallback><Package className="h-4 w-4" /></AvatarFallback>
                                                 </Avatar>
-                                                <span>{invItem.name} (Disp: {invItem.availableQuantity})</span>
+                                                <span>{invItem.name} (Livre: {invItem.availableQuantity})</span>
                                             </div>
                                           </CommandItem>
                                     ))}

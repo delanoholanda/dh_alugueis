@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { CalendarIcon, PlusCircle, Trash2, Save, Truck, Percent, Info, CreditCard, Landmark, CircleDollarSign, UserPlus, PackagePlus, MapPin, AlertCircle, ChevronsUpDown, Check, Package, Fuel, ArrowLeft } from 'lucide-react';
-import { format, addDays, parseISO, isSameDay, differenceInDays, isWithinInterval, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns';
+import { format, addDays, parseISO, isSameDay, isWithinInterval, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -213,12 +213,14 @@ export function RentalForm({
   const watchedChargeSundays = form.watch("chargeSundays");
   const watchedExpectedReturnDate = form.watch("expectedReturnDate");
 
+  // Robust availability logic for both UI display and form submission
   const inventoryWithAvailability = useMemo(() => {
-    const newStartDate = form.getValues('rentalStartDate');
-    const isOpenEnded = form.getValues('isOpenEnded');
-    const newEndDate = isOpenEnded ? addDays(new Date(), 365) : (form.getValues('expectedReturnDate') || addDays(newStartDate, 1));
+    const startDate = form.getValues('rentalStartDate');
+    const isOpen = form.getValues('isOpenEnded');
+    // For availability check of open-ended contracts, project 2 years ahead
+    const endDate = isOpen ? addDays(new Date(), 730) : (form.getValues('expectedReturnDate') || addDays(startDate, 1));
 
-    if (!newStartDate) {
+    if (!startDate) {
       return inventoryList.map(item => ({ 
         ...item, 
         availableQuantity: item.status === 'rented' ? 0 : item.quantity 
@@ -226,8 +228,8 @@ export function RentalForm({
     }
 
     const requestedInterval = { 
-        start: startOfDay(newStartDate), 
-        end: endOfDay(newEndDate) 
+        start: startOfDay(startDate), 
+        end: endOfDay(endDate) 
     };
 
     const daysToCheck = eachDayOfInterval(requestedInterval);
@@ -238,8 +240,8 @@ export function RentalForm({
     }
 
     for (const rental of allRentals) {
-        // Robust check to skip the current rental if editing
-        if (initialData && Number(rental.id) === Number(initialData.id)) continue;
+        // CRITICAL FIX: Robust ID comparison. Use strings to avoid Number vs BigInt vs undefined issues in production environments.
+        if (initialData && String(rental.id) === String(initialData.id)) continue;
 
         const rStart = startOfDay(parseISO(rental.rentalStartDate));
         const rEnd = rental.actualReturnDate 
@@ -269,11 +271,13 @@ export function RentalForm({
     
     return inventoryList
         .map(item => {
-            const maxRented = maxRentedAcrossPeriod.get(item.id) || 0;
-            // Maintenance check: if global status is 'rented' (maintenance), base is 0. 
-            // Otherwise, base is total owned quantity.
-            const baseAvailable = item.status === 'rented' ? 0 : item.quantity;
-            return { ...item, availableQuantity: Math.max(0, baseAvailable - maxRented) };
+            const maxRentedByOthers = maxRentedAcrossPeriod.get(item.id) || 0;
+            // If global status is 'rented', it's in maintenance, so base is 0.
+            const baseCapacity = item.status === 'rented' ? 0 : item.quantity;
+            return { 
+                ...item, 
+                availableQuantity: Math.max(0, baseCapacity - maxRentedByOthers) 
+            };
         });
 
   }, [inventoryList, allRentals, initialData, watchedRentalStartDate, watchedExpectedReturnDate, watchedIsOpenEnded]);
@@ -432,42 +436,34 @@ export function RentalForm({
     form.clearErrors(); 
 
     let validationPassed = true;
-    const currentAvailabilityMap = new Map<string, InventoryEquipment & { availableQuantity: number }>();
-    inventoryWithAvailability.forEach(item => currentAvailabilityMap.set(item.id, item));
-
-    const equipmentIdsInForm = data.equipment.map(eq => eq.equipmentId);
-    const duplicateEquipment = equipmentIdsInForm.filter((id, index) => equipmentIdsInForm.indexOf(id) !== index && id !== '');
     
-    if (duplicateEquipment.length > 0) {
-        data.equipment.forEach((eq, index) => {
-            if (duplicateEquipment.includes(eq.equipmentId)) {
-                form.setError(`equipment.${index}.equipmentId`, { message: "Item duplicado. Agrupe as quantidades." });
-                validationPassed = false;
-            }
-        });
-    }
+    // Create a temporary map of what's available (excluding usage of THIS contract if editing)
+    const availabilityMap = new Map<string, number>();
+    inventoryWithAvailability.forEach(item => availabilityMap.set(item.id, item.availableQuantity));
 
-
+    // Validate quantities against actually available stock (ignoring self-usage)
     data.equipment.forEach((eqInForm, index) => {
         if (!eqInForm.equipmentId) return; 
 
-        const inventoryItemDetails = currentAvailabilityMap.get(eqInForm.equipmentId);
+        const availableQty = availabilityMap.get(eqInForm.equipmentId);
         
-        if (!inventoryItemDetails) { 
-            form.setError(`equipment.${index}.equipmentId`, { message: "Item de inventário não disponível para aluguel." });
+        if (availableQty === undefined) { 
+            form.setError(`equipment.${index}.equipmentId`, { message: "Item não encontrado." });
             validationPassed = false;
             return;
         }
 
-        if (eqInForm.quantity > inventoryItemDetails.availableQuantity) {
-            form.setError(`equipment.${index}.quantity`, { message: `Máx ${inventoryItemDetails.availableQuantity} unid. disponíveis para este período.` });
+        if (eqInForm.quantity > availableQty) {
+            form.setError(`equipment.${index}.quantity`, { 
+                message: `Capacidade excedida. ${availableQty} unids. livres para o período.` 
+            });
             validationPassed = false;
         }
     });
 
     if (!validationPassed) {
         setIsLoading(false);
-        toast({ title: "Erro de Validação", description: "Verifique as quantidades disponíveis dos itens.", variant: "destructive" });
+        toast({ title: "Verificar Disponibilidade", description: "Alguns itens selecionados não possuem estoque livre para este período.", variant: "destructive" });
         return;
     }
     
@@ -477,9 +473,8 @@ export function RentalForm({
       
       if (rate === undefined || String(rate).trim() === '' || isNaN(Number(rate))) {
         rate = (standardRate !== undefined && !isNaN(standardRate)) ? standardRate : null;
-      } else if (typeof rate === 'string') { 
-        const parsedRate = parseFloat(rate);
-        rate = isNaN(parsedRate) ? null : parsedRate;
+      } else {
+        rate = Number(rate);
       }
       
       return {
@@ -498,10 +493,10 @@ export function RentalForm({
       expectedReturnDate: data.expectedReturnDate ? format(data.expectedReturnDate, 'yyyy-MM-dd') : undefined,
       paymentDate: data.paymentDate ? format(data.paymentDate, 'yyyy-MM-dd') : undefined,
       rentalDays: data.isOpenEnded ? 0 : data.rentalDays,
-      freightValue: (typeof data.freightValue === 'number' && !isNaN(data.freightValue)) ? data.freightValue : 0,
-      discountValue: (typeof data.discountValue === 'number' && !isNaN(data.discountValue)) ? data.discountValue : 0,
-      fuelValue: (typeof data.fuelValue === 'number' && !isNaN(data.fuelValue)) ? data.fuelValue : 0,
-      value: (typeof data.value === 'number' && !isNaN(data.value)) ? data.value : 0,
+      freightValue: Number(data.freightValue) || 0,
+      discountValue: Number(data.discountValue) || 0,
+      fuelValue: Number(data.fuelValue) || 0,
+      value: Number(data.value) || 0,
       deliveryAddress: data.deliveryAddress && data.deliveryAddress.trim() !== '' ? data.deliveryAddress : 'A definir',
     } as any; 
 
@@ -509,7 +504,7 @@ export function RentalForm({
       await onSubmitAction(actionData);
       toast({
         title: `Aluguel ${initialData ? 'Atualizado' : 'Criado'}`,
-        description: `O contrato de aluguel foi ${initialData ? 'atualizado' : 'criado'} com sucesso.`,
+        description: `O contrato de aluguel foi salvo com sucesso.`,
         variant: 'success',
       });
       router.back();
@@ -699,7 +694,7 @@ export function RentalForm({
                                                     <AvatarImage src={invItem.imageUrl || undefined} alt={invItem.name} />
                                                     <AvatarFallback><Package className="h-4 w-4" /></AvatarFallback>
                                                 </Avatar>
-                                                <span>{invItem.name} (Disp: {invItem.availableQuantity})</span>
+                                                <span>{invItem.name} (Livre: {invItem.availableQuantity})</span>
                                             </div>
                                           </CommandItem>
                                     ))}
