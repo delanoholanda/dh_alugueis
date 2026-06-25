@@ -1,7 +1,8 @@
+
 'use client';
 
 import type { Rental, Customer, Equipment as InventoryEquipment, PaymentMethod, EquipmentType } from '@/types';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import Image from 'next/image';
@@ -159,16 +160,18 @@ export function RentalForm({
   });
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "equipment" });
-  const watchedIsOpenEnded = form.watch("isOpenEnded");
-  const watchedEquipment = form.watch("equipment");
-  const watchedRentalDays = form.watch("rentalDays");
-  const watchedRentalStartDate = form.watch("rentalStartDate");
-  const watchedChargeSaturdays = form.watch("chargeSaturdays");
-  const watchedChargeSundays = form.watch("chargeSundays");
-  const watchedExpectedReturnDate = form.watch("expectedReturnDate");
-  const watchedFreightValue = form.watch("freightValue");
-  const watchedFuelValue = form.watch("fuelValue");
-  const watchedDiscountValue = form.watch("discountValue");
+
+  // Monitoramento robusto dos campos para recálculo instantâneo
+  const watchedEquipment = useWatch({ control: form.control, name: "equipment" });
+  const watchedRentalDays = useWatch({ control: form.control, name: "rentalDays" });
+  const watchedRentalStartDate = useWatch({ control: form.control, name: "rentalStartDate" });
+  const watchedIsOpenEnded = useWatch({ control: form.control, name: "isOpenEnded" });
+  const watchedChargeSaturdays = useWatch({ control: form.control, name: "chargeSaturdays" });
+  const watchedChargeSundays = useWatch({ control: form.control, name: "chargeSundays" });
+  const watchedExpectedReturnDate = useWatch({ control: form.control, name: "expectedReturnDate" });
+  const watchedFreightValue = useWatch({ control: form.control, name: "freightValue" });
+  const watchedFuelValue = useWatch({ control: form.control, name: "fuelValue" });
+  const watchedDiscountValue = useWatch({ control: form.control, name: "discountValue" });
 
   const inventoryWithAvailability = useMemo(() => {
     const startDate = watchedRentalStartDate;
@@ -245,9 +248,11 @@ export function RentalForm({
     }
   }, [watchedRentalDays, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, watchedIsOpenEnded, form]);
   
+  // Recálculo automático do valor total
   useEffect(() => {
     const days = !watchedIsOpenEnded ? (Number(watchedRentalDays) || 0) : 1;
     let itemsTotalValue = 0;
+    
     watchedEquipment.forEach(item => {
       const qty = Number(item.quantity) || 0;
       if (item.equipmentId && qty > 0) {
@@ -258,10 +263,14 @@ export function RentalForm({
         }
       }
     });
+
     const freight = Number(watchedFreightValue) || 0;
     const fuel = Number(watchedFuelValue) || 0;
     const discount = Number(watchedDiscountValue) || 0;
+    
+    // Se for contrato em aberto, o valor representa a diária base acumulada (sem frete/combustível/desconto até fechar)
     const final = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight + fuel - discount;
+    
     form.setValue('value', Math.max(0, final), { shouldValidate: true });
   }, [watchedEquipment, watchedRentalDays, watchedFreightValue, watchedFuelValue, watchedDiscountValue, inventoryList, watchedIsOpenEnded, form]);
 

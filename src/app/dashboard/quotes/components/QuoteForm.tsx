@@ -1,7 +1,8 @@
+
 'use client';
 
 import type { Quote, Customer, Equipment as InventoryEquipment, EquipmentType, Rental } from '@/types';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import Image from 'next/image';
@@ -123,14 +124,16 @@ export function QuoteForm({
   });
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "equipment" });
-  const watchedEquipment = form.watch("equipment");
-  const watchedRentalDays = form.watch("rentalDays");
-  const watchedRentalStartDate = form.watch("rentalStartDate");
-  const watchedExpectedReturnDate = form.watch("expectedReturnDate");
-  const watchedFreightValue = form.watch("freightValue");
-  const watchedDiscountValue = form.watch("discountValue");
-  const watchedChargeSaturdays = form.watch("chargeSaturdays");
-  const watchedChargeSundays = form.watch("chargeSundays");
+  
+  // Monitoramento robusto para orçamentos
+  const watchedEquipment = useWatch({ control: form.control, name: "equipment" });
+  const watchedRentalDays = useWatch({ control: form.control, name: "rentalDays" });
+  const watchedRentalStartDate = useWatch({ control: form.control, name: "rentalStartDate" });
+  const watchedExpectedReturnDate = useWatch({ control: form.control, name: "expectedReturnDate" });
+  const watchedFreightValue = useWatch({ control: form.control, name: "freightValue" });
+  const watchedDiscountValue = useWatch({ control: form.control, name: "discountValue" });
+  const watchedChargeSaturdays = useWatch({ control: form.control, name: "chargeSaturdays" });
+  const watchedChargeSundays = useWatch({ control: form.control, name: "chargeSundays" });
 
   const inventoryWithAvailability = useMemo(() => {
     const startDate = watchedRentalStartDate;
@@ -189,6 +192,7 @@ export function QuoteForm({
     }
   }, [watchedRentalDays, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, form]);
 
+  // Recálculo automático do valor total do orçamento
   useEffect(() => {
     let itemsTotal = 0;
     const days = watchedRentalDays || 0;

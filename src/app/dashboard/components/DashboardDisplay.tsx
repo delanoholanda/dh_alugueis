@@ -264,6 +264,7 @@ export default function DashboardDisplay() {
         let dailyActiveRevenue = 0;
         let activeRentalsCount = 0;
         const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const todayObj = startOfDay(new Date());
 
         rentalsData.forEach(rental => {
             let currentRentalValue: number;
@@ -277,16 +278,23 @@ export default function DashboardDisplay() {
             const contractExcludingFuel = currentRentalValue - (rental.fuelValue || 0);
             totalContractValueExcludingFuel += contractExcludingFuel;
 
-            // Only count as "Active" for the stat if NOT physically returned AND NOT fully paid.
-            // This excludes finalized-but-unpaid contracts from the "Generating revenue" rate,
-            // as they are no longer accruing daily revenue.
-            if (!rental.actualReturnDate && rental.paymentStatus !== 'paid') {
+            // Count towards "Active Rentals" if items are with the customer
+            if (!rental.actualReturnDate) {
               activeRentalsCount++;
-              rental.equipment.forEach(eq => {
-                const itemDetails = inventoryItemsData.find(inv => inv.id === eq.equipmentId);
-                const rate = eq.customDailyRentalRate ?? itemDetails?.dailyRentalRate ?? 0;
-                dailyActiveRevenue += eq.quantity * rate;
-              });
+              
+              // ONLY count towards DAILY REVENUE RATE if:
+              // 1. It is an open-ended rental (always counts while active)
+              // 2. OR it is a fixed-term rental that is NOT overdue (expectedReturnDate >= today)
+              const returnDate = parseISO(rental.expectedReturnDate);
+              const isOverdue = !rental.isOpenEnded && isPast(returnDate) && !isToday(returnDate);
+
+              if (!isOverdue) {
+                rental.equipment.forEach(eq => {
+                  const itemDetails = inventoryItemsData.find(inv => inv.id === eq.equipmentId);
+                  const rate = eq.customDailyRentalRate ?? itemDetails?.dailyRentalRate ?? 0;
+                  dailyActiveRevenue += eq.quantity * rate;
+                });
+              }
             }
         });
         
@@ -686,7 +694,16 @@ export default function DashboardDisplay() {
                 <ChartContainer config={pieChartConfig} className="h-[350px] w-full">
                     <RechartsPieChart>
                         <ChartTooltip content={<ChartTooltipContent nameKey="name" hideIndicator />} />
-                        <Pie data={mostRentedTypesData} dataKey="value" nameKey="name" innerRadius={60}>{mostRentedTypesData.map(entry => <Cell key={`cell-${entry.name}`} fill={entry.fill} />)}</Pie>
+                        <Pie 
+                          data={mostRentedTypesData} 
+                          dataKey="value" 
+                          nameKey="name" 
+                          innerRadius={60}
+                        >
+                          {mostRentedTypesData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
                         <ChartLegend content={<ChartLegendContent nameKey="name" />} />
                     </RechartsPieChart>
                 </ChartContainer>
