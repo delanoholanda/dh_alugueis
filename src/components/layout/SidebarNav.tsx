@@ -24,7 +24,8 @@ import {
   PackageSearch,
   CalendarDays,
   ShoppingCart,
-  Building2
+  Building2,
+  ClipboardCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -77,6 +78,7 @@ const mainNavItems: NavItem[] = [
     iconName: 'Warehouse',
     subItems: [
         { href: '/dashboard/inventory', label: 'Estoque Atual', iconName: 'Warehouse' },
+        { href: '/dashboard/inventory/quick-check', label: 'Conferência Rápida', iconName: 'ClipboardCheck' },
         { href: '/dashboard/inventory/purchases', label: 'Entrada/Compras', iconName: 'ShoppingCart' },
     ]
   },
@@ -155,7 +157,6 @@ export function SidebarNav() {
           });
 
           const updatedNavItems = [...mainNavItems];
-          // Mantemos os subitens fixos (Entrada/Compras) e adicionamos os tipos dinâmicos
           const fixedSubItems = updatedNavItems[inventoryNavIndex].subItems || [];
           updatedNavItems[inventoryNavIndex] = {
             ...updatedNavItems[inventoryNavIndex],
@@ -178,18 +179,12 @@ export function SidebarNav() {
   };
 
   const isNavItemActive = (item: NavItem) => {
-    // Se for o painel, correspondência exata
     if (item.href === '/dashboard') {
       return pathname === '/dashboard';
     }
-    
-    // Se tiver subitens, está ativo se o pathname começar com o href do item pai
-    // ou se qualquer subitem estiver ativo.
     if (item.subItems) {
       return pathname.startsWith(item.href);
     }
-
-    // Caso padrão: correspondência de início de rota
     return pathname.startsWith(item.href);
   };
 
@@ -224,7 +219,6 @@ export function SidebarNav() {
                   <SidebarMenuSub className={cn("group-data-[collapsible=icon]:hidden", isActive ? "flex" : "hidden")}>
                     {item.subItems.map((subItem) => {
                       const SubIconComp = getIcon(subItem.iconName);
-                      // Subitem está ativo se o pathname for exatamente o dele ou começar com ele
                       const isSubActive = pathname === subItem.href || (subItem.href !== item.href && pathname.startsWith(subItem.href));
                       return (
                         <SidebarMenuSubItem key={subItem.href}>

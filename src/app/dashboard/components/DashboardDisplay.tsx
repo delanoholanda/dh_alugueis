@@ -5,7 +5,7 @@ import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse, CheckCircle2, AlertCircle, Fuel, Edit, CalendarPlus } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse, CheckCircle2, AlertCircle, Fuel, Edit, CalendarPlus, ClipboardCheck } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import type { Rental, Customer, Equipment, Expense, EquipmentType, Payment } from '@/types';
@@ -666,9 +666,17 @@ export default function DashboardDisplay() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center"><BarChartIcon className="h-6 w-6 mr-2 text-primary" />Atividade por Item de Equipamento</CardTitle>
-            <CardDescription>Quantidade total, alugada e disponível para cada item individual no inventário.</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div>
+                <CardTitle className="font-headline flex items-center"><BarChartIcon className="h-6 w-6 mr-2 text-primary" />Atividade por Item de Equipamento</CardTitle>
+                <CardDescription>Quantidade total, alugada e disponível para cada item individual no inventário.</CardDescription>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1" title="Ver conferência rápida para celular">
+                <Link href="/dashboard/inventory/quick-check">
+                    <ClipboardCheck className="h-4 w-4 text-primary" />
+                    <span className="hidden sm:inline">Conferência Rápida</span>
+                </Link>
+            </Button>
           </CardHeader>
           <CardContent>
                <ChartContainer config={chartConfigBar} className="h-[350px] w-full">
