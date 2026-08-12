@@ -65,7 +65,10 @@ export default function ConsolidatedPrintActions({ customerId, customerName }: C
         if (outputType === 'save') {
             await worker.save();
         } else {
-            await worker.outputPdf('dataurlnewwindow');
+            const pdfBlob = await worker.outputPdf('blob');
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            window.open(blobUrl, '_blank');
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
         }
 
         if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';

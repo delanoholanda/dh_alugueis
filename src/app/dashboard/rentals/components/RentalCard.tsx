@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { Rental, Equipment as InventoryEquipment, Customer } from '@/types';
@@ -8,16 +7,10 @@ import { RentalTableActions } from './RentalTableActions';
 import { format, parseISO, isToday, isPast, startOfDay, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn, countBillableDays, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
-import { CalendarDays, DollarSign, Package, CircleAlert, CircleCheck, TrendingUp, Infinity as InfinityIcon, HandCoins } from 'lucide-react';
+import { CalendarDays, DollarSign, Package, CircleAlert, CircleCheck, TrendingUp, Infinity as InfinityIcon, HandCoins, MapPin, History, Clock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useState } from 'react';
 import { MarkAsPaidDialog } from './MarkAsPaidDialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 
 interface RentalCardProps {
   rental: Rental;
@@ -70,7 +63,7 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
   let dailyRevenue = 0;
   if (!isFullyFinalized) {
     if (rental.isOpenEnded) {
-        dailyRevenue = rental.value; // In open-ended, the value IS the daily rate
+        dailyRevenue = rental.value; 
     } else {
         rental.equipment.forEach(eqEntry => {
             const inventoryItem = inventory.find(inv => inv.id === eqEntry.equipmentId);
@@ -92,7 +85,7 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
       rental.chargeSaturdays ?? true,
       rental.chargeSundays ?? true
     );
-    currentAccumulated = billableDays * rental.value; // rental.value is the daily rate
+    currentAccumulated = billableDays * rental.value; 
   }
   
   const handleBadgeClick = () => {
@@ -101,7 +94,6 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
     }
   }
 
-  // Corrigido: adicionado +1 para que o dia de início já conte como dia 1
   const daysDisplay = rental.isOpenEnded 
     ? `${differenceInDays(new Date(), parseISO(rental.rentalStartDate)) + 1} dias corridos` 
     : `${rental.rentalDays} dias contratados`;
@@ -147,11 +139,21 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
              : <span className={cn("ml-1 font-medium", returnDateColorClass)}>{format(expectedReturnDateObj, 'dd/MM/yy', { locale: ptBR })}</span>
             }
           </div>
+
           <div className="flex items-center">
-            <CalendarDays className="h-4 w-4 mr-2 text-muted-foreground" />
+            <History className="h-4 w-4 mr-2 text-muted-foreground" />
             <span className="text-muted-foreground">Duração:</span>
             <span className="ml-1 font-medium">{daysDisplay}</span>
           </div>
+          
+          {rental.deliveryAddress && (
+            <div className="flex items-start">
+              <MapPin className="h-4 w-4 mr-2 text-primary flex-shrink-0 mt-0.5" />
+              <span className="text-[11px] leading-tight text-muted-foreground italic truncate" title={rental.deliveryAddress}>
+                {rental.deliveryAddress}
+              </span>
+            </div>
+          )}
 
           <div className="flex items-center">
             <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -160,19 +162,11 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
           </div>
           
           {rental.isOpenEnded && !isPhysicallyReturned && (
-              <div className="flex items-center text-blue-600 dark:text-blue-400">
+              <div className="flex items-center text-blue-600 dark:text-blue-400 font-bold border-t pt-1 mt-1">
                   <TrendingUp className="h-4 w-4 mr-2" />
-                  <span className="text-muted-foreground">Acumulado (hoje):</span>
-                  <span className="ml-1 font-semibold">{formatToBRL(currentAccumulated)}</span>
+                  <span className="text-muted-foreground font-normal">Acumulado (hoje):</span>
+                  <span className="ml-1">{formatToBRL(currentAccumulated)}</span>
               </div>
-          )}
-
-          {!rental.isOpenEnded && !isFullyFinalized && dailyRevenue > 0 && (
-            <div className="flex items-center">
-              <TrendingUp className="h-4 w-4 mr-2 text-green-500" />
-              <span className="text-muted-foreground">Renda Diária Est.:</span>
-              <span className="ml-1 font-medium text-green-600">{formatToBRL(dailyRevenue)}</span>
-            </div>
           )}
 
            <div className="pt-2">

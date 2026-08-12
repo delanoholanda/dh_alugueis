@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { Rental, Equipment as InventoryEquipment, Customer } from '@/types';
@@ -10,7 +9,7 @@ import { format, parseISO, isToday, isPast, startOfDay, differenceInDays } from 
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, getPaymentStatusVariant, paymentStatusMap, cn, countBillableDays } from '@/lib/utils';
 import { RentalTableActions } from './RentalTableActions';
-import { CircleAlert, Infinity as InfinityIcon, ChevronDown, Package, HandCoins } from 'lucide-react';
+import { CircleAlert, Infinity as InfinityIcon, ChevronDown, Package, HandCoins, MapPin } from 'lucide-react';
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
@@ -35,7 +34,7 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
   
   const getDailyIncome = (rental: Rental) => {
     if (rental.isOpenEnded) {
-        return rental.value; // For open-ended, the value IS the daily rate
+        return rental.value; 
     }
     let dailyRevenue = 0;
     rental.equipment.forEach(eqEntry => {
@@ -101,7 +100,6 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
               rental.chargeSaturdays ?? true,
               rental.chargeSundays ?? true
           );
-          // For open-ended, rental.value is the daily rate.
           const accumulatedValue = billableDays * getDailyIncome(rental);
           return (
             <div className="text-right">
@@ -119,7 +117,6 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
          const billableDays = countBillableDays(rental.rentalStartDate, rental.actualReturnDate, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
          return <span className="font-semibold">{billableDays}</span>;
       }
-      // Corrigido: adicionado +1 para que o dia de início já conte como dia 1
       const daysSoFar = differenceInDays(new Date(), parseISO(rental.rentalStartDate)) + 1;
       return (
         <div className="text-center">
@@ -169,9 +166,14 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
                             <AvatarImage src={customer?.imageUrl || undefined} alt={customer?.name} />
                             <AvatarFallback>{customer ? getFirstName(customer.name).charAt(0) : 'C'}</AvatarFallback>
                           </Avatar>
-                          <div className="flex items-center">
-                              <span className="font-medium truncate">{getFirstName(rental.customerName)}</span>
-                              {badge}
+                          <div className="flex flex-col">
+                              <div className="flex items-center">
+                                  <span className="font-medium truncate">{getFirstName(rental.customerName)}</span>
+                                  {badge}
+                              </div>
+                              {rental.deliveryAddress && rental.deliveryAddress !== 'A definir' && (
+                                  <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">{rental.deliveryAddress}</span>
+                              )}
                           </div>
                         </div>
                       </TableCell>
@@ -197,39 +199,40 @@ export function RentalTable({ rentals, inventory, customers, onActionSuccess }: 
                         <TableRow>
                             <TableCell colSpan={10} className="p-0">
                                 <div className="bg-muted/50 p-4">
-                                    <h4 className="font-semibold text-sm mb-3 flex items-center uppercase tracking-wider"><Package className="h-4 w-4 mr-2" /> Detalhamento de Itens</h4>
-                                    <div className="border rounded-lg overflow-hidden bg-background max-w-2xl shadow-sm">
-                                        <table className="w-full text-xs text-left border-collapse">
-                                            <thead className="bg-muted/80 border-b">
-                                                <tr>
-                                                    <th className="px-4 py-2 font-bold text-muted-foreground">Equipamento</th>
-                                                    <th className="px-4 py-2 font-bold text-muted-foreground text-center">Quantidade</th>
-                                                    <th className="px-4 py-2 font-bold text-muted-foreground text-right">Taxa Diária</th>
-                                                    <th className="px-4 py-2 font-bold text-muted-foreground text-right">Total Diário</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y">
-                                                {rental.equipment.map((eq, index) => {
-                                                    const inventoryItem = inventory.find(inv => inv.id === eq.equipmentId);
-                                                    const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
-                                                    const dailyTotal = rateToUse * eq.quantity;
-                                                    return (
-                                                        <tr key={index} className="hover:bg-muted/30 transition-colors">
-                                                            <td className="px-4 py-2 font-medium">{eq.name}</td>
-                                                            <td className="px-4 py-2 text-center">{eq.quantity} un.</td>
-                                                            <td className="px-4 py-2 text-right font-mono">{formatToBRL(rateToUse)}</td>
-                                                            <td className="px-4 py-2 text-right font-mono font-semibold text-primary">{formatToBRL(dailyTotal)}</td>
+                                    <div className="flex flex-col md:flex-row gap-6">
+                                        <div className="flex-1">
+                                            <h4 className="font-semibold text-sm mb-3 flex items-center uppercase tracking-wider"><Package className="h-4 w-4 mr-2" /> Detalhamento de Itens</h4>
+                                            <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
+                                                <table className="w-full text-xs text-left border-collapse">
+                                                    <thead className="bg-muted/80 border-b">
+                                                        <tr>
+                                                            <th className="px-4 py-2 font-bold text-muted-foreground">Equipamento</th>
+                                                            <th className="px-4 py-2 font-bold text-muted-foreground text-center">Quantidade</th>
+                                                            <th className="px-4 py-2 font-bold text-muted-foreground text-right">Taxa Diária</th>
                                                         </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                            <tfoot className="bg-muted/50 font-bold border-t">
-                                                <tr>
-                                                    <td colSpan={3} className="px-4 py-2 text-right uppercase text-[10px]">Soma das Diárias:</td>
-                                                    <td className="px-4 py-2 text-right font-mono text-primary">{formatToBRL(getDailyIncome(rental))}</td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
+                                                    </thead>
+                                                    <tbody className="divide-y">
+                                                        {rental.equipment.map((eq, index) => {
+                                                            const inventoryItem = inventory.find(inv => inv.id === eq.equipmentId);
+                                                            const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+                                                            return (
+                                                                <tr key={index} className="hover:bg-muted/30 transition-colors">
+                                                                    <td className="px-4 py-2 font-medium">{eq.name}</td>
+                                                                    <td className="px-4 py-2 text-center">{eq.quantity} un.</td>
+                                                                    <td className="px-4 py-2 text-right font-mono">{formatToBRL(rateToUse)}</td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="font-semibold text-sm mb-3 flex items-center uppercase tracking-wider"><MapPin className="h-4 w-4 mr-2" /> Local de Entrega</h4>
+                                            <div className="p-4 border rounded-lg bg-background shadow-sm italic text-muted-foreground">
+                                                {rental.deliveryAddress || 'Endereço não informado.'}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </TableCell>

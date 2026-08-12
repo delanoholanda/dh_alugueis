@@ -1,15 +1,13 @@
-
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, CheckSquare, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse, CheckCircle2, AlertCircle, Fuel, Edit, CalendarPlus, ClipboardCheck } from 'lucide-react';
+import { BarChart as BarChartIcon, Users, Package, LineChart as LucideLineChart, CalendarClock, PieChart as PieChartIcon, HandCoins, FileText, Eye, DollarSign, TrendingUp, TrendingDown, Warehouse, CheckCircle2, Edit, CalendarPlus, ClipboardCheck, MapPin, History, Clock, ChevronDown } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
-import { Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
-import type { Rental, Customer, Equipment, Expense, EquipmentType, Payment } from '@/types';
-import { format, parseISO, isToday, isPast, startOfDay, addDays, eachMonthOfInterval, startOfMonth, parse, isBefore } from 'date-fns';
+import { Bar, Line, XAxis, YAxis, CartesianGrid, LineChart as RechartsLineChart, BarChart as RechartsBarChart, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
+import type { Rental, Customer, Equipment, Expense, EquipmentType } from '@/types';
+import { format, parseISO, isToday, isPast, startOfDay, addDays, eachMonthOfInterval, startOfMonth, parse, isBefore, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn, getPaymentStatusVariant, paymentStatusMap, countBillableDays } from '@/lib/utils';
 import type { ChartConfig } from "@/components/ui/chart";
@@ -74,9 +72,6 @@ export interface GroupedUpcomingReturn {
   totalPendingValue: number;
   rentals: Rental[];
 }
-
-
-// --- Helper Functions for Data Aggregation ---
 
 const aggregateMonthlyFinancials = (rentals: Rental[], expenses: Expense[]) => {
   const monthlyData: { [key: string]: { revenue: number, expenses: number, profit: number } } = {};
@@ -145,7 +140,7 @@ const aggregateEquipmentItemActivity = (inventory: Equipment[], rentals: Rental[
   });
 
   return inventory
-    .filter(item => item.forRental) // Only show rental items in activity chart
+    .filter(item => item.forRental) 
     .map(item => ({
       name: item.name,
       total: item.quantity,
@@ -194,13 +189,11 @@ function calculateTrendPercentage(current?: number, previous?: number): string |
   return `${percentageChange > 0 ? '+' : ''}${percentageChange.toFixed(1)}%`;
 }
 
-
 function determineTrendColor(trend: string | null, type: 'revenue' | 'expense'): string {
   if (!trend || trend.includes('∞') || trend.includes('≈') || trend === "0.0%") return 'text-muted-foreground';
   const value = parseFloat(trend.replace('%', ''));
   return type === 'expense' ? (value < 0 ? 'text-green-500' : 'text-red-500') : (value > 0 ? 'text-green-500' : 'text-red-500');
 }
-
 
 const chartConfigLine = {
   revenue: { label: "Receita", color: "hsl(var(--chart-1))" },
@@ -212,7 +205,6 @@ const chartConfigBar = {
   rented: {label: "Alugado", color: "hsl(var(--chart-1))"},
   available: {label: "Disponível", color: "hsl(var(--chart-2))"}
 } satisfies import("@/components/ui/chart").ChartConfig;
-
 
 export default function DashboardDisplay() {
   const [rentals, setRentals] = useState<Rental[]>([]);
@@ -226,6 +218,8 @@ export default function DashboardDisplay() {
   const [selectedRentalForPayment, setSelectedRentalForPayment] = useState<Rental | null>(null);
   const [selectedRentalForExtension, setSelectedRentalForExtension] = useState<Rental | null>(null);
   const [selectedGroupForBulkPayment, setSelectedGroupForBulkPayment] = useState<GroupedPendingPayment | GroupedUpcomingReturn | null>(null);
+
+  const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -250,7 +244,6 @@ export default function DashboardDisplay() {
         setCustomers(customersData);
         setInventory(inventoryItemsData);
 
-        // Process data for charts and cards
         const aggregatedMonthly = aggregateMonthlyFinancials(rentalsData, expensesData);
         setMonthlyLineChartData(aggregatedMonthly);
         
@@ -263,8 +256,6 @@ export default function DashboardDisplay() {
         let totalContractValueExcludingFuel = 0;
         let dailyActiveRevenue = 0;
         let activeRentalsCount = 0;
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        const todayObj = startOfDay(new Date());
 
         rentalsData.forEach(rental => {
             let currentRentalValue: number;
@@ -278,13 +269,9 @@ export default function DashboardDisplay() {
             const contractExcludingFuel = currentRentalValue - (rental.fuelValue || 0);
             totalContractValueExcludingFuel += contractExcludingFuel;
 
-            // Count towards "Active Rentals" if items are with the customer
             if (!rental.actualReturnDate) {
               activeRentalsCount++;
               
-              // ONLY count towards DAILY REVENUE RATE if:
-              // 1. It is an open-ended rental (always counts while active)
-              // 2. OR it is a fixed-term rental that is NOT overdue (expectedReturnDate >= today)
               const returnDate = parseISO(rental.expectedReturnDate);
               const isOverdue = !rental.isOpenEnded && isPast(returnDate) && !isToday(returnDate);
 
@@ -320,7 +307,7 @@ export default function DashboardDisplay() {
     } finally {
         setIsLoading(false);
     }
-  }, []);
+  }, [todayStr]);
 
   useEffect(() => {
     fetchData();
@@ -331,10 +318,8 @@ export default function DashboardDisplay() {
   }, [fetchData]);
 
   const { groupedUpcomingReturns, groupedPendingPayments } = useMemo(() => {
-    const today = startOfDay(new Date());
-    const upcomingCutoff = addDays(today, 8);
-
-    // --- 1. Group Upcoming Returns ---
+    const todayDate = startOfDay(new Date());
+    const upcomingCutoff = addDays(todayDate, 8);
     const upcomingMap: Record<string, GroupedUpcomingReturn> = {};
     
     rentals
@@ -369,7 +354,6 @@ export default function DashboardDisplay() {
         return a.customerName.localeCompare(b.customerName);
     });
 
-    // --- 2. Group Pending Payments (Items already returned) ---
     const customerMap: { [key: string]: GroupedPendingPayment } = {};
     const pending: GroupedPendingPayment[] = [];
 
@@ -423,11 +407,6 @@ export default function DashboardDisplay() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 <Skeleton className="h-[300px] w-full" />
                 <Skeleton className="h-[300px] w-full" />
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Skeleton className="h-[400px] w-full" />
-                <Skeleton className="h-[400px] w-full" />
-                <Skeleton className="h-[400px] w-full lg:col-span-2" />
             </div>
         </div>
     );
@@ -491,49 +470,75 @@ export default function DashboardDisplay() {
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                            <div className="pl-4 pr-4 pb-3 pt-2 text-sm space-y-4">
+                                            <div className="pl-2 pr-2 pb-3 pt-2 text-sm space-y-4">
                                                 <div className="space-y-3">
                                                     {group.rentals.map(rental => {
                                                         const returnDate = parseISO(rental.expectedReturnDate);
                                                         const isOverdue = isPast(returnDate) && !isToday(returnDate);
                                                         const isDueToday = isToday(returnDate);
                                                         const isPayable = rental.paymentStatus !== 'paid';
+                                                        
+                                                        const daysDisplay = rental.isOpenEnded 
+                                                          ? `${differenceInDays(new Date(), parseISO(rental.rentalStartDate)) + 1} dias` 
+                                                          : `${rental.rentalDays} dias`;
+
+                                                        let currentAccumulated = 0;
+                                                        if (rental.isOpenEnded && !rental.actualReturnDate) {
+                                                            const billableDays = countBillableDays(rental.rentalStartDate, todayStr, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
+                                                            currentAccumulated = billableDays * rental.value;
+                                                        }
 
                                                         return (
                                                             <div key={rental.id} className="p-3 border rounded-lg bg-muted/30 relative">
                                                                 <div className="flex justify-between items-start mb-2">
-                                                                    <div>
-                                                                        <p className="font-bold text-xs uppercase text-muted-foreground">ID #{rental.id.toString().padStart(4, '0')} — Total: {formatToBRL(rental.value)}</p>
-                                                                        <p className={cn("font-semibold", isOverdue && "text-destructive", isDueToday && "text-orange-600")}>
+                                                                    <div className="min-w-0 pr-10">
+                                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                                          <p className="font-bold text-[11px] uppercase text-muted-foreground tracking-tighter">ID #{rental.id.toString().padStart(4, '0')} — TOTAL: {formatToBRL(rental.isOpenEnded ? currentAccumulated : rental.value)}</p>
+                                                                        </div>
+                                                                        <p className={cn("font-bold text-base", isOverdue && "text-destructive", isDueToday && "text-orange-600")}>
                                                                             Devolução: {format(returnDate, 'dd/MM/yy', { locale: ptBR })}
-                                                                            {isOverdue && ' (Atrasado)'}
                                                                         </p>
+                                                                        
+                                                                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                                                            <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center"><Clock className="h-3 w-3 mr-1" /> {daysDisplay}</p>
+                                                                            {rental.isOpenEnded && !rental.actualReturnDate && (
+                                                                                <p className="text-[10px] font-bold text-blue-600 uppercase flex items-center">
+                                                                                    <TrendingUp className="h-3 w-3 mr-1" /> Acumulado: {formatToBRL(currentAccumulated)}
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {rental.deliveryAddress && rental.deliveryAddress !== 'A definir' && (
+                                                                          <p className="flex items-center text-[10px] text-muted-foreground italic mt-1 truncate">
+                                                                            <MapPin className="h-3 w-3 mr-1 flex-shrink-0 text-primary" /> {rental.deliveryAddress}
+                                                                          </p>
+                                                                        )}
                                                                     </div>
                                                                     <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="text-[10px]">
                                                                         {paymentStatusMap[rental.paymentStatus]}
                                                                     </Badge>
                                                                 </div>
-                                                                
-                                                                <div className="mb-3">
-                                                                    <p className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-wider">Itens do Contrato</p>
-                                                                    <div className="border rounded-md overflow-hidden bg-background/50">
-                                                                        <table className="w-full text-[10px] text-left border-collapse">
-                                                                            <thead className="bg-muted/50 border-b">
+
+                                                                <div className="mb-4 pt-2">
+                                                                    <p className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-wider">ITENS DO CONTRATO</p>
+                                                                    <div className="border rounded-md overflow-hidden bg-background">
+                                                                        <table className="w-full text-[11px] text-left border-collapse">
+                                                                            <thead className="bg-muted/80 border-b">
                                                                                 <tr>
-                                                                                    <th className="px-2 py-1 font-semibold">Item</th>
-                                                                                    <th className="px-2 py-1 font-semibold text-center">Qtd</th>
-                                                                                    <th className="px-2 py-1 font-semibold text-right">Diária</th>
+                                                                                    <th className="px-3 py-1.5 font-bold text-muted-foreground">Item</th>
+                                                                                    <th className="px-3 py-1.5 font-bold text-muted-foreground text-center">Qtd</th>
+                                                                                    <th className="px-3 py-1.5 font-bold text-muted-foreground text-right">Diária</th>
                                                                                 </tr>
                                                                             </thead>
                                                                             <tbody className="divide-y">
                                                                                 {rental.equipment.map((eq, i) => {
-                                                                                    const inventoryItem = inventory.find(inv => inv.id === eq.equipmentId);
-                                                                                    const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+                                                                                    const itemDetails = inventory.find(inv => inv.id === eq.equipmentId);
+                                                                                    const rate = eq.customDailyRentalRate ?? itemDetails?.dailyRentalRate ?? 0;
                                                                                     return (
-                                                                                        <tr key={i} className="hover:bg-muted/30 transition-colors">
-                                                                                            <td className="px-2 py-1 truncate max-w-[120px]">{eq.name}</td>
-                                                                                            <td className="px-2 py-1 text-center font-medium">{eq.quantity}</td>
-                                                                                            <td className="px-2 py-1 text-right font-mono">{formatToBRL(rateToUse)}</td>
+                                                                                        <tr key={i}>
+                                                                                            <td className="px-3 py-1.5 font-medium">{eq.name}</td>
+                                                                                            <td className="px-3 py-1.5 text-center">{eq.quantity}</td>
+                                                                                            <td className="px-3 py-1.5 text-right font-mono italic">{formatToBRL(rate)}</td>
                                                                                         </tr>
                                                                                     );
                                                                                 })}
@@ -541,22 +546,32 @@ export default function DashboardDisplay() {
                                                                         </table>
                                                                     </div>
                                                                 </div>
-
-                                                                <div className="flex flex-wrap items-center gap-2">
-                                                                    <FinalizeRentalButton rental={rental} isFinalized={false} onFinalized={handleActionSuccess} buttonProps={{ variant: "outline", size: "sm", className: "h-8 text-[10px]" }} />
-                                                                    <Button variant="outline" size="sm" className="h-8 text-[10px]" onClick={() => setSelectedRentalForExtension(rental)}><CalendarPlus className="mr-1 h-3 w-3 text-primary" />Prorrogar</Button>
-                                                                    {isPayable && <Button variant="outline" size="sm" className="h-8 text-[10px]" onClick={() => setSelectedRentalForPayment(rental)}><DollarSign className="mr-1 h-3 w-3" />Pagar</Button>}
-                                                                    <Button asChild variant="outline" size="sm" className="h-8 text-[10px]" title="Ver Detalhes do Aluguel">
-                                                                        <Link href={`/dashboard/rentals/${rental.id}/details`}>
-                                                                            <Eye className="mr-1 h-3 w-3 text-muted-foreground" /> Detalhes
-                                                                        </Link>
-                                                                    </Button>
-                                                                    <Button asChild variant="outline" size="sm" className="h-8 text-[10px]" title="Gerar Contrato Individual">
-                                                                        <Link href={`/dashboard/rentals/${rental.id}/receipt`}>
-                                                                            <FileText className="mr-1 h-3 w-3 text-blue-500" /> Contrato
-                                                                        </Link>
-                                                                    </Button>
-                                                                    <Button asChild variant="ghost" size="sm" className="h-8 text-[10px] ml-auto"><Link href={`/dashboard/rentals/${rental.id}/edit`}><Edit className="mr-1 h-3 w-3" /> Editar</Link></Button>
+                                                                
+                                                                <div className="grid grid-cols-1 gap-2">
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        <FinalizeRentalButton rental={rental} isFinalized={false} onFinalized={handleActionSuccess} buttonProps={{ variant: "outline", size: "sm", className: "h-9 rounded-full px-4 text-[10px]" }} />
+                                                                        <Button variant="outline" size="sm" className="h-9 rounded-full px-4 text-[10px]" onClick={() => setSelectedRentalForExtension(rental)}><CalendarPlus className="mr-1 h-3.5 w-3.5 text-primary" />PRORROGAR</Button>
+                                                                        {isPayable && <Button variant="outline" size="sm" className="h-9 rounded-full px-4 text-[10px]" onClick={() => setSelectedRentalForPayment(rental)}><DollarSign className="mr-1 h-3.5 w-3.5" />PAGAR</Button>}
+                                                                    </div>
+                                                                    <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 mt-1">
+                                                                        <div className="flex gap-2">
+                                                                            <Button asChild variant="outline" size="sm" className="h-9 rounded-full px-4 text-[10px] bg-muted/20">
+                                                                                <Link href={`/dashboard/rentals/${rental.id}/details`}>
+                                                                                    <Eye className="mr-1 h-3.5 w-3.5 text-muted-foreground" /> DETALHES
+                                                                                </Link>
+                                                                            </Button>
+                                                                            <Button asChild variant="outline" size="sm" className="h-9 rounded-full px-4 text-[10px] bg-muted/20">
+                                                                                <Link href={`/dashboard/rentals/${rental.id}/receipt`}>
+                                                                                    <FileText className="mr-1 h-3.5 w-3.5 text-blue-500" /> CONTRATO
+                                                                                </Link>
+                                                                            </Button>
+                                                                        </div>
+                                                                        <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4 text-[10px]">
+                                                                            <Link href={`/dashboard/rentals/${rental.id}/edit`}>
+                                                                                <Edit className="mr-1 h-3.5 w-3.5" /> EDITAR
+                                                                            </Link>
+                                                                        </Button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         );
@@ -564,11 +579,11 @@ export default function DashboardDisplay() {
                                                 </div>
                                                 <div className="flex flex-wrap justify-end pt-2 gap-2 border-t mt-2">
                                                     {group.totalPendingValue > 0 && (
-                                                        <Button variant="outline" size="sm" onClick={() => setSelectedGroupForBulkPayment(group)}>
-                                                            <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" /> Quitar {group.rentals.length} Contratos ({formatToBRL(group.totalPendingValue)})
+                                                        <Button variant="outline" className="rounded-full h-11 px-6 border-green-600/30 text-green-700 hover:bg-green-50" onClick={() => setSelectedGroupForBulkPayment(group)}>
+                                                            <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" /> QUITAR {group.rentals.length} CONTRATOS ({formatToBRL(group.totalPendingValue)})
                                                         </Button>
                                                     )}
-                                                    <Button asChild size="sm" variant="secondary"><Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}><FileText className="h-4 w-4 mr-2" />Contrato Consolidado</Link></Button>
+                                                    <Button asChild className="rounded-full h-11 px-6 bg-secondary text-secondary-foreground hover:bg-secondary/80 border-none"><Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}><FileText className="h-4 w-4 mr-2" />CONTRATO CONSOLIDADO</Link></Button>
                                                 </div>
                                             </div>
                                         </AccordionContent>
@@ -603,56 +618,80 @@ export default function DashboardDisplay() {
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent>
-                                        <div className="pl-4 pr-4 pb-3 pt-2 text-sm space-y-3">
-                                            <div className="space-y-2">
+                                        <div className="pl-2 pr-2 pb-3 pt-2 text-sm space-y-3">
+                                            <div className="space-y-3">
                                                 {group.rentals.map(rental => {
                                                     const totalPaid = rental.payments?.reduce((acc,p)=>acc+p.amount,0) ?? 0;
                                                     const pendingValue = Math.max(0, rental.value - totalPaid);
                                                     const returnDate = rental.actualReturnDate ? parseISO(rental.actualReturnDate) : parseISO(rental.expectedReturnDate);
                                                     const formattedReturnDate = format(returnDate, 'dd/MM/yy', { locale: ptBR });
                                                     
+                                                    const daysDisplay = rental.isOpenEnded 
+                                                      ? `${differenceInDays(parseISO(rental.actualReturnDate || todayStr), parseISO(rental.rentalStartDate)) + 1} dias` 
+                                                      : `${rental.rentalDays} dias`;
+
                                                     return(
-                                                        <div key={rental.id} className="flex flex-col gap-2 p-3 border rounded-lg bg-muted/20">
-                                                            <div className="flex justify-between items-start">
-                                                                <div>
-                                                                    <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-tight">Contrato #{rental.id.toString().padStart(4, '0')} — Total: {formatToBRL(rental.value)}</p>
-                                                                    <p className="font-bold text-destructive text-sm">{formatToBRL(pendingValue)} Pendente ({formattedReturnDate})</p>
+                                                        <div key={rental.id} className="p-3 border rounded-lg bg-muted/20">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div className="min-w-0 pr-10">
+                                                                    <p className="text-muted-foreground text-[11px] uppercase font-bold tracking-tighter">ID #{rental.id.toString().padStart(4, '0')} — PENDENTE: {formatToBRL(pendingValue)}</p>
+                                                                    <p className="font-bold text-destructive text-base">Devolvido em: {formattedReturnDate}</p>
+                                                                    
+                                                                    <div className="flex items-center gap-3 mt-1">
+                                                                        <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center"><History className="h-3 w-3 mr-1" /> {daysDisplay}</p>
+                                                                        {rental.deliveryAddress && rental.deliveryAddress !== 'A definir' && (
+                                                                          <p className="flex items-center text-[10px] text-muted-foreground italic truncate">
+                                                                            <MapPin className="h-3 w-3 mr-1 flex-shrink-0 text-primary" /> {rental.deliveryAddress}
+                                                                          </p>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                                 <RentalTableActions rental={rental} inventory={inventory} onActionSuccess={handleActionSuccess} />
                                                             </div>
-                                                            <div className="border rounded-md overflow-hidden bg-background/50">
-                                                                <table className="w-full text-[10px] text-left border-collapse">
-                                                                    <thead className="bg-muted/50 border-b">
-                                                                        <tr>
-                                                                            <th className="px-2 py-1 font-semibold">Item</th>
-                                                                            <th className="px-2 py-1 font-semibold text-center">Qtd</th>
-                                                                            <th className="px-2 py-1 font-semibold text-right">Diária</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody className="divide-y">
-                                                                        {rental.equipment.map((eq, i) => {
-                                                                            const inventoryItem = inventory.find(inv => inv.id === eq.equipmentId);
-                                                                            const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
-                                                                            return (
-                                                                                <tr key={i} className="hover:bg-muted/30 transition-colors">
-                                                                                    <td className="px-2 py-1 truncate max-w-[150px]">{eq.name}</td>
-                                                                                    <td className="px-2 py-1 text-center font-medium">{eq.quantity}</td>
-                                                                                    <td className="px-2 py-1 text-right font-mono">{formatToBRL(rateToUse)}</td>
+
+                                                            <div className="mb-3 pt-1">
+                                                                <p className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-wider">ITENS ALUGADOS</p>
+                                                                <div className="border rounded-md overflow-hidden bg-background">
+                                                                    <table className="w-full text-[11px] text-left border-collapse">
+                                                                        <tbody className="divide-y">
+                                                                            {rental.equipment.map((eq, i) => (
+                                                                                <tr key={i}>
+                                                                                    <td className="px-3 py-1.5 font-medium">{eq.name}</td>
+                                                                                    <td className="px-3 py-1.5 text-center text-muted-foreground">{eq.quantity} un.</td>
+                                                                                    <td className="px-3 py-1.5 text-right font-mono italic">{formatToBRL(eq.customDailyRentalRate || 0)}</td>
                                                                                 </tr>
-                                                                            );
-                                                                        })}
-                                                                    </tbody>
-                                                                </table>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <div className="flex justify-between items-center gap-2 border-t pt-2 mt-1">
+                                                                <div className="flex gap-2">
+                                                                     <Button asChild variant="outline" size="sm" className="h-9 rounded-full px-4 text-[10px] bg-muted/20">
+                                                                        <Link href={`/dashboard/rentals/${rental.id}/details`}>
+                                                                            <Eye className="mr-1 h-3.5 w-3.5 text-muted-foreground" /> DETALHES
+                                                                        </Link>
+                                                                    </Button>
+                                                                    <Button asChild variant="outline" size="sm" className="h-9 rounded-full px-4 text-[10px] bg-muted/20">
+                                                                        <Link href={`/dashboard/rentals/${rental.id}/receipt`}>
+                                                                            <FileText className="mr-1 h-3.5 w-3.5 text-blue-500" /> RECIBO
+                                                                        </Link>
+                                                                    </Button>
+                                                                </div>
+                                                                <Button variant="ghost" size="sm" className="h-9 rounded-full px-4 text-[10px]" onClick={() => setSelectedRentalForPayment(rental)}>
+                                                                    <DollarSign className="mr-1 h-3.5 w-3.5 text-green-600" /> PAGAR
+                                                                </Button>
                                                             </div>
                                                         </div>
                                                     )
                                                 })}
                                             </div>
                                             <div className="flex justify-end pt-2 gap-2 flex-wrap">
-                                                <Button variant="outline" size="sm" onClick={() => setSelectedGroupForBulkPayment(group)}>
-                                                    <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" /> Quitar Tudo
+                                                <Button variant="outline" className="rounded-full h-11 px-6 border-green-600/30 text-green-700 hover:bg-green-50" onClick={() => setSelectedGroupForBulkPayment(group)}>
+                                                    <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" /> QUITAR TUDO
                                                 </Button>
-                                                <Button asChild size="sm"><Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}><FileText className="h-4 w-4 mr-2" />Gerar Recibo Consolidado</Link></Button>
+                                                <Button asChild className="rounded-full h-11 px-6 bg-primary text-primary-foreground border-none hover:bg-primary/90"><Link href={`/dashboard/customers/${group.customerId}/consolidated-receipt?rental_ids=${group.rentals.map(r => r.id).join(',')}`}><FileText className="h-4 w-4 mr-2" />GERAR RECIBO CONSOLIDADO</Link></Button>
                                             </div>
                                         </div>
                                     </AccordionContent>
@@ -668,10 +707,10 @@ export default function DashboardDisplay() {
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div>
-                <CardTitle className="font-headline flex items-center"><BarChartIcon className="h-6 w-6 mr-2 text-primary" />Atividade por Item de Equipamento</CardTitle>
-                <CardDescription>Quantidade total, alugada e disponível para cada item individual no inventário.</CardDescription>
+                <CardTitle className="font-headline flex items-center"><BarChartIcon className="h-6 w-6 mr-2 text-primary" />Atividade por Item</CardTitle>
+                <CardDescription>Estoque vs. Alugado.</CardDescription>
             </div>
-            <Button asChild variant="ghost" size="sm" className="h-8 gap-1" title="Ver conferência rápida para celular">
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1">
                 <Link href="/dashboard/inventory/quick-check">
                     <ClipboardCheck className="h-4 w-4 text-primary" />
                     <span className="hidden sm:inline">Conferência Rápida</span>
@@ -683,7 +722,7 @@ export default function DashboardDisplay() {
                 <RechartsBarChart data={equipmentActivityChartData} layout="vertical" margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false}/>
                   <XAxis type="number" dataKey="total" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(value) => `${value} un.`} />
-                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tickMargin={8} width={180} interval={0} tickFormatter={(value, index) => `${equipmentActivityChartData[index]?.name} (${equipmentActivityChartData[index]?.rented}/${equipmentActivityChartData[index]?.total})`}/>
+                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tickMargin={8} width={180} interval={0}/>
                   <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
                   <ChartLegend content={<ChartLegendContent />} />
                   <Bar dataKey="rented" stackId="a" fill="var(--color-rented)" radius={[0, 4, 4, 0]} name="Alugado" />
@@ -695,8 +734,7 @@ export default function DashboardDisplay() {
 
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline flex items-center"><PieChartIcon className="h-6 w-6 mr-2 text-primary" />Tipos de Equipamento Mais Alugados</CardTitle>
-            <CardDescription>Distribuição dos tipos de equipamentos mais populares em aluguéis (baseado na quantidade de itens).</CardDescription>
+            <CardTitle className="font-headline flex items-center"><PieChartIcon className="h-6 w-6 mr-2 text-primary" />Tipos Mais Alugados</CardTitle>
           </CardHeader>
           <CardContent>
                 <ChartContainer config={pieChartConfig} className="h-[350px] w-full">
@@ -721,13 +759,12 @@ export default function DashboardDisplay() {
         <Card className="shadow-lg lg:col-span-2">
           <CardHeader>
             <CardTitle className="font-headline flex items-center"><LucideLineChart className="h-6 w-6 mr-2 text-primary" />Finanças Mensais</CardTitle>
-             <CardDescription>Receita (exclui combustível), Despesas e Lucro nos últimos meses.</CardDescription>
           </CardHeader>
           <CardContent>
               <ChartContainer config={chartConfigLine} className="h-[350px] w-full">
                 <RechartsLineChart data={monthlyLineChartData} margin={{ top: 5, right: 20, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} interval={monthlyLineChartData.length > 6 ? 'preserveEnd' : 0} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
                   <YAxis tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(value) => `R$${value / 1000}k`} />
                   <ChartTooltip content={<ChartTooltipContent indicator="dot" formatter={CustomTooltipContentFormatter}/>} />
                   <ChartLegend content={<ChartLegendContent />} />

@@ -55,7 +55,6 @@ export default function ContractPrintActions({ rentalId, customerName }: Contrac
     setProcessingType('pdf');
     
     try {
-        // Carregamento dinâmico apenas no cliente
         const html2pdf = (await import('html2pdf.js')).default;
         
         const actionsElement = setup.element.querySelector('.no-print');
@@ -64,9 +63,15 @@ export default function ContractPrintActions({ rentalId, customerName }: Contrac
         const worker = html2pdf().from(setup.element).set(setup.options);
 
         if (outputType === 'save') {
+            // Em dispositivos móveis, .save() é mais confiável que abrir nova janela
             await worker.save();
         } else {
-            await worker.outputPdf('dataurlnewwindow');
+            // No iPhone, abrir em nova janela muitas vezes falha se não houver um blob intermediário
+            const pdfBlob = await worker.outputPdf('blob');
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            window.open(blobUrl, '_blank');
+            // Liberar memória após um tempo
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
         }
 
         if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
