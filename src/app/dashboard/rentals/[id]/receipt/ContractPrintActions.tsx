@@ -45,6 +45,20 @@ export default function ContractPrintActions({ rentalId, customerName }: Contrac
     };
   };
 
+  const dataURLtoBlob = (dataurl: string) => {
+    const arr = dataurl.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    if (!mimeMatch) return null;
+    const mime = mimeMatch[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  };
+
   const generatePdf = async (outputType: 'save' | 'open') => {
     if (processingType) return;
     
@@ -63,14 +77,11 @@ export default function ContractPrintActions({ rentalId, customerName }: Contrac
         const worker = html2pdf().from(setup.element).set(setup.options);
 
         if (outputType === 'save') {
-            // Em dispositivos móveis, .save() é mais confiável que abrir nova janela
             await worker.save();
         } else {
-            // No iPhone, abrir em nova janela muitas vezes falha se não houver um blob intermediário
             const pdfBlob = await worker.outputPdf('blob');
             const blobUrl = URL.createObjectURL(pdfBlob);
             window.open(blobUrl, '_blank');
-            // Liberar memória após um tempo
             setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
         }
 
@@ -99,12 +110,18 @@ export default function ContractPrintActions({ rentalId, customerName }: Contrac
 
         const imgData = await html2pdf().from(setup.element).set(setup.options).outputImg('datauristring');
         
-        const link = document.createElement('a');
-        link.download = `Contrato_DH_Alugueis_${rentalId}${customerFirstNamePart ? `_${customerFirstNamePart}` : ''}.png`;
-        link.href = imgData;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Convert to Blob for iOS compatibility
+        const blob = dataURLtoBlob(imgData);
+        if (blob) {
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = `Contrato_DH_Alugueis_${rentalId}${customerFirstNamePart ? `_${customerFirstNamePart}` : ''}.png`;
+            link.href = blobUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+        }
 
         if (actionsElement) (actionsElement as HTMLElement).style.display = 'flex';
     } catch (error) {
