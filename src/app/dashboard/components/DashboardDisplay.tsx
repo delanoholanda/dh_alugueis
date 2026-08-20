@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -61,6 +62,7 @@ export interface GroupedPendingPayment {
   customerName: string;
   customerImageUrl?: string;
   totalPendingValue: number;
+  totalPaidValue: number;
   rentals: Rental[];
 }
 
@@ -70,6 +72,7 @@ export interface GroupedUpcomingReturn {
   customerImageUrl?: string;
   hasOverdue: boolean;
   totalPendingValue: number;
+  totalPaidValue: number;
   rentals: Rental[];
 }
 
@@ -333,6 +336,7 @@ export default function DashboardDisplay() {
                   customerImageUrl: customer?.imageUrl,
                   hasOverdue: false,
                   totalPendingValue: 0,
+                  totalPaidValue: 0,
                   rentals: []
               };
           }
@@ -345,6 +349,7 @@ export default function DashboardDisplay() {
           }
           
           const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
+          group.totalPaidValue += totalPaid;
           group.totalPendingValue += Math.max(0, rental.value - totalPaid);
       });
 
@@ -372,11 +377,13 @@ export default function DashboardDisplay() {
                   customerName: rental.customerName || 'Cliente Desconhecido',
                   customerImageUrl: customer?.imageUrl,
                   totalPendingValue: 0,
+                  totalPaidValue: 0,
                   rentals: []
               };
               pending.push(customerMap[rental.customerId]);
           }
           
+          customerMap[rental.customerId].totalPaidValue += totalPaid;
           customerMap[rental.customerId].totalPendingValue += pendingValue;
           customerMap[rental.customerId].rentals.push(rental);
       });
@@ -462,9 +469,11 @@ export default function DashboardDisplay() {
                                                 <Avatar className="h-10 w-10"><AvatarImage src={group.customerImageUrl || undefined} alt={group.customerName} /><AvatarFallback>{group.customerName.charAt(0).toUpperCase()}</AvatarFallback></Avatar>
                                                 <div className="flex-grow">
                                                     <p className="font-semibold">{group.customerName}</p>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex flex-wrap items-center gap-2">
                                                         <Badge variant="secondary" className="text-[10px]">{group.rentals.length} contrato(s)</Badge>
                                                         {group.hasOverdue && <Badge variant="destructive" className="text-[10px] animate-pulse">Tem Atraso</Badge>}
+                                                        <span className="text-[10px] text-green-600 font-medium">Pago: {formatToBRL(group.totalPaidValue)}</span>
+                                                        <span className="text-[10px] text-destructive font-bold">Pendente: {formatToBRL(group.totalPendingValue)}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -487,13 +496,17 @@ export default function DashboardDisplay() {
                                                             const billableDays = countBillableDays(rental.rentalStartDate, todayStr, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
                                                             currentAccumulated = billableDays * rental.value;
                                                         }
+                                                        
+                                                        const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
+                                                        const currentTotal = rental.isOpenEnded ? currentAccumulated : rental.value;
+                                                        const currentPending = Math.max(0, currentTotal - totalPaid);
 
                                                         return (
                                                             <div key={rental.id} className="p-3 border rounded-lg bg-muted/30 relative">
                                                                 <div className="flex justify-between items-start mb-2">
                                                                     <div className="min-w-0 pr-10">
                                                                         <div className="flex items-center gap-2 mb-0.5">
-                                                                          <p className="font-bold text-[11px] uppercase text-muted-foreground tracking-tighter">ID #{rental.id.toString().padStart(4, '0')} — TOTAL: {formatToBRL(rental.isOpenEnded ? currentAccumulated : rental.value)}</p>
+                                                                          <p className="font-bold text-[11px] uppercase text-muted-foreground tracking-tighter">ID #{rental.id.toString().padStart(4, '0')} — TOTAL: {formatToBRL(currentTotal)}</p>
                                                                         </div>
                                                                         <p className={cn("font-bold text-base", isOverdue && "text-destructive", isDueToday && "text-orange-600")}>
                                                                             Devolução: {format(returnDate, 'dd/MM/yy', { locale: ptBR })}
@@ -506,6 +519,11 @@ export default function DashboardDisplay() {
                                                                                     <TrendingUp className="h-3 w-3 mr-1" /> Acumulado: {formatToBRL(currentAccumulated)}
                                                                                 </p>
                                                                             )}
+                                                                        </div>
+
+                                                                        <div className="flex items-center gap-2 mt-1 mb-1">
+                                                                            <span className="text-[10px] text-muted-foreground">Pago: <span className="text-green-600 font-bold">{formatToBRL(totalPaid)}</span></span>
+                                                                            <span className="text-[10px] text-muted-foreground">/ Pendente: <span className="text-destructive font-bold">{formatToBRL(currentPending)}</span></span>
                                                                         </div>
 
                                                                         {rental.deliveryAddress && rental.deliveryAddress !== 'A definir' && (
@@ -613,7 +631,10 @@ export default function DashboardDisplay() {
                                             <Avatar className="h-10 w-10"><AvatarImage src={group.customerImageUrl || undefined} alt={group.customerName} /><AvatarFallback>{group.customerName.charAt(0).toUpperCase()}</AvatarFallback></Avatar>
                                             <div className="flex-grow">
                                                 <p className="font-semibold">{group.customerName}</p>
-                                                <div className="text-sm font-bold text-destructive">Dívida Total: {formatToBRL(group.totalPendingValue)}</div>
+                                                <div className="flex flex-wrap items-center gap-x-3">
+                                                    <div className="text-xs text-green-600 font-medium">Pago: {formatToBRL(group.totalPaidValue)}</div>
+                                                    <div className="text-sm font-bold text-destructive">Pendente: {formatToBRL(group.totalPendingValue)}</div>
+                                                </div>
                                             </div>
                                         </div>
                                     </AccordionTrigger>
@@ -634,7 +655,7 @@ export default function DashboardDisplay() {
                                                         <div key={rental.id} className="p-3 border rounded-lg bg-muted/20">
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <div className="min-w-0 pr-10">
-                                                                    <p className="text-muted-foreground text-[11px] uppercase font-bold tracking-tighter">ID #{rental.id.toString().padStart(4, '0')} — PENDENTE: {formatToBRL(pendingValue)}</p>
+                                                                    <p className="text-muted-foreground text-[11px] uppercase font-bold tracking-tighter">ID #{rental.id.toString().padStart(4, '0')} — TOTAL: {formatToBRL(rental.value)}</p>
                                                                     <p className="font-bold text-destructive text-base">Devolvido em: {formattedReturnDate}</p>
                                                                     
                                                                     <div className="flex items-center gap-3 mt-1">
@@ -644,6 +665,10 @@ export default function DashboardDisplay() {
                                                                             <MapPin className="h-3 w-3 mr-1 flex-shrink-0 text-primary" /> {rental.deliveryAddress}
                                                                           </p>
                                                                         )}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 mt-1.5 mb-1">
+                                                                        <span className="text-[10px] text-muted-foreground">Pago: <span className="text-green-600 font-bold">{formatToBRL(totalPaid)}</span></span>
+                                                                        <span className="text-[10px] text-muted-foreground">/ Pendente: <span className="text-destructive font-bold">{formatToBRL(pendingValue)}</span></span>
                                                                     </div>
                                                                 </div>
                                                                 <RentalTableActions rental={rental} inventory={inventory} onActionSuccess={handleActionSuccess} />

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -27,7 +26,7 @@ interface DetailedEquipmentItem extends InventoryItem {
     quantity: number;
     equipmentId: string;
     dailyRentalRateUsed: number;
-    dailyTotal: number; // New field for daily cost per item line
+    dailyTotal: number; 
     lineTotal: number;
     customDailyRentalRate?: number;
 }
@@ -159,7 +158,7 @@ const formatDocumentForDisplay = (docType?: 'cpf' | 'cnpj', docNumber?: string |
   if (docType === 'cnpj' && digits.length === 14) {
     return `CNPJ: ${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
   }
-  return docNumber; // return as is if format doesn't match
+  return docNumber; 
 };
 
 interface RentalContractClientProps {
@@ -179,7 +178,7 @@ export default function RentalContractClient({ rental, customer, companySettings
       const inventoryItem = inventoryMap.get(eq.equipmentId);
       const dailyRateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
       const dailyTotal = dailyRateToUse * eq.quantity;
-      const itemSubtotal = dailyTotal * (rental.isOpenEnded ? 1 : (rental.rentalDays || 0));
+      const itemSubtotal = dailyTotal * (rental.rentalDays || 1);
 
       return {
         ...inventoryItem,
@@ -214,21 +213,20 @@ export default function RentalContractClient({ rental, customer, companySettings
     return pixKey;
   };
 
-  const itemsSubtotal = detailedEquipment.reduce((sum, eq) => rental.isOpenEnded ? sum + eq.dailyTotal : sum + eq.lineTotal, 0);
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
-  
   const grandTotal = rental.value;
   const pendingValue = grandTotal - totalPaid;
+  const itemsSubtotal = detailedEquipment.reduce((sum, eq) => sum + eq.lineTotal, 0);
 
   const contractGeneratedAt = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
   
-  const valorExtensoValue = rental.isOpenEnded ? itemsSubtotal : (pendingValue > 0 ? pendingValue : grandTotal);
+  const valorExtensoValue = pendingValue > 0 ? pendingValue : grandTotal;
   const valorPorExtenso = numberToWords(valorExtensoValue);
 
   const displayContractLogo = companySettings.contractLogoUrl || companySettings.companyLogoUrl || DEFAULT_COMPANY_LOGO;
   const contractTitle = "Contrato de Aluguel";
   const rentalPeriod = rental.isOpenEnded
-    ? `${format(parseISO(rental.rentalStartDate), "dd/MM/yyyy", { locale: ptBR })} - Em Aberto`
+    ? `${format(parseISO(rental.rentalStartDate), "dd/MM/yyyy", { locale: ptBR })} - ${format(parseISO(rental.expectedReturnDate), "dd/MM/yyyy", { locale: ptBR })} (Em Aberto)`
     : `${format(parseISO(rental.rentalStartDate), "dd/MM/yyyy", { locale: ptBR })} - ${format(parseISO(rental.expectedReturnDate), "dd/MM/yyyy", { locale: ptBR })}`;
   const formattedPixKey = formatPixKeyForDisplay(companySettings.pixKey);
 
@@ -354,9 +352,9 @@ export default function RentalContractClient({ rental, customer, companySettings
                   <td>{eq.name}</td>
                   <td className="text-right">{eq.quantity}</td>
                   <td className="text-right">{formatToBRL(eq.dailyRentalRateUsed)}</td>
-                  <td className="text-right">{rental.isOpenEnded ? 'N/A' : rental.rentalDays}</td>
+                  <td className="text-right">{rental.rentalDays}</td>
                   <td className="text-right">{formatToBRL(eq.dailyTotal)}</td>
-                  <td className="text-right">{rental.isOpenEnded ? '-' : formatToBRL(eq.lineTotal)}</td>
+                  <td className="text-right">{formatToBRL(eq.lineTotal)}</td>
                 </tr>
               ))}
             </tbody>
@@ -381,7 +379,7 @@ export default function RentalContractClient({ rental, customer, companySettings
               {companySettings.contractTermsAndConditions || ''}
             </p>
              <p className="text-xs mt-2 valor-extenso-class">
-              Valor por extenso: {valorPorExtenso || 'Não especificado'}. {rental.isOpenEnded && <span className="font-semibold">(Valor referente à diária)</span>}
+              Valor por extenso: {valorPorExtenso || 'Não especificado'}.
             </p>
             <section className="contract-section signature-container">
                 <div className="signature-area">
@@ -439,13 +437,13 @@ export default function RentalContractClient({ rental, customer, companySettings
                     <td>Total Geral:</td>
                     <td className="text-right">{formatToBRL(grandTotal)}</td>
                   </tr>
-                  {pendingValue > 0 && !rental.isOpenEnded && (
+                  {pendingValue > 0 && (
                     <tr className="total-line text-destructive">
                         <td>Valor Pendente:</td>
                         <td className="text-right">{formatToBRL(pendingValue)}</td>
                     </tr>
                   )}
-                  {pendingValue <= 0 && rental.paymentStatus === 'paid' && !rental.isOpenEnded && (
+                  {pendingValue <= 0 && rental.paymentStatus === 'paid' && (
                     <tr className="total-line text-green-600">
                         <td>Valor Pendente:</td>
                         <td className="text-right">{formatToBRL(0)}</td>
@@ -460,14 +458,14 @@ export default function RentalContractClient({ rental, customer, companySettings
                     <p className="text-xs">Pago em: {format(parseISO(rental.paymentDate), "dd/MM/yyyy", { locale: ptBR })}</p>
                 )}
                 {rental.paymentStatus === 'paid' && (
-                  <p className="text-sm font-semibold text-green-600 mt-1">{rental.isOpenEnded ? 'PAGAMENTO INICIAL OK' : 'CONTRATO QUITADO'}</p>
+                  <p className="text-sm font-semibold text-green-600 mt-1">CONTRATO QUITADO</p>
                 )}
             </div>
             
-            {rental.isOpenEnded && !rental.paymentDate && (
-                <div className="mt-2 p-2 border border-orange-400 bg-orange-50 text-orange-800 rounded-md text-xs">
-                   <AlertCircle className="inline-block h-4 w-4 mr-1"/>
-                    Este é um contrato em aberto. O valor total será calculado no momento da devolução do equipamento.
+            {rental.isOpenEnded && (
+                <div className="mt-2 p-2 border border-orange-400 bg-orange-50 text-orange-800 rounded-md text-[10px] leading-tight">
+                   <AlertCircle className="inline-block h-3.5 w-3.5 mr-1"/>
+                    Este é um contrato em aberto. Os valores acima são projeções acumuladas até a data de hoje. O valor final exato será calculado no momento da devolução física.
                 </div>
             )}
 
@@ -508,11 +506,6 @@ export default function RentalContractClient({ rental, customer, companySettings
                     </div>
                 </div>
              )}
-              {rental.paymentMethod === 'pix' && !companySettings.pixKey && (
-                <div className="pix-section">
-                    <p className="text-xs text-destructive">Chave PIX não configurada nas informações da empresa.</p>
-                </div>
-              )}
           </div>
         </div>
 

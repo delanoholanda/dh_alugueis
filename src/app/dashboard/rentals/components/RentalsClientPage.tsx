@@ -32,7 +32,8 @@ type ViewMode = 'cards' | 'table';
 interface GroupedRentals {
   customer: Customer;
   rentals: Rental[];
-  totalValue: number;
+  totalPending: number;
+  totalPaid: number;
 }
 
 
@@ -184,35 +185,34 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
    const groupedRentals = useMemo((): GroupedRentals[] => {
     if (viewMode !== 'cards') return [];
 
-    const customerMap = new Map<string, { customer: Customer; rentals: Rental[]; totalValue: number }>();
+    const customerMap = new Map<string, { customer: Customer; rentals: Rental[]; totalPending: number; totalPaid: number }>();
 
     for (const rental of filteredRentals) {
         const customer = customers.find(c => c.id === rental.customerId);
         if (!customer) continue;
 
         if (!customerMap.has(customer.id)) {
-            customerMap.set(customer.id, { customer, rentals: [], totalValue: 0 });
+            customerMap.set(customer.id, { customer, rentals: [], totalPending: 0, totalPaid: 0 });
         }
         
         const group = customerMap.get(customer.id)!;
         group.rentals.push(rental);
 
-        // Calculate the pending value for this specific rental
+        const totalPaidForThisRental = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
         let currentRentalPendingValue = 0;
-        const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
 
         if (rental.isOpenEnded && !rental.actualReturnDate) {
             const todayStr = format(new Date(), 'yyyy-MM-dd');
             const billableDays = countBillableDays(rental.rentalStartDate, todayStr, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
-            const dailyRate = rental.value; // For open-ended, value is daily rate
+            const dailyRate = rental.value; 
             const accumulatedValue = (billableDays * dailyRate) + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0) - (rental.discountValue ?? 0);
-            currentRentalPendingValue = accumulatedValue - totalPaid;
+            currentRentalPendingValue = accumulatedValue - totalPaidForThisRental;
         } else {
-            currentRentalPendingValue = rental.value - totalPaid;
+            currentRentalPendingValue = rental.value - totalPaidForThisRental;
         }
         
-        // Add the pending value to the customer's total
-        group.totalValue += Math.max(0, currentRentalPendingValue);
+        group.totalPending += Math.max(0, currentRentalPendingValue);
+        group.totalPaid += totalPaidForThisRental;
     }
     
     return Array.from(customerMap.values()).sort((a, b) => a.customer.name.localeCompare(b.customer.name));
@@ -290,7 +290,7 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
         <>
             {filteredRentals.length > 0 ? (
                 <Accordion type="multiple" className="w-full space-y-4">
-                  {groupedRentals.map(({ customer, rentals: customerRentals, totalValue }) => {
+                  {groupedRentals.map(({ customer, rentals: customerRentals, totalPending, totalPaid }) => {
                     const customerSelectedRentals = selectedRentals[customer.id] || [];
                     const hasOpenEndedSelected = customerSelectedRentals.some(id => customerRentals.find(r => r.id === id)?.isOpenEnded);
                     const closeUntilDate = closingDates[customer.id];
@@ -310,9 +310,12 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
                                     <p className="text-xs text-muted-foreground text-left">{customerRentals.length} contrato(s) filtrado(s)</p>
                                 </div>
                                 </div>
-                                <div className="w-full sm:w-auto mt-2 sm:mt-0">
-                                    <p className="text-xs text-muted-foreground sm:text-right">Valor Total em Aberto</p>
-                                    <p className="font-bold text-primary text-lg text-left sm:text-right">{formatToBRL(totalValue)}</p>
+                                <div className="w-full sm:w-auto mt-2 sm:mt-0 text-left sm:text-right">
+                                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Resumo Financeiro</p>
+                                    <div className="flex sm:flex-col gap-x-3 items-baseline sm:items-end">
+                                        <p className="text-xs text-green-600 font-medium">Pago: {formatToBRL(totalPaid)}</p>
+                                        <p className="text-lg font-bold text-destructive">Pendente: {formatToBRL(totalPending)}</p>
+                                    </div>
                                 </div>
                             </div>
                         </AccordionTrigger>
@@ -376,7 +379,7 @@ export default function RentalsClientPage({ initialRentals, initialInventory, in
                         </AccordionContent>
                         </AccordionItem>
                     );
-                })}
+                  })}
                 </Accordion>
             ) : (
                 <Card className="shadow-lg col-span-full">

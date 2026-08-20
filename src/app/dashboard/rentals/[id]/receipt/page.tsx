@@ -38,8 +38,9 @@ export default async function RentalContractPage({ params }: { params: { id: str
 
   // --- Start: Dynamic Value Calculation for Rendering ---
   let finalRentalForDisplay = { ...initialRental };
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  
   if (initialRental.isOpenEnded && !initialRental.actualReturnDate) {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
       const billableDays = countBillableDays(
           initialRental.rentalStartDate,
           todayStr,
@@ -51,6 +52,7 @@ export default async function RentalContractPage({ params }: { params: { id: str
       const calculatedValue = (billableDays * dailyRate) + (finalRentalForDisplay.freightValue ?? 0) + (finalRentalForDisplay.fuelValue ?? 0) - (finalRentalForDisplay.discountValue ?? 0);
       finalRentalForDisplay.value = calculatedValue;
       finalRentalForDisplay.rentalDays = billableDays;
+      finalRentalForDisplay.expectedReturnDate = todayStr;
   }
   // --- End: Dynamic Value Calculation ---
   

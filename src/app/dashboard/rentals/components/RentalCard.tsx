@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Rental, Equipment as InventoryEquipment, Customer } from '@/types';
@@ -7,7 +8,7 @@ import { RentalTableActions } from './RentalTableActions';
 import { format, parseISO, isToday, isPast, startOfDay, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatToBRL, cn, countBillableDays, getPaymentStatusVariant, paymentStatusMap } from '@/lib/utils';
-import { CalendarDays, DollarSign, Package, CircleAlert, CircleCheck, TrendingUp, Infinity as InfinityIcon, HandCoins, MapPin, History, Clock } from 'lucide-react';
+import { CalendarDays, DollarSign, Package, CircleAlert, CircleCheck, TrendingUp, Infinity as InfinityIcon, HandCoins, MapPin, History } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useState } from 'react';
 import { MarkAsPaidDialog } from './MarkAsPaidDialog';
@@ -60,22 +61,6 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
     cardBorderColor = 'border-orange-500/30';
   }
   
-  let dailyRevenue = 0;
-  if (!isFullyFinalized) {
-    if (rental.isOpenEnded) {
-        dailyRevenue = rental.value; 
-    } else {
-        rental.equipment.forEach(eqEntry => {
-            const inventoryItem = inventory.find(inv => inv.id === eqEntry.equipmentId);
-            let rateToUse = eqEntry.customDailyRentalRate;
-            if (rateToUse === undefined || rateToUse === null) {
-                rateToUse = inventoryItem?.dailyRentalRate ?? 0;
-            }
-            dailyRevenue += (rateToUse * eqEntry.quantity);
-        });
-    }
-  }
-
   let currentAccumulated = 0;
   if (rental.isOpenEnded && !isPhysicallyReturned) {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -86,6 +71,15 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
       rental.chargeSundays ?? true
     );
     currentAccumulated = billableDays * rental.value; 
+  }
+
+  // Calculate financial summary
+  const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+  let pendingValue = 0;
+  if (rental.isOpenEnded && !isPhysicallyReturned) {
+      pendingValue = Math.max(0, currentAccumulated - totalPaid);
+  } else {
+      pendingValue = Math.max(0, rental.value - totalPaid);
   }
   
   const handleBadgeClick = () => {
@@ -197,20 +191,28 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
             </div>
           </div>
           
-          <div className="flex items-center pt-1">
-            <Badge 
-              variant={getPaymentStatusVariant(rental.paymentStatus)} 
-              className={cn("capitalize text-xs py-0.5 px-2", isPayable && "cursor-pointer hover:opacity-80 transition-opacity")}
-              onClick={handleBadgeClick}
-              title={isPayable ? "Clique para marcar como pago" : ""}
-            >
-              {paymentStatusMap[rental.paymentStatus]}
-            </Badge>
-            {rental.paymentStatus === 'paid' && rental.paymentDate && (
-              <span className="text-xs text-muted-foreground ml-2">
-                em {format(parseISO(rental.paymentDate), 'dd/MM/yy')}
-              </span>
-            )}
+          <div className="flex flex-col gap-1.5 pt-2 border-t mt-1">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                    <Badge 
+                        variant={getPaymentStatusVariant(rental.paymentStatus)} 
+                        className={cn("capitalize text-[10px] py-0 px-2 h-5", isPayable && "cursor-pointer hover:opacity-80 transition-opacity")}
+                        onClick={handleBadgeClick}
+                        title={isPayable ? "Clique para marcar como pago" : ""}
+                    >
+                        {paymentStatusMap[rental.paymentStatus]}
+                    </Badge>
+                    {rental.paymentStatus === 'paid' && rental.paymentDate && (
+                    <span className="text-[10px] text-muted-foreground ml-2">
+                        em {format(parseISO(rental.paymentDate), 'dd/MM/yy')}
+                    </span>
+                    )}
+                </div>
+            </div>
+            <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Pago: <span className="text-green-600 font-bold">{formatToBRL(totalPaid)}</span></span>
+                <span className="text-[11px] text-muted-foreground">/ Pendente: <span className="text-destructive font-bold">{formatToBRL(pendingValue)}</span></span>
+            </div>
           </div>
 
         </CardContent>

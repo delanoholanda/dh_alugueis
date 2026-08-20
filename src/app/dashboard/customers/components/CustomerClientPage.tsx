@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { CustomerForm } from './CustomerForm';
 import { createCustomer, updateCustomer, deleteCustomer, getCustomers } from '@/actions/customerActions';
-import { PlusCircle, Edit, Trash2, User, Phone, Fingerprint, Home, UsersRound, History, PackageX, FileText, AlertTriangle, Calendar as CalendarIcon, ListChecks, Eraser } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, User, Phone, Fingerprint, Home, UsersRound, History, PackageX, FileText, AlertTriangle, Calendar as CalendarIcon, ListChecks, Eraser, ScrollText, DollarSign } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -86,6 +86,23 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
         const isNotFinalized = !rental.actualReturnDate || rental.paymentStatus !== 'paid';
         return rental.customerId === customer.id && isNotFinalized;
       }).sort((a,b) => parseISO(a.rentalStartDate).getTime() - parseISO(b.rentalStartDate).getTime());
+    }
+    return map;
+  }, [customers, initialRentals]);
+
+  // Calcula estatísticas históricas por cliente
+  const allTimeStatsByCustomer = useMemo(() => {
+    const map: Record<string, { count: number; totalPaid: number }> = {};
+    for (const customer of customers) {
+      const customerRentals = initialRentals.filter(r => r.customerId === customer.id);
+      const totalPaid = customerRentals.reduce((sum, rental) => {
+        const rentalPaid = rental.payments?.reduce((pSum, p) => pSum + p.amount, 0) ?? 0;
+        return sum + rentalPaid;
+      }, 0);
+      map[customer.id] = {
+        count: customerRentals.length,
+        totalPaid: totalPaid
+      };
     }
     return map;
   }, [customers, initialRentals]);
@@ -204,6 +221,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {customers.map((customer) => {
             const customerActiveRentals = activeRentalsByCustomer[customer.id] || [];
+            const stats = allTimeStatsByCustomer[customer.id] || { count: 0, totalPaid: 0 };
             const customerSelectedRentals = selectedRentals[customer.id] || [];
             const hasOpenEndedSelected = customerSelectedRentals.some(id => 
                 activeRentalsByCustomer[customer.id]?.find(r => r.id === id)?.isOpenEnded
@@ -266,6 +284,22 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm flex-grow">
+                 {/* Estatísticas Históricas */}
+                 <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="flex flex-col p-2 bg-muted/40 rounded-md border border-border/50">
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground flex items-center mb-1">
+                            <ScrollText className="h-2.5 w-2.5 mr-1 text-primary" /> Aluguéis
+                        </span>
+                        <span className="text-sm font-bold text-foreground leading-none">{stats.count}</span>
+                    </div>
+                    <div className="flex flex-col p-2 bg-muted/40 rounded-md border border-border/50">
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground flex items-center mb-1">
+                            <DollarSign className="h-2.5 w-2.5 mr-1 text-green-600" /> Total Pago
+                        </span>
+                        <span className="text-sm font-bold text-green-700 leading-none">{formatToBRL(stats.totalPaid)}</span>
+                    </div>
+                </div>
+
                  <div className="flex items-start">
                     <Home className="h-4 w-4 mr-1.5 text-muted-foreground flex-shrink-0 mt-0.5" />
                     {customer.address ? (
@@ -275,10 +309,10 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                     )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant={customer.responsiveness === 'very responsive' || customer.responsiveness === 'responsive' ? 'default' : 'secondary'} className="whitespace-nowrap text-xs py-0.5 px-1.5">
+                    <Badge variant={customer.responsiveness === 'very responsive' || customer.responsiveness === 'responsive' ? 'default' : 'secondary'} className="whitespace-nowrap text-[10px] py-0 px-1.5">
                         <UsersRound className="h-3 w-3 mr-1"/> {responsivenessMap[customer.responsiveness]}
                     </Badge>
-                    <Badge variant={customer.rentalHistory === 'always on time' ? 'default' : customer.rentalHistory === 'sometimes late' ? 'secondary' : 'destructive'} className="whitespace-nowrap text-xs py-0.5 px-1.5">
+                    <Badge variant={customer.rentalHistory === 'always on time' ? 'default' : customer.rentalHistory === 'sometimes late' ? 'secondary' : 'destructive'} className="whitespace-nowrap text-[10px] py-0 px-1.5">
                        <History className="h-3 w-3 mr-1"/> {rentalHistoryMap[customer.rentalHistory]}
                     </Badge>
                 </div>
@@ -288,7 +322,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                         <Accordion type="single" collapsible className="w-full">
                             <AccordionItem value="rentals" className="border-t">
                                 <AccordionTrigger className="text-sm font-semibold hover:no-underline py-2">
-                                    {customerActiveRentals.length} Aluguel(eis) Ativo(s)
+                                    {customerActiveRentals.length} Contrato(s) Ativo(s)
                                 </AccordionTrigger>
                                 <AccordionContent className="pt-2 space-y-2">
                                     <div className="flex gap-2 mb-2">
@@ -316,7 +350,7 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
                                                             {rental.isOpenEnded ? 'Em Aberto (diária)' : 'Valor do Contrato'}: {formatToBRL(rental.value)}
                                                         </p>
                                                     </div>
-                                                    <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="capitalize text-xs">
+                                                    <Badge variant={getPaymentStatusVariant(rental.paymentStatus)} className="capitalize text-[10px]">
                                                         {paymentStatusMap[rental.paymentStatus]}
                                                     </Badge>
                                                 </div>
@@ -406,5 +440,3 @@ export default function CustomerClientPage({ initialCustomers, initialRentals }:
     </>
   );
 }
-
-    
