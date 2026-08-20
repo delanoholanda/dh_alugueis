@@ -83,11 +83,15 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
         const totalPaid = rental.payments?.reduce((pSum, p) => pSum + p.amount, 0) ?? 0;
         const itemsSubtotal = calculateItemsSubtotal(rental);
         const contractValue = getProjectedValue(rental);
+        const effectiveRevenue = contractValue - (rental.fuelValue ?? 0);
         const pendingValue = contractValue - totalPaid;
 
         acc.itemsSubtotal += itemsSubtotal;
         acc.freightValue += rental.freightValue ?? 0;
+        acc.fuelValue += rental.fuelValue ?? 0;
+        acc.discountValue += rental.discountValue ?? 0;
         acc.contractValue += contractValue;
+        acc.effectiveRevenue += effectiveRevenue;
         acc.totalPaid += totalPaid;
         acc.pendingValue += pendingValue;
         
@@ -96,7 +100,10 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
       {
         itemsSubtotal: 0,
         freightValue: 0,
+        fuelValue: 0,
+        discountValue: 0,
         contractValue: 0,
+        effectiveRevenue: 0,
         totalPaid: 0,
         pendingValue: 0,
       }
@@ -152,7 +159,10 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
                   <TableHead>Status Pag.</TableHead>
                   <TableHead className="text-right">Itens</TableHead>
                   <TableHead className="text-right">Frete</TableHead>
+                  <TableHead className="text-right">Combustível</TableHead>
+                  <TableHead className="text-right">Desconto</TableHead>
                   <TableHead className="text-right">Total Contrato</TableHead>
+                  <TableHead className="text-right text-emerald-600 dark:text-emerald-400">Receita Efetiva</TableHead>
                   <TableHead className="text-right">Pago / Pendente</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
@@ -163,6 +173,7 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
                     const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
                     const itemsSubtotal = calculateItemsSubtotal(rental);
                     const contractValue = getProjectedValue(rental);
+                    const effectiveRevenue = contractValue - (rental.fuelValue ?? 0);
                     const pendingValue = contractValue - totalPaid;
 
                     return (
@@ -176,7 +187,14 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
                         </TableCell>
                         <TableCell className="text-right font-mono">{formatToBRL(itemsSubtotal)}</TableCell>
                         <TableCell className="text-right font-mono">{formatToBRL(rental.freightValue ?? 0)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatToBRL(rental.fuelValue ?? 0)}</TableCell>
+                        <TableCell className="text-right font-mono text-amber-600">
+                          {rental.discountValue && rental.discountValue > 0 ? `-${formatToBRL(rental.discountValue)}` : formatToBRL(0)}
+                        </TableCell>
                         <TableCell className="text-right font-mono font-bold">{formatToBRL(contractValue)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                          {formatToBRL(effectiveRevenue)}
+                        </TableCell>
                         <TableCell className="text-right font-mono">
                           <p className="text-green-600">{formatToBRL(totalPaid)}</p>
                           <p className="text-red-600">-{formatToBRL(pendingValue)}</p>
@@ -193,7 +211,7 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
+                    <TableCell colSpan={11} className="h-24 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <PackageX className="h-8 w-8" />
                         Nenhum contrato encontrado.
@@ -207,7 +225,12 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
                     <TableCell colSpan={3}>Total</TableCell>
                     <TableCell className="text-right font-mono">{formatToBRL(totals.itemsSubtotal)}</TableCell>
                     <TableCell className="text-right font-mono">{formatToBRL(totals.freightValue)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatToBRL(totals.fuelValue)}</TableCell>
+                    <TableCell className="text-right font-mono text-amber-600">
+                      {totals.discountValue > 0 ? `-${formatToBRL(totals.discountValue)}` : formatToBRL(0)}
+                    </TableCell>
                     <TableCell className="text-right font-mono">{formatToBRL(totals.contractValue)}</TableCell>
+                    <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">{formatToBRL(totals.effectiveRevenue)}</TableCell>
                     <TableCell className="text-right font-mono">
                          <p className="text-green-600">{formatToBRL(totals.totalPaid)}</p>
                          <p className="text-red-600">-{formatToBRL(totals.pendingValue)}</p>
