@@ -75,14 +75,22 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
       }
       const itemsProjectedValue = calculateItemsSubtotal(rental);
       return (itemsProjectedValue) + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0) - (rental.discountValue ?? 0);
-  }
+  };
+
+  const getItemSubtotal = (rental: Rental) => {
+      const contractVal = getProjectedValue(rental);
+      const freight = rental.freightValue ?? 0;
+      const fuel = rental.fuelValue ?? 0;
+      const discount = rental.discountValue ?? 0;
+      return contractVal - freight - fuel + discount;
+  };
   
   const totals = useMemo(() => {
     return filteredRentals.reduce(
       (acc, rental) => {
         const totalPaid = rental.payments?.reduce((pSum, p) => pSum + p.amount, 0) ?? 0;
-        const itemsSubtotal = calculateItemsSubtotal(rental);
         const contractValue = getProjectedValue(rental);
+        const itemsSubtotal = getItemSubtotal(rental);
         const effectiveRevenue = contractValue - (rental.fuelValue ?? 0);
         const pendingValue = contractValue - totalPaid;
 
@@ -171,8 +179,8 @@ export default function ContractsClientPage({ initialRentals }: { initialRentals
                 {filteredRentals.length > 0 ? (
                   filteredRentals.map((rental) => {
                     const totalPaid = rental.payments?.reduce((acc, p) => acc + p.amount, 0) ?? 0;
-                    const itemsSubtotal = calculateItemsSubtotal(rental);
                     const contractValue = getProjectedValue(rental);
+                    const itemsSubtotal = getItemSubtotal(rental);
                     const effectiveRevenue = contractValue - (rental.fuelValue ?? 0);
                     const pendingValue = contractValue - totalPaid;
 

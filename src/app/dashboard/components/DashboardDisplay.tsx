@@ -264,7 +264,11 @@ export default function DashboardDisplay() {
             let currentRentalValue: number;
             if (rental.isOpenEnded && !rental.actualReturnDate) {
                 const billableDays = countBillableDays(rental.rentalStartDate, todayStr, rental.chargeSaturdays ?? true, rental.chargeSundays ?? true);
-                currentRentalValue = billableDays * rental.value; 
+                const itemsSubtotal = rental.equipment.reduce((sum, eq) => {
+                    const dailyRate = eq.customDailyRentalRate ?? 0;
+                    return sum + (dailyRate * eq.quantity * billableDays);
+                }, 0);
+                currentRentalValue = itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0) - (rental.discountValue ?? 0);
             } else {
                 currentRentalValue = rental.value;
             }
