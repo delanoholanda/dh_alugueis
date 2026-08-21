@@ -11,11 +11,12 @@ import { getInventoryItems } from '@/actions/inventoryActions';
 import { getEquipmentTypes } from '@/actions/equipmentTypeActions';
 
 interface EditQuotePageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function EditQuotePage({ params }: EditQuotePageProps) {
-  const quoteId = Number(params.id);
+  const { id } = await params;
+  const quoteId = Number(id);
   if (isNaN(quoteId)) {
     notFound();
   }

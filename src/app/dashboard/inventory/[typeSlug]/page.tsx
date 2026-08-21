@@ -9,7 +9,7 @@ import { notFound } from 'next/navigation';
 import { getIcon } from '@/lib/lucide-icons';
 
 interface DynamicInventoryPageProps {
-  params: { typeSlug: string };
+  params: Promise<{ typeSlug: string }>;
 }
 
 async function getTargetTypeBySlug(slug: string, allTypes: EquipmentType[]): Promise<EquipmentType | undefined> {
@@ -41,8 +41,8 @@ async function getTargetTypeBySlug(slug: string, allTypes: EquipmentType[]): Pro
 }
 
 
-export default async function DynamicInventoryTypePage({ params }: DynamicInventoryPageProps) {
-  const { typeSlug } = params;
+export default async function DynamicInventoryPage({ params }: DynamicInventoryPageProps) {
+  const { typeSlug } = await params;
 
   const allEquipmentTypes: EquipmentType[] = await getEquipmentTypes();
   const targetType = await getTargetTypeBySlug(typeSlug, allEquipmentTypes);

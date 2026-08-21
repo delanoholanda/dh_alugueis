@@ -6,8 +6,9 @@ import { getInventoryItems } from '@/actions/inventoryActions';
 import { notFound } from 'next/navigation';
 import QuoteReceiptClient from './QuoteReceiptClient';
 
-export default async function QuoteReceiptPage({ params }: { params: { id: string } }) {
-  const quoteIdNum = parseInt(params.id || '', 10);
+export default async function QuoteReceiptPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const quoteIdNum = parseInt(id || '', 10);
   if (isNaN(quoteIdNum)) {
     notFound();
   }

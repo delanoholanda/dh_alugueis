@@ -24,13 +24,13 @@ function extractCityFromAddress(address?: string): string {
 }
 
 interface ConsolidatedReceiptPageProps {
-  params: { id: string };
-  searchParams: { rental_ids?: string; close_until?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ rental_ids?: string; close_until?: string }>;
 }
 
 export default async function ConsolidatedReceiptPage({ params, searchParams }: ConsolidatedReceiptPageProps) {
-  const customerId = params.id;
-  const rentalIdsStr = searchParams.rental_ids;
+  const { id: customerId } = await params;
+  const { rental_ids: rentalIdsStr, close_until: closeUntilParam } = await searchParams;
 
   if (!customerId || !rentalIdsStr) {
     notFound();
@@ -42,8 +42,8 @@ export default async function ConsolidatedReceiptPage({ params, searchParams }: 
   }
   
   let closeUntilDate = new Date();
-  if (searchParams.close_until) {
-      const parsedDate = parseISO(searchParams.close_until);
+  if (closeUntilParam) {
+      const parsedDate = parseISO(closeUntilParam);
       if (isValid(parsedDate)) {
           closeUntilDate = parsedDate;
       }

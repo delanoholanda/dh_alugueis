@@ -10,11 +10,12 @@ import { getInventoryItems } from '@/actions/inventoryActions';
 import { getEquipmentTypes } from '@/actions/equipmentTypeActions';
 
 interface EditRentalPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function EditRentalPage({ params }: EditRentalPageProps) {
-  const rentalId = Number(params.id);
+  const { id } = await params;
+  const rentalId = Number(id);
   if (isNaN(rentalId)) {
     notFound();
   }

@@ -22,8 +22,9 @@ function extractCityFromAddress(address?: string): string {
   return cityCandidate.trim().toUpperCase().substring(0,15);
 }
 
-export default async function RentalContractPage({ params }: { params: { id: string } }) {
-  const rentalIdNum = parseInt(params.id || '', 10);
+export default async function RentalContractPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const rentalIdNum = parseInt(id || '', 10);
   if (isNaN(rentalIdNum)) {
     notFound();
   }

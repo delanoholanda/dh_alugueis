@@ -7,9 +7,9 @@ const DATA_DIR = path.join(process.cwd(), 'data', 'uploads');
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { slug: string[] } }
+  { params }: { params: Promise<{ slug: string[] }> }
 ) {
-  const slug = params.slug;
+  const { slug } = await params;
 
   if (!slug || !Array.isArray(slug) || slug.length === 0) {
     return new NextResponse('Invalid file path', { status: 400 });
