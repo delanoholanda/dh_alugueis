@@ -107,11 +107,15 @@ export default function InventoryClientPage({ initialItems, rentedQuantities: in
 
   const handleDeleteItem = async (itemId: string) => {
     try {
-      await deleteInventoryItem(itemId);
-      toast({ title: 'Item Excluído', description: 'Item do inventário removido.', variant: 'success' });
+      const res = await deleteInventoryItem(itemId);
+      if (res.archived) {
+        toast({ title: 'Item Arquivado / Vendido', description: res.message || 'Item desativado do estoque ativo.', variant: 'default' });
+      } else {
+        toast({ title: 'Item Excluído', description: 'Item removido do inventário.', variant: 'success' });
+      }
       setItems(prevItems => prevItems.filter(item => item.id !== itemId));
     } catch (error) {
-      toast({ title: 'Erro', description: (error as Error).message || 'Falha ao excluir item.', variant: 'destructive' });
+      toast({ title: 'Erro ao excluir', description: (error as Error).message || 'Falha ao processar exclusão.', variant: 'destructive' });
     }
   };
   

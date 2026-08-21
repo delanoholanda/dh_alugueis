@@ -48,6 +48,7 @@ import { useState, useEffect } from 'react';
 import { DynamicLucideIcon, getIcon } from '@/lib/lucide-icons'; 
 import type { EquipmentType } from '@/types'; 
 import { getEquipmentTypes } from '@/actions/equipmentTypeActions'; 
+import { getInventoryItems } from '@/actions/inventoryActions';
 import { getCompanySettings } from '@/actions/settingsActions';
 
 
@@ -140,21 +141,33 @@ export function SidebarNav() {
   useEffect(() => {
     async function fetchAndSetEquipmentTypes() {
       try {
-        const fetchedTypes: EquipmentType[] = await getEquipmentTypes();
+        const [fetchedTypes, inventoryItems] = await Promise.all([
+          getEquipmentTypes(),
+          getInventoryItems()
+        ]);
+        
+        const activeTypeIds = new Set(
+          inventoryItems
+            .filter(item => item.forRental || item.quantity > 0)
+            .map(item => item.typeId)
+        );
+
         const inventoryNavIndex = mainNavItems.findIndex(item => item.href === '/dashboard/inventory');
         
         if (inventoryNavIndex !== -1) {
-          const typeSubItems: NavItem[] = fetchedTypes.map(type => {
-            let hrefSegment = type.id.replace('type_', '');
-            if (type.name.toLowerCase() === 'plataforma') {
-              hrefSegment = 'platforms';
-            }
-            return {
-              href: `/dashboard/inventory/${hrefSegment}`, 
-              label: type.name,
-              iconName: type.iconName || 'Package',
-            };
-          });
+          const typeSubItems: NavItem[] = fetchedTypes
+            .filter(type => activeTypeIds.has(type.id))
+            .map(type => {
+              let hrefSegment = type.id.replace('type_', '');
+              if (type.name.toLowerCase() === 'plataforma') {
+                hrefSegment = 'platforms';
+              }
+              return {
+                href: `/dashboard/inventory/${hrefSegment}`, 
+                label: type.name,
+                iconName: type.iconName || 'Package',
+              };
+            });
 
           const updatedNavItems = [...mainNavItems];
           const fixedSubItems = updatedNavItems[inventoryNavIndex].subItems || [];

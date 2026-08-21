@@ -55,7 +55,7 @@ export default async function DynamicInventoryPage({ params }: DynamicInventoryP
   const allItems: Equipment[] = await getInventoryItems();
   const allRentals: Rental[] = await getRentals();
 
-  const items = allItems.filter(item => item.typeId === targetType.id);
+  const items = allItems.filter(item => item.typeId === targetType.id && (item.forRental || item.quantity > 0));
 
   const rentedQuantities: Record<string, number> = {};
   allRentals.forEach(rental => {

@@ -114,22 +114,39 @@ export async function updateInventoryItem(id: string, itemData: Partial<Omit<Equ
   }
 }
 
-export async function deleteInventoryItem(id: string): Promise<{ success: boolean }> {
+export async function deleteInventoryItem(id: string): Promise<{ success: boolean; archived?: boolean; message?: string }> {
   await validateServerSession();
   const db = getDb();
   try {
     const itemToDelete = await getInventoryItemById(id);
-    if(itemToDelete?.imageUrl) {
-        await deleteFile(itemToDelete.imageUrl);
-    }
+    if (!itemToDelete) return { success: false, message: 'Item não encontrado.' };
 
-    const stmt = db.prepare('DELETE FROM inventory WHERE id = ?');
-    const result = stmt.run(id);
-    revalidatePath('/dashboard/inventory', 'layout');
-    revalidatePath('/dashboard', 'layout');
-    return { success: result.changes > 0 };
+    const isUsedInRentals = db.prepare('SELECT 1 FROM rental_equipment WHERE equipmentId = ? LIMIT 1').get(id);
+    const isUsedInPurchases = db.prepare('SELECT 1 FROM purchases WHERE inventoryId = ? LIMIT 1').get(id);
+    const isUsedInQuotes = db.prepare('SELECT 1 FROM quote_equipment WHERE equipmentId = ? LIMIT 1').get(id);
+
+    if (isUsedInRentals || isUsedInPurchases || isUsedInQuotes) {
+      const stmt = db.prepare('UPDATE inventory SET quantity = 0, forRental = 0 WHERE id = ?');
+      stmt.run(id);
+      revalidatePath('/dashboard/inventory', 'layout');
+      revalidatePath('/dashboard', 'layout');
+      return { 
+        success: true, 
+        archived: true, 
+        message: 'O item possui histórico de aluguéis/compras e foi arquivado/desativado do estoque ativo.' 
+      };
+    } else {
+      if (itemToDelete.imageUrl && itemToDelete.imageUrl.startsWith('/uploads/')) {
+        await deleteFile(itemToDelete.imageUrl);
+      }
+      const stmt = db.prepare('DELETE FROM inventory WHERE id = ?');
+      const result = stmt.run(id);
+      revalidatePath('/dashboard/inventory', 'layout');
+      revalidatePath('/dashboard', 'layout');
+      return { success: result.changes > 0, message: 'Item excluído com sucesso.' };
+    }
   } catch (error) {
     console.error(`Failed to delete inventory item with id ${id}:`, error);
-    throw error; 
+    throw new Error(`Falha ao excluir item: ${(error as Error).message}`); 
   }
 }

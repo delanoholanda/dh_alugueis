@@ -8,7 +8,8 @@ import { Warehouse } from 'lucide-react';
 import type { Rental, Equipment, EquipmentType } from '@/types';
 
 export default async function InventoryPage() {
-  const items: Equipment[] = await getInventoryItems();
+  const allItems: Equipment[] = await getInventoryItems();
+  const items = allItems.filter(item => item.forRental || item.quantity > 0);
   const rentals: Rental[] = await getRentals();
   const equipmentTypes: EquipmentType[] = await getEquipmentTypes();
 
