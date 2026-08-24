@@ -46,7 +46,7 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
     }
   }
 
-  const isPayable = isPaymentPending && !rental.isOpenEnded;
+  const isPayable = isPaymentPending;
 
   let cardBorderColor = 'border-border';
   if (isFullyFinalized) {

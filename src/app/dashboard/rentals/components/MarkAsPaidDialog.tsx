@@ -20,7 +20,25 @@ import { useToast } from '@/hooks/use-toast';
 import { addPayment, updateRental } from '@/actions/rentalActions';
 import type { Rental } from '@/types';
 import { Loader2, CalendarIcon, DollarSign, CreditCard, Landmark, CheckSquare } from 'lucide-react';
-import { formatToBRL, parseFromBRL } from '@/lib/utils';
+import { formatToBRL, parseFromBRL, countBillableDays } from '@/lib/utils';
+
+function getTargetContractValue(rental: Rental): number {
+  if (rental.isOpenEnded && !rental.actualReturnDate) {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const billableDays = countBillableDays(
+      rental.rentalStartDate,
+      todayStr,
+      rental.chargeSaturdays ?? true,
+      rental.chargeSundays ?? true
+    );
+    const itemsSubtotal = rental.equipment.reduce((sum, eq) => {
+      const dailyRate = eq.customDailyRentalRate ?? 0;
+      return sum + (dailyRate * eq.quantity * billableDays);
+    }, 0);
+    return itemsSubtotal + (rental.freightValue ?? 0) + (rental.fuelValue ?? 0) - (rental.discountValue ?? 0);
+  }
+  return rental.value;
+}
 
 const paymentSchema = z.object({
   paymentDate: z.date({ required_error: "A data do pagamento é obrigatória." }),
@@ -44,7 +62,8 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
   const [isAmountFocused, setIsAmountFocused] = useState(false);
   
   const totalPaid = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
-  const remainingValue = rental.value - totalPaid;
+  const targetValue = getTargetContractValue(rental);
+  const remainingValue = Math.max(0, targetValue - totalPaid);
 
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
@@ -58,7 +77,9 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
 
   useEffect(() => {
     if (isOpen) {
-        const newRemainingValue = rental.value - (rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0);
+        const totalPaidCalc = rental.payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+        const targetVal = getTargetContractValue(rental);
+        const newRemainingValue = Math.max(0, targetVal - totalPaidCalc);
         const initialAmount = newRemainingValue > 0.005 ? newRemainingValue : 0;
         form.reset({
             paymentDate: new Date(),
@@ -132,7 +153,8 @@ export function MarkAsPaidDialog({ rental, isOpen, onOpenChange, onSuccess }: Ma
             <DollarSign className="mr-2 h-5 w-5 text-primary" /> Registrar Pagamento (ID: {rental.id})
           </DialogTitle>
            <DialogDescription>
-            Valor total do contrato: {formatToBRL(rental.value)}. 
+            {rental.isOpenEnded && !rental.actualReturnDate ? "Valor acumulado (hoje): " : "Valor total do contrato: "}
+            {formatToBRL(targetValue)}. 
             Valor pendente: <span className="font-bold">{formatToBRL(remainingValue)}</span>.
           </DialogDescription>
         </DialogHeader>

@@ -244,7 +244,7 @@ export default function RentalDetailsPage() {
     );
   }
 
-  const isPayable = (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue') && !rental.isOpenEnded;
+  const isPayable = (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue');
   const handleBadgeClick = () => {
     if (isPayable) {
         setIsPaidDialogOpen(true);

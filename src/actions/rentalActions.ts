@@ -736,9 +736,26 @@ export async function addPayment(
     insertPaymentStmt.run({ ...newPayment, isPartial: newPayment.isPartial ? 1 : 0 });
 
     const totalPaid = existingPayments.reduce((sum, p) => sum + p.amount, 0) + newPayment.amount;
-    const remainingValue = rentalRow.value - totalPaid;
     
-    const isNowFullyPaid = remainingValue < 0.01;
+    let targetContractValue = rentalRow.value;
+    if (rentalRow.isOpenEnded && !rentalRow.actualReturnDate) {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const billableDays = countBillableDays(
+            rentalRow.rentalStartDate,
+            todayStr,
+            rentalRow.chargeSaturdays ?? true,
+            rentalRow.chargeSundays ?? true
+        );
+        const equipment = db.prepare('SELECT * FROM rental_equipment WHERE rentalId = ?').all(rentalId) as Array<{ quantity: number; customDailyRentalRate?: number | null }>;
+        const itemsSubtotal = equipment.reduce((sum, eq) => {
+            const dailyRate = eq.customDailyRentalRate ?? 0;
+            return sum + (dailyRate * eq.quantity * billableDays);
+        }, 0);
+        targetContractValue = itemsSubtotal + (rentalRow.freightValue || 0) + (rentalRow.fuelValue || 0) - (rentalRow.discountValue || 0);
+    }
+    
+    const remainingValue = targetContractValue - totalPaid;
+    const isNowFullyPaid = remainingValue < 0.01 && !rentalRow.isOpenEnded;
     let newPaymentStatus: Rental['paymentStatus'] = rentalRow.paymentStatus;
     
     if (isNowFullyPaid) {

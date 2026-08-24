@@ -45,7 +45,7 @@ export function RentalTableActions({ rental, inventory, onActionSuccess }: Renta
   const [isPaidDialogOpen, setIsPaidDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const isPayable = (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue') && !rental.isOpenEnded;
+  const isPayable = (rental.paymentStatus === 'pending' || rental.paymentStatus === 'overdue');
 
   const handleDelete = async () => {
     setIsDeleting(true);
