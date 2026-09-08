@@ -23,7 +23,7 @@ import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useMemo } from 'react';
-import { formatToBRL, cn, findNthBillableDay } from '@/lib/utils';
+import { formatToBRL, cn, findNthBillableDay, countBillableDays } from '@/lib/utils';
 import { CustomerForm } from '@/app/dashboard/customers/components/CustomerForm';
 import { createCustomer, getCustomers } from '@/actions/customerActions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -173,6 +173,15 @@ export function RentalForm({
   const watchedFuelValue = useWatch({ control: form.control, name: "fuelValue" });
   const watchedDiscountValue = useWatch({ control: form.control, name: "discountValue" });
 
+  const openEndedBillableDays = useMemo(() => {
+    if (!watchedIsOpenEnded || !watchedRentalStartDate || !isValid(watchedRentalStartDate)) {
+      return 0;
+    }
+    const startStr = format(watchedRentalStartDate, 'yyyy-MM-dd');
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    return countBillableDays(startStr, todayStr, watchedChargeSaturdays, watchedChargeSundays);
+  }, [watchedIsOpenEnded, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays]);
+
   const inventoryWithAvailability = useMemo(() => {
     const startDate = watchedRentalStartDate;
     const isOpen = watchedIsOpenEnded;
@@ -250,7 +259,17 @@ export function RentalForm({
   
   // Recálculo automático do valor total
   useEffect(() => {
-    const days = !watchedIsOpenEnded ? (Number(watchedRentalDays) || 0) : 1;
+    let days = 1;
+    if (watchedIsOpenEnded) {
+      if (watchedRentalStartDate && isValid(watchedRentalStartDate)) {
+        const startStr = format(watchedRentalStartDate, 'yyyy-MM-dd');
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        days = countBillableDays(startStr, todayStr, watchedChargeSaturdays, watchedChargeSundays);
+      }
+    } else {
+      days = Number(watchedRentalDays) || 0;
+    }
+
     let itemsTotalValue = 0;
     
     watchedEquipment.forEach(item => {
@@ -268,11 +287,10 @@ export function RentalForm({
     const fuel = Number(watchedFuelValue) || 0;
     const discount = Number(watchedDiscountValue) || 0;
     
-    // Se for contrato em aberto, o valor representa a diária base acumulada (sem frete/combustível/desconto até fechar)
-    const final = watchedIsOpenEnded ? itemsTotalValue : itemsTotalValue + freight + fuel - discount;
+    const final = itemsTotalValue + freight + fuel - discount;
     
     form.setValue('value', Math.max(0, final), { shouldValidate: true });
-  }, [watchedEquipment, watchedRentalDays, watchedFreightValue, watchedFuelValue, watchedDiscountValue, inventoryList, watchedIsOpenEnded, form]);
+  }, [watchedEquipment, watchedRentalDays, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, watchedFreightValue, watchedFuelValue, watchedDiscountValue, inventoryList, watchedIsOpenEnded, form]);
 
   const handleNewCustomerCreated = async (data: Omit<Customer, 'id'>) => {
     const newCustomer = await createCustomer(data); 
@@ -514,7 +532,7 @@ export function RentalForm({
                    )} />
                </div>
                
-               {!watchedIsOpenEnded && (
+               {!watchedIsOpenEnded ? (
                   <div className="p-4 bg-muted/30 border rounded-lg border-primary/20 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <CalendarDays className="h-5 w-5 text-primary" />
@@ -524,6 +542,21 @@ export function RentalForm({
                       </div>
                     </div>
                     <Badge variant="outline" className="bg-background">{watchedRentalDays} dias cobráveis</Badge>
+                  </div>
+               ) : (
+                  <div className="p-4 bg-blue-50/50 dark:bg-blue-950/30 border rounded-lg border-blue-200 dark:border-blue-800 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <CalendarDays className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <div>
+                        <p className="text-xs font-bold uppercase text-muted-foreground">Contrato em Aberto</p>
+                        <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                          Acumulando diárias de {watchedRentalStartDate && isValid(watchedRentalStartDate) ? format(watchedRentalStartDate, 'dd/MM/yyyy') : '--'} até hoje ({format(new Date(), 'dd/MM/yyyy')})
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="bg-background border-blue-300 text-blue-700 dark:text-blue-300 font-bold">
+                      {openEndedBillableDays} {openEndedBillableDays === 1 ? 'dia cobrável' : 'dias cobráveis'} acumulados
+                    </Badge>
                   </div>
                )}
             </div>
@@ -539,7 +572,7 @@ export function RentalForm({
             </div>
 
             <FormField control={form.control} name="value" render={({ field }) => (
-              <FormItem><FormLabel className="text-lg font-bold">{watchedIsOpenEnded ? "Valor da Diária Base" : "Valor Total do Contrato"}</FormLabel>
+              <FormItem><FormLabel className="text-lg font-bold">{watchedIsOpenEnded ? "Valor Total Acumulado (até hoje)" : "Valor Total do Contrato"}</FormLabel>
                 <FormControl><Input type="text" value={formatToBRL(field.value)} readOnly disabled className="bg-primary/5 font-bold text-2xl h-14 border-primary/30 text-primary" /></FormControl>
                 <FormMessage />
               </FormItem>
