@@ -498,23 +498,23 @@ export function RentalForm({
               )}
             </div>
 
-            {!watchedIsOpenEnded && (
-               <div className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-6 p-3 border rounded-lg bg-card shadow-sm">
-                      <FormField control={form.control} name="chargeSaturdays" render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                          <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                          <FormLabel className="text-sm font-medium cursor-pointer">Cobrar Sábados?</FormLabel>
-                        </FormItem>
-                      )} />
-                      <FormField control={form.control} name="chargeSundays" render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                          <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                          <FormLabel className="text-sm font-medium cursor-pointer">Cobrar Domingos?</FormLabel>
-                        </FormItem>
-                      )} />
-                  </div>
-                  
+            <div className="space-y-4">
+               <div className="flex flex-wrap items-center gap-6 p-3 border rounded-lg bg-card shadow-sm">
+                   <FormField control={form.control} name="chargeSaturdays" render={({ field }) => (
+                     <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                       <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                       <FormLabel className="text-sm font-medium cursor-pointer">Cobrar Sábados?</FormLabel>
+                     </FormItem>
+                   )} />
+                   <FormField control={form.control} name="chargeSundays" render={({ field }) => (
+                     <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                       <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                       <FormLabel className="text-sm font-medium cursor-pointer">Cobrar Domingos?</FormLabel>
+                     </FormItem>
+                   )} />
+               </div>
+               
+               {!watchedIsOpenEnded && (
                   <div className="p-4 bg-muted/30 border rounded-lg border-primary/20 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <CalendarDays className="h-5 w-5 text-primary" />
@@ -525,8 +525,8 @@ export function RentalForm({
                     </div>
                     <Badge variant="outline" className="bg-background">{watchedRentalDays} dias cobráveis</Badge>
                   </div>
-               </div>
-            )}
+               )}
+            </div>
 
             <FormField control={form.control} name="deliveryAddress" render={({ field }) => (
               <FormItem><FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground"/> Endereço de Entrega</FormLabel><FormControl><Textarea placeholder="ex: Rua Tal, 123, Obra X..." {...field} rows={2} /></FormControl><FormMessage /></FormItem>
