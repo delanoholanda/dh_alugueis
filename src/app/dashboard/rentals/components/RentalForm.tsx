@@ -173,6 +173,21 @@ export function RentalForm({
   const watchedFuelValue = useWatch({ control: form.control, name: "fuelValue" });
   const watchedDiscountValue = useWatch({ control: form.control, name: "discountValue" });
 
+  const itemsDailyRate = useMemo(() => {
+    let sum = 0;
+    watchedEquipment.forEach(item => {
+      const qty = Number(item.quantity) || 0;
+      if (item.equipmentId && qty > 0) {
+        const details = inventoryList.find(inv => inv.id === item.equipmentId);
+        if (details) {
+          const rate = item.customDailyRentalRate ?? details.dailyRentalRate ?? 0;
+          sum += (qty * rate);
+        }
+      }
+    });
+    return sum;
+  }, [watchedEquipment, inventoryList]);
+
   const openEndedBillableDays = useMemo(() => {
     if (!watchedIsOpenEnded || !watchedRentalStartDate || !isValid(watchedRentalStartDate)) {
       return 0;
@@ -181,6 +196,13 @@ export function RentalForm({
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     return countBillableDays(startStr, todayStr, watchedChargeSaturdays, watchedChargeSundays);
   }, [watchedIsOpenEnded, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays]);
+
+  const accumulatedTotalValue = useMemo(() => {
+    const freight = Number(watchedFreightValue) || 0;
+    const fuel = Number(watchedFuelValue) || 0;
+    const discount = Number(watchedDiscountValue) || 0;
+    return (itemsDailyRate * openEndedBillableDays) + freight + fuel - discount;
+  }, [itemsDailyRate, openEndedBillableDays, watchedFreightValue, watchedFuelValue, watchedDiscountValue]);
 
   const inventoryWithAvailability = useMemo(() => {
     const startDate = watchedRentalStartDate;
@@ -259,38 +281,28 @@ export function RentalForm({
   
   // Recálculo automático do valor total
   useEffect(() => {
-    let days = 1;
     if (watchedIsOpenEnded) {
-      if (watchedRentalStartDate && isValid(watchedRentalStartDate)) {
-        const startStr = format(watchedRentalStartDate, 'yyyy-MM-dd');
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        days = countBillableDays(startStr, todayStr, watchedChargeSaturdays, watchedChargeSundays);
-      }
+      form.setValue('value', itemsDailyRate, { shouldValidate: true });
     } else {
-      days = Number(watchedRentalDays) || 0;
-    }
-
-    let itemsTotalValue = 0;
-    
-    watchedEquipment.forEach(item => {
-      const qty = Number(item.quantity) || 0;
-      if (item.equipmentId && qty > 0) {
-        const details = inventoryList.find(inv => inv.id === item.equipmentId);
-        if (details) {
-          const rate = item.customDailyRentalRate ?? details.dailyRentalRate ?? 0;
-          itemsTotalValue += (qty * rate * days);
+      const days = Number(watchedRentalDays) || 0;
+      let itemsTotalValue = 0;
+      watchedEquipment.forEach(item => {
+        const qty = Number(item.quantity) || 0;
+        if (item.equipmentId && qty > 0) {
+          const details = inventoryList.find(inv => inv.id === item.equipmentId);
+          if (details) {
+            const rate = item.customDailyRentalRate ?? details.dailyRentalRate ?? 0;
+            itemsTotalValue += (qty * rate * days);
+          }
         }
-      }
-    });
-
-    const freight = Number(watchedFreightValue) || 0;
-    const fuel = Number(watchedFuelValue) || 0;
-    const discount = Number(watchedDiscountValue) || 0;
-    
-    const final = itemsTotalValue + freight + fuel - discount;
-    
-    form.setValue('value', Math.max(0, final), { shouldValidate: true });
-  }, [watchedEquipment, watchedRentalDays, watchedRentalStartDate, watchedChargeSaturdays, watchedChargeSundays, watchedFreightValue, watchedFuelValue, watchedDiscountValue, inventoryList, watchedIsOpenEnded, form]);
+      });
+      const freight = Number(watchedFreightValue) || 0;
+      const fuel = Number(watchedFuelValue) || 0;
+      const discount = Number(watchedDiscountValue) || 0;
+      const final = itemsTotalValue + freight + fuel - discount;
+      form.setValue('value', Math.max(0, final), { shouldValidate: true });
+    }
+  }, [watchedEquipment, watchedRentalDays, watchedFreightValue, watchedFuelValue, watchedDiscountValue, inventoryList, watchedIsOpenEnded, itemsDailyRate, form]);
 
   const handleNewCustomerCreated = async (data: Omit<Customer, 'id'>) => {
     const newCustomer = await createCustomer(data); 
@@ -325,6 +337,7 @@ export function RentalForm({
 
     const actionData = {
       ...data,
+      value: data.isOpenEnded ? itemsDailyRate : data.value,
       rentalStartDate: format(data.rentalStartDate, 'yyyy-MM-dd'),
       expectedReturnDate: data.expectedReturnDate ? format(data.expectedReturnDate, 'yyyy-MM-dd') : undefined,
       paymentDate: data.paymentDate ? format(data.paymentDate, 'yyyy-MM-dd') : undefined,
@@ -572,8 +585,20 @@ export function RentalForm({
             </div>
 
             <FormField control={form.control} name="value" render={({ field }) => (
-              <FormItem><FormLabel className="text-lg font-bold">{watchedIsOpenEnded ? "Valor Total Acumulado (até hoje)" : "Valor Total do Contrato"}</FormLabel>
-                <FormControl><Input type="text" value={formatToBRL(field.value)} readOnly disabled className="bg-primary/5 font-bold text-2xl h-14 border-primary/30 text-primary" /></FormControl>
+              <FormItem>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                  <FormLabel className="text-lg font-bold">
+                    {watchedIsOpenEnded ? "Valor da Diária Base" : "Valor Total do Contrato"}
+                  </FormLabel>
+                  {watchedIsOpenEnded && (
+                    <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                      Total Acumulado (até hoje): <strong className="text-base font-bold text-blue-700 dark:text-blue-300">{formatToBRL(accumulatedTotalValue)}</strong>
+                    </span>
+                  )}
+                </div>
+                <FormControl>
+                  <Input type="text" value={formatToBRL(field.value)} readOnly disabled className="bg-primary/5 font-bold text-2xl h-14 border-primary/30 text-primary" />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )} />

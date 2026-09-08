@@ -62,6 +62,13 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
   }
   
   let currentAccumulated = 0;
+  const itemsDailyRate = rental.equipment.reduce((sum, eq) => {
+    const inventoryItem = inventory.find(inv => inv.id === eq.equipmentId);
+    const rateToUse = eq.customDailyRentalRate ?? inventoryItem?.dailyRentalRate ?? 0;
+    return sum + (rateToUse * eq.quantity);
+  }, 0);
+  const displayDailyRate = itemsDailyRate > 0 ? itemsDailyRate : (rental.value > 0 && rental.value < 1000 ? rental.value : 0);
+
   if (rental.isOpenEnded && !isPhysicallyReturned) {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const billableDays = countBillableDays(
@@ -70,7 +77,7 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
       rental.chargeSaturdays ?? true,
       rental.chargeSundays ?? true
     );
-    currentAccumulated = billableDays * rental.value; 
+    currentAccumulated = (billableDays * displayDailyRate) + (rental.freightValue || 0) + (rental.fuelValue || 0) - (rental.discountValue || 0); 
   }
 
   // Calculate financial summary
@@ -152,7 +159,7 @@ export function RentalCard({ rental, inventory, customers, onActionSuccess }: Re
           <div className="flex items-center">
             <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
             <span className="text-muted-foreground">{rental.isOpenEnded ? "Valor Diária:" : "Valor Contrato:"}</span>
-            <span className="ml-1 font-medium">{formatToBRL(rental.value)}</span>
+            <span className="ml-1 font-medium">{formatToBRL(rental.isOpenEnded ? displayDailyRate : rental.value)}</span>
           </div>
           
           {rental.isOpenEnded && !isPhysicallyReturned && (
